@@ -1,13 +1,23 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
+import csv
+from io import BytesIO, StringIO
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+import anthropic
 
 from database import init_db, get_db
+from legal_context import SYSTEM_PROMPT
 from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, download_dce
 from config import SECTORS, CATEGORIES
+from auth import hash_password, verify_password, create_token, decode_token
 
 
 @asynccontextmanager
@@ -16,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Marchés Publics Maroc API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Marchés Publics Maroc API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +35,103 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Auth helpers ─────────────────────────────────────────────────────────────
+
+async def get_current_user(authorization: str | None = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    data = decode_token(token)
+    if not data:
+        return None
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM users WHERE id = ?", (data["sub"],))
+    user = await cursor.fetchone()
+    await db.close()
+    return dict(user) if user else None
+
+
+async def require_user(authorization: str | None = Header(None)):
+    user = await get_current_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+# ── Auth endpoints ───────────────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+    company: str = ""
+    phone: str = ""
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    db = await get_db()
+    existing = await db.execute("SELECT id FROM users WHERE email = ?", (req.email,))
+    if await existing.fetchone():
+        await db.close()
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    pw_hash = hash_password(req.password)
+    cursor = await db.execute(
+        "INSERT INTO users (email, password_hash, name, company, phone) VALUES (?, ?, ?, ?, ?)",
+        (req.email, pw_hash, req.name, req.company, req.phone),
+    )
+    await db.commit()
+    user_id = cursor.lastrowid
+    await db.close()
+
+    token = create_token(user_id, req.email)
+    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free"}}
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM users WHERE email = ?", (req.email,))
+    user = await cursor.fetchone()
+    await db.close()
+
+    if not user or not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    user = dict(user)
+    token = create_token(user["id"], user["email"])
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "plan": user["plan"],
+            "company": user.get("company", ""),
+        },
+    }
+
+
+@app.get("/api/auth/me")
+async def me(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "plan": user["plan"],
+        "company": user.get("company", ""),
+    }
+
+
+# ── Tenders ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/tenders")
 async def list_tenders(
@@ -64,17 +171,27 @@ async def list_tenders(
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-    allowed_sort = {"deadline", "publication_date", "title", "entity", "location", "scraped_at"}
+    allowed_sort = {"deadline", "publication_date", "title", "entity", "location", "scraped_at", "estimation"}
     sort_col = sort if sort in allowed_sort else "deadline"
     sort_dir = "DESC" if order.lower() == "desc" else "ASC"
 
-    count_row = await db.execute(f"SELECT COUNT(*) as total FROM tenders {where}", params)
+    # Prefix columns with t. for the JOIN query
+    if sort_col == "estimation":
+        order_clause = f"td.estimation {sort_dir}"
+    else:
+        order_clause = f"t.{sort_col} {sort_dir}"
+
+    where_prefixed = where.replace("WHERE ", "WHERE ").replace("title", "t.title").replace("reference", "t.reference").replace("entity", "t.entity").replace("category", "t.category").replace("sector_code", "t.sector_code").replace("location", "t.location").replace("status", "t.status") if where else ""
+
+    count_row = await db.execute(f"SELECT COUNT(*) as total FROM tenders t {where_prefixed}", params)
     total = (await count_row.fetchone())[0]
 
     offset = (page - 1) * per_page
     query = f"""
-        SELECT * FROM tenders {where}
-        ORDER BY {sort_col} {sort_dir}
+        SELECT t.*, td.estimation FROM tenders t
+        LEFT JOIN tender_details td ON td.tender_id = t.id
+        {where_prefixed}
+        ORDER BY {order_clause}
         LIMIT ? OFFSET ?
     """
     cursor = await db.execute(query, params + [per_page, offset])
@@ -90,6 +207,106 @@ async def list_tenders(
     }
 
 
+@app.get("/api/tenders/export")
+async def export_tenders(
+    format: str = Query("csv", description="csv, json, or excel"),
+    q: str = Query(""),
+    category: str = Query(""),
+    sector: str = Query(""),
+    entity: str = Query(""),
+    location: str = Query(""),
+    status: str = Query(""),
+    sort: str = Query("deadline"),
+    order: str = Query("asc"),
+):
+    """Export all matching tenders (no pagination) as CSV, JSON, or Excel."""
+    db = await get_db()
+    conditions = []
+    params = []
+
+    if q:
+        conditions.append("(title LIKE ? OR reference LIKE ? OR entity LIKE ?)")
+        params.extend([f"%{q}%"] * 3)
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if sector:
+        conditions.append("sector_code = ?")
+        params.append(sector)
+    if entity:
+        conditions.append("entity LIKE ?")
+        params.append(f"%{entity}%")
+    if location:
+        conditions.append("location LIKE ?")
+        params.append(f"%{location}%")
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    allowed_sort = {"deadline", "publication_date", "title", "entity", "location", "scraped_at"}
+    sort_col = sort if sort in allowed_sort else "deadline"
+    sort_dir = "DESC" if order.lower() == "desc" else "ASC"
+
+    cursor = await db.execute(
+        f"SELECT * FROM tenders {where} ORDER BY {sort_col} {sort_dir} LIMIT 10000",
+        params,
+    )
+    rows = await cursor.fetchall()
+    await db.close()
+
+    columns = ["reference", "title", "entity", "category", "sector_name", "location",
+               "deadline", "publication_date", "status", "procedure_type"]
+
+    if format == "json":
+        data = [{col: dict(r).get(col, "") for col in columns} for r in rows]
+        import json as json_mod
+        content = json_mod.dumps(data, ensure_ascii=False, indent=2)
+        return Response(
+            content=content.encode("utf-8"),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="consultations.json"',
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+
+    if format == "excel":
+        # Generate CSV with BOM for Excel compatibility
+        buf = StringIO()
+        buf.write("\ufeff")  # UTF-8 BOM for Excel
+        writer = csv.writer(buf, delimiter=";")  # semicolon for French Excel
+        headers_fr = ["Référence", "Objet", "Entité", "Catégorie", "Secteur",
+                       "Localisation", "Date limite", "Date publication", "Statut", "Procédure"]
+        writer.writerow(headers_fr)
+        for r in rows:
+            d = dict(r)
+            writer.writerow([d.get(col, "") for col in columns])
+        return Response(
+            content=buf.getvalue().encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": 'attachment; filename="consultations.csv"',
+            },
+        )
+
+    # Default: CSV (standard comma-separated)
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(columns)
+    for r in rows:
+        d = dict(r)
+        writer.writerow([d.get(col, "") for col in columns])
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="consultations.csv"',
+        },
+    )
+
+
 @app.get("/api/tenders/{tender_id}")
 async def get_tender(tender_id: str):
     db = await get_db()
@@ -98,18 +315,16 @@ async def get_tender(tender_id: str):
 
     if not row:
         await db.close()
-        return {"error": "Not found"}, 404
+        raise HTTPException(status_code=404, detail="Not found")
 
     result = dict(row)
 
-    # Check if we already have details
     det_cursor = await db.execute(
         "SELECT * FROM tender_details WHERE tender_id = ?", (tender_id,)
     )
     detail = await det_cursor.fetchone()
 
     if not detail and result.get("detail_url"):
-        # Scrape detail on demand
         scraped = await scrape_tender_detail(result["detail_url"])
         if scraped:
             cols = [
@@ -137,9 +352,10 @@ async def get_tender(tender_id: str):
     return result
 
 
+# ── Overview & Stats ─────────────────────────────────────────────────────────
+
 @app.get("/api/overview")
 async def overview():
-    """Live counts from the portal homepage."""
     counts = await scrape_homepage_counts()
     total = sum(c["count"] for c in counts)
     return {"total_active": total, "sectors": counts}
@@ -206,12 +422,482 @@ async def get_filters():
     }
 
 
-@app.get("/api/tenders/{tender_id}/dce")
-async def download_tender_dce(tender_id: str):
-    """Download the DCE ZIP for a tender by filling the form automatically."""
+# ── Cities ───────────────────────────────────────────────────────────────────
+
+CITY_REGIONS = {
+    "Rabat": "Rabat-Salé-Kénitra",
+    "Salé": "Rabat-Salé-Kénitra",
+    "Kénitra": "Rabat-Salé-Kénitra",
+    "Témara": "Rabat-Salé-Kénitra",
+    "Skhirate": "Rabat-Salé-Kénitra",
+    "Casablanca": "Casablanca-Settat",
+    "Mohammedia": "Casablanca-Settat",
+    "Settat": "Casablanca-Settat",
+    "El Jadida": "Casablanca-Settat",
+    "Berrechid": "Casablanca-Settat",
+    "Marrakech": "Marrakech-Safi",
+    "Safi": "Marrakech-Safi",
+    "Essaouira": "Marrakech-Safi",
+    "Tanger": "Tanger-Tétouan-Al Hoceïma",
+    "Tétouan": "Tanger-Tétouan-Al Hoceïma",
+    "Al Hoceïma": "Tanger-Tétouan-Al Hoceïma",
+    "Larache": "Tanger-Tétouan-Al Hoceïma",
+    "Fès": "Fès-Meknès",
+    "Meknès": "Fès-Meknès",
+    "Taza": "Fès-Meknès",
+    "Ifrane": "Fès-Meknès",
+    "Agadir": "Souss-Massa",
+    "Tiznit": "Souss-Massa",
+    "Taroudant": "Souss-Massa",
+    "Oujda": "Oriental",
+    "Nador": "Oriental",
+    "Berkane": "Oriental",
+    "Béni Mellal": "Béni Mellal-Khénifra",
+    "Khénifra": "Béni Mellal-Khénifra",
+    "Khouribga": "Béni Mellal-Khénifra",
+    "Errachidia": "Drâa-Tafilalet",
+    "Ouarzazate": "Drâa-Tafilalet",
+    "Guelmim": "Guelmim-Oued Noun",
+    "Laâyoune": "Laâyoune-Sakia El Hamra",
+    "Dakhla": "Dakhla-Oued Ed-Dahab",
+}
+
+REGIONS = list(set(CITY_REGIONS.values()))
+
+
+@app.get("/api/cities")
+async def list_cities():
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT location, COUNT(*) as total,
+           SUM(CASE WHEN deadline >= date('now') THEN 1 ELSE 0 END) as active
+           FROM tenders WHERE location != ''
+           GROUP BY location ORDER BY total DESC"""
+    )
+    rows = await cursor.fetchall()
+    await db.close()
+
+    cities = []
+    for r in rows:
+        loc = r["location"]
+        cities.append({
+            "name": loc,
+            "total": r["total"],
+            "active": r["active"],
+            "region": CITY_REGIONS.get(loc, ""),
+        })
+    return {"cities": cities}
+
+
+@app.get("/api/cities/{city_name}")
+async def city_detail(city_name: str):
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT category, COUNT(*) as count FROM tenders
+           WHERE location LIKE ? GROUP BY category ORDER BY count DESC""",
+        (f"%{city_name}%",),
+    )
+    by_category = [dict(r) for r in await cursor.fetchall()]
+
+    total_cursor = await db.execute(
+        "SELECT COUNT(*) FROM tenders WHERE location LIKE ?", (f"%{city_name}%",)
+    )
+    total = (await total_cursor.fetchone())[0]
+
+    active_cursor = await db.execute(
+        "SELECT COUNT(*) FROM tenders WHERE location LIKE ? AND deadline >= date('now')",
+        (f"%{city_name}%",),
+    )
+    active = (await active_cursor.fetchone())[0]
+
+    sector_cursor = await db.execute(
+        """SELECT sector_code, sector_name, COUNT(*) as count FROM tenders
+           WHERE location LIKE ? GROUP BY sector_code ORDER BY count DESC LIMIT 10""",
+        (f"%{city_name}%",),
+    )
+    top_sectors = [dict(r) for r in await sector_cursor.fetchall()]
+
+    await db.close()
+
+    return {
+        "name": city_name,
+        "region": CITY_REGIONS.get(city_name, ""),
+        "total": total,
+        "active": active,
+        "by_category": by_category,
+        "top_sectors": top_sectors,
+    }
+
+
+# ── Regions ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/regions")
+async def list_regions():
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT location, COUNT(*) as total FROM tenders WHERE location != '' GROUP BY location"
+    )
+    rows = await cursor.fetchall()
+    await db.close()
+
+    region_stats: dict[str, dict] = {}
+    for r in rows:
+        loc = r["location"]
+        region = CITY_REGIONS.get(loc, "Autre")
+        if region not in region_stats:
+            region_stats[region] = {"name": region, "total": 0, "cities": []}
+        region_stats[region]["total"] += r["total"]
+        region_stats[region]["cities"].append(loc)
+
+    result = sorted(region_stats.values(), key=lambda x: x["total"], reverse=True)
+    return {"regions": result}
+
+
+@app.get("/api/regions/{region_name}")
+async def region_detail(region_name: str):
+    cities_in_region = [c for c, r in CITY_REGIONS.items() if r == region_name]
+    if not cities_in_region:
+        return {"name": region_name, "total": 0, "cities": [], "by_category": [], "top_sectors": []}
+
+    db = await get_db()
+    placeholders = ",".join(["?"] * len(cities_in_region))
+
+    total_cursor = await db.execute(
+        f"SELECT COUNT(*) FROM tenders WHERE location IN ({placeholders})", cities_in_region
+    )
+    total = (await total_cursor.fetchone())[0]
+
+    active_cursor = await db.execute(
+        f"SELECT COUNT(*) FROM tenders WHERE location IN ({placeholders}) AND deadline >= date('now')",
+        cities_in_region,
+    )
+    active = (await active_cursor.fetchone())[0]
+
+    cat_cursor = await db.execute(
+        f"""SELECT category, COUNT(*) as count FROM tenders
+            WHERE location IN ({placeholders}) GROUP BY category ORDER BY count DESC""",
+        cities_in_region,
+    )
+    by_category = [dict(r) for r in await cat_cursor.fetchall()]
+
+    sector_cursor = await db.execute(
+        f"""SELECT sector_code, sector_name, COUNT(*) as count FROM tenders
+            WHERE location IN ({placeholders}) GROUP BY sector_code ORDER BY count DESC LIMIT 10""",
+        cities_in_region,
+    )
+    top_sectors = [dict(r) for r in await sector_cursor.fetchall()]
+
+    city_cursor = await db.execute(
+        f"""SELECT location, COUNT(*) as total FROM tenders
+            WHERE location IN ({placeholders}) GROUP BY location ORDER BY total DESC""",
+        cities_in_region,
+    )
+    city_stats = [dict(r) for r in await city_cursor.fetchall()]
+
+    await db.close()
+
+    return {
+        "name": region_name,
+        "total": total,
+        "active": active,
+        "cities": city_stats,
+        "by_category": by_category,
+        "top_sectors": top_sectors,
+    }
+
+
+# ── Sectors ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/sectors")
+async def list_sectors():
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT sector_code, sector_name, category, COUNT(*) as count
+           FROM tenders GROUP BY sector_code ORDER BY category, count DESC"""
+    )
+    rows = [dict(r) for r in await cursor.fetchall()]
+    await db.close()
+
+    categories = {}
+    for r in rows:
+        cat = r["category"] or "Autre"
+        if cat not in categories:
+            categories[cat] = {"name": cat, "total": 0, "sectors": []}
+        categories[cat]["total"] += r["count"]
+        categories[cat]["sectors"].append(r)
+
+    return {"categories": list(categories.values()), "all_sectors": rows}
+
+
+@app.get("/api/sectors/{sector_code}")
+async def sector_detail(sector_code: str):
     db = await get_db()
 
-    # Get the DCE URL from tender_details
+    name = SECTORS.get(sector_code, sector_code)
+
+    total_cursor = await db.execute(
+        "SELECT COUNT(*) FROM tenders WHERE sector_code = ?", (sector_code,)
+    )
+    total = (await total_cursor.fetchone())[0]
+
+    active_cursor = await db.execute(
+        "SELECT COUNT(*) FROM tenders WHERE sector_code = ? AND deadline >= date('now')",
+        (sector_code,),
+    )
+    active = (await active_cursor.fetchone())[0]
+
+    entity_cursor = await db.execute(
+        """SELECT entity, COUNT(*) as count FROM tenders
+           WHERE sector_code = ? GROUP BY entity ORDER BY count DESC LIMIT 10""",
+        (sector_code,),
+    )
+    top_entities = [dict(r) for r in await entity_cursor.fetchall()]
+
+    location_cursor = await db.execute(
+        """SELECT location, COUNT(*) as count FROM tenders
+           WHERE sector_code = ? AND location != '' GROUP BY location ORDER BY count DESC LIMIT 10""",
+        (sector_code,),
+    )
+    top_locations = [dict(r) for r in await location_cursor.fetchall()]
+
+    await db.close()
+
+    return {
+        "code": sector_code,
+        "name": name,
+        "total": total,
+        "active": active,
+        "top_entities": top_entities,
+        "top_locations": top_locations,
+    }
+
+
+# ── Favorites ────────────────────────────────────────────────────────────────
+
+@app.get("/api/favorites")
+async def list_favorites(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT t.* FROM tenders t
+           JOIN favorites f ON f.tender_id = t.id
+           WHERE f.user_id = ? ORDER BY f.created_at DESC""",
+        (user["id"],),
+    )
+    rows = [dict(r) for r in await cursor.fetchall()]
+    await db.close()
+    return {"data": rows}
+
+
+@app.get("/api/favorites/ids")
+async def list_favorite_ids(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT tender_id FROM favorites WHERE user_id = ?", (user["id"],)
+    )
+    ids = [r[0] for r in await cursor.fetchall()]
+    await db.close()
+    return {"ids": ids}
+
+
+@app.post("/api/favorites/{tender_id}")
+async def add_favorite(tender_id: str, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO favorites (user_id, tender_id) VALUES (?, ?)",
+            (user["id"], tender_id),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return {"status": "added"}
+
+
+@app.delete("/api/favorites/{tender_id}")
+async def remove_favorite(tender_id: str, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM favorites WHERE user_id = ? AND tender_id = ?",
+        (user["id"], tender_id),
+    )
+    await db.commit()
+    await db.close()
+    return {"status": "removed"}
+
+
+# ── Alert Preferences ───────────────────────────────────────────────────────
+
+class AlertRequest(BaseModel):
+    name: str = "Mon alerte"
+    sectors: str = ""
+    regions: str = ""
+    keywords: str = ""
+    min_budget: str = ""
+    max_budget: str = ""
+    frequency: str = "daily"
+    enabled: bool = True
+
+
+@app.get("/api/alerts")
+async def list_alerts(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM alert_preferences WHERE user_id = ? ORDER BY created_at DESC",
+        (user["id"],),
+    )
+    rows = [dict(r) for r in await cursor.fetchall()]
+    await db.close()
+    return {"data": rows}
+
+
+@app.post("/api/alerts")
+async def create_alert(req: AlertRequest, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        """INSERT INTO alert_preferences (user_id, name, sectors, regions, keywords, min_budget, max_budget, frequency, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user["id"], req.name, req.sectors, req.regions, req.keywords,
+         req.min_budget, req.max_budget, req.frequency, 1 if req.enabled else 0),
+    )
+    await db.commit()
+    alert_id = cursor.lastrowid
+    await db.close()
+    return {"id": alert_id, "status": "created"}
+
+
+@app.put("/api/alerts/{alert_id}")
+async def update_alert(alert_id: int, req: AlertRequest, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    await db.execute(
+        """UPDATE alert_preferences SET name=?, sectors=?, regions=?, keywords=?,
+           min_budget=?, max_budget=?, frequency=?, enabled=? WHERE id=? AND user_id=?""",
+        (req.name, req.sectors, req.regions, req.keywords,
+         req.min_budget, req.max_budget, req.frequency, 1 if req.enabled else 0,
+         alert_id, user["id"]),
+    )
+    await db.commit()
+    await db.close()
+    return {"status": "updated"}
+
+
+@app.delete("/api/alerts/{alert_id}")
+async def delete_alert(alert_id: int, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM alert_preferences WHERE id = ? AND user_id = ?",
+        (alert_id, user["id"]),
+    )
+    await db.commit()
+    await db.close()
+    return {"status": "deleted"}
+
+
+# ── PDF Export ───────────────────────────────────────────────────────────────
+
+@app.get("/api/tenders/{tender_id}/pdf")
+async def export_tender_pdf(tender_id: str):
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
+    row = await cursor.fetchone()
+    if not row:
+        await db.close()
+        raise HTTPException(status_code=404, detail="Not found")
+
+    tender = dict(row)
+
+    det_cursor = await db.execute(
+        "SELECT * FROM tender_details WHERE tender_id = ?", (tender_id,)
+    )
+    detail = await det_cursor.fetchone()
+    await db.close()
+
+    detail = dict(detail) if detail else {}
+
+    # Generate simple text-based PDF
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("CustomTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=12)
+    heading_style = ParagraphStyle("CustomHeading", parent=styles["Heading2"], fontSize=12,
+                                    textColor=colors.HexColor("#2563eb"), spaceAfter=6, spaceBefore=12)
+    normal_style = styles["Normal"]
+
+    elements = []
+    elements.append(Paragraph("Marchés Publics Maroc", title_style))
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(f"<b>{tender.get('title', tender.get('reference', ''))}</b>", styles["Heading2"]))
+    elements.append(Spacer(1, 12))
+
+    # Basic info table
+    info = [
+        ["Référence", tender.get("reference", "")],
+        ["Entité", tender.get("entity", "")],
+        ["Catégorie", tender.get("category", "")],
+        ["Secteur", tender.get("sector_name", "")],
+        ["Localisation", tender.get("location", "")],
+        ["Date limite", tender.get("deadline", "")],
+        ["Date publication", tender.get("publication_date", "")],
+        ["Procédure", tender.get("procedure_type", "")],
+    ]
+    t = Table(info, colWidths=[5*cm, 12*cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4ff")),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(t)
+
+    if detail:
+        detail_fields = [
+            ("Objet", "objet"), ("Acheteur", "acheteur"), ("Estimation", "estimation"),
+            ("Lieu d'exécution", "lieu_execution"), ("Allotissement", "allotissement"),
+            ("Caution provisoire", "caution_provisoire"), ("Qualifications", "qualifications"),
+            ("Agréments", "agrements"), ("Contact", "contact"),
+        ]
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph("Détails", heading_style))
+        for label, key in detail_fields:
+            val = detail.get(key, "")
+            if val:
+                elements.append(Paragraph(f"<b>{label}:</b> {val}", normal_style))
+                elements.append(Spacer(1, 4))
+
+    doc.build(elements)
+    pdf_bytes = buf.getvalue()
+
+    ref = tender.get("reference", tender_id).replace("/", "_")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="tender_{ref}.pdf"'},
+    )
+
+
+# ── DCE Download ─────────────────────────────────────────────────────────────
+
+@app.get("/api/tenders/{tender_id}/dce")
+async def download_tender_dce(tender_id: str):
+    db = await get_db()
     det_cursor = await db.execute(
         "SELECT dce_url FROM tender_details WHERE tender_id = ?", (tender_id,)
     )
@@ -236,9 +922,10 @@ async def download_tender_dce(tender_id: str):
     )
 
 
+# ── Scrape ───────────────────────────────────────────────────────────────────
+
 @app.post("/api/scrape")
 async def trigger_scrape():
-    """Manually trigger a full scrape."""
     result = await scrape_all_sectors()
     return {"status": "done", **result}
 
@@ -252,3 +939,307 @@ async def scrape_status():
     logs = [dict(r) for r in await cursor.fetchall()]
     await db.close()
     return {"logs": logs}
+
+
+# ── Blog (static content) ───────────────────────────────────────────────────
+
+BLOG_POSTS = [
+    {
+        "slug": "guide-marches-publics-maroc",
+        "title": "Guide complet des marchés publics au Maroc",
+        "summary": "Tout ce que vous devez savoir sur les marchés publics au Maroc : procédures, réglementation, et conseils pour réussir vos soumissions.",
+        "category": "Guide",
+        "date": "2025-01-15",
+        "content": """
+## Introduction aux marchés publics au Maroc
+
+Les marchés publics au Maroc représentent un levier économique majeur, avec plus de 95 000 appels d'offres publiés chaque année sur le portail officiel marchespublics.gov.ma.
+
+## Cadre réglementaire
+
+Le décret n° 2-22-431 du 8 mars 2023 relatif aux marchés publics constitue le texte de référence. Il définit :
+
+- **Les modes de passation** : appel d'offres ouvert, restreint, concours, procédure négociée
+- **Les seuils** : déterminent le mode de passation applicable
+- **Les délais** : publication, retrait des dossiers, dépôt des offres
+- **Les garanties** : caution provisoire et définitive
+
+## Types de marchés
+
+### 1. Travaux
+Concernent la réalisation d'ouvrages de bâtiment ou de génie civil : construction, rénovation, aménagement, VRD.
+
+### 2. Fournitures
+Portent sur l'achat ou la location de produits et matériels : équipement informatique, mobilier, fournitures de bureau.
+
+### 3. Services
+Couvrent les prestations intellectuelles et techniques : études, conseil, maintenance, gardiennage.
+
+## Comment soumissionner
+
+1. **S'inscrire** sur le portail marchespublics.gov.ma
+2. **Rechercher** les appels d'offres correspondant à votre activité
+3. **Retirer** le dossier de consultation (DCE)
+4. **Préparer** votre offre technique et financière
+5. **Déposer** votre offre dans les délais
+
+## Conseils pour réussir
+
+- Surveillez régulièrement les nouvelles publications
+- Constituez vos dossiers administratifs à l'avance
+- Analysez attentivement le cahier des charges
+- Proposez des prix compétitifs mais réalistes
+- Respectez scrupuleusement les délais
+""",
+    },
+    {
+        "slug": "decret-2-22-431-explique",
+        "title": "Décret 2-22-431 : ce qui change pour les entreprises",
+        "summary": "Analyse détaillée du décret 2-22-431 relatif aux marchés publics et ses implications pour les PME marocaines.",
+        "category": "Analyse",
+        "date": "2025-02-10",
+        "content": """
+## Le décret 2-22-431 en bref
+
+Publié le 8 mars 2023, ce décret modernise le cadre des marchés publics au Maroc avec plusieurs innovations majeures.
+
+## Principales nouveautés
+
+### Dématérialisation renforcée
+- Soumission électronique obligatoire pour les marchés > 1 million MAD
+- Signature électronique des documents
+- Archivage numérique des dossiers
+
+### Préférence nationale
+- Majoration de 15% sur les offres étrangères pour les marchés de travaux
+- Majoration de 15% pour les fournitures d'origine marocaine
+
+### PME et coopératives
+- 20% des marchés réservés aux PME
+- Allotissement obligatoire pour favoriser l'accès des petites entreprises
+- Simplification des dossiers administratifs
+
+### Délais
+- Publication minimale de 21 jours pour les appels d'offres ouverts
+- 40 jours pour les marchés > 60 millions MAD
+- Réduction possible en cas d'urgence (15 jours)
+
+### Transparence
+- Publication systématique des résultats
+- Motivation obligatoire des rejets
+- Recours facilités pour les soumissionnaires
+""",
+    },
+    {
+        "slug": "comment-soumissionner-marche-public",
+        "title": "Comment soumissionner à un marché public : guide étape par étape",
+        "summary": "Guide pratique pour préparer et déposer votre offre sur un marché public au Maroc.",
+        "category": "Guide",
+        "date": "2025-03-05",
+        "content": """
+## Étape 1 : Identifier les opportunités
+
+Utilisez MP Maroc pour rechercher les appels d'offres correspondant à votre secteur d'activité. Filtrez par :
+- Secteur d'activité
+- Localisation géographique
+- Budget estimé
+- Date limite de soumission
+
+## Étape 2 : Retirer le DCE
+
+Le Dossier de Consultation des Entreprises comprend :
+- Le règlement de consultation (RC)
+- Le cahier des prescriptions spéciales (CPS)
+- Le bordereau des prix
+- Les plans et documents techniques
+
+## Étape 3 : Préparer le dossier administratif
+
+Documents requis :
+- Certificat d'inscription au registre du commerce
+- Attestation fiscale (< 6 mois)
+- Attestation CNSS (< 6 mois)
+- Caution provisoire
+- Déclaration sur l'honneur
+- Certificat de qualification et classification (si travaux)
+
+## Étape 4 : Élaborer l'offre technique
+
+- Respectez le cahier des charges point par point
+- Détaillez votre méthodologie
+- Présentez vos références similaires
+- Joignez les CV de l'équipe projet
+
+## Étape 5 : Préparer l'offre financière
+
+- Remplissez le bordereau des prix avec soin
+- Vérifiez les calculs et les reports
+- Assurez-vous de la cohérence avec l'offre technique
+
+## Étape 6 : Déposer l'offre
+
+- Respectez impérativement la date et l'heure limites
+- Déposez les plis séparés (administratif, technique, financier)
+- Conservez l'accusé de réception
+""",
+    },
+    {
+        "slug": "secteurs-actifs-marches-publics-2025",
+        "title": "Les secteurs les plus actifs des marchés publics en 2025",
+        "summary": "Analyse des secteurs qui concentrent le plus d'appels d'offres au Maroc en 2025.",
+        "category": "Analyse",
+        "date": "2025-04-20",
+        "content": """
+## Vue d'ensemble
+
+Le marché public marocain continue de croître, porté par les grands projets d'infrastructure et la préparation de la Coupe du Monde 2030.
+
+## Top 5 des secteurs
+
+### 1. Construction et BTP
+Le secteur le plus actif avec plus de 30% des appels d'offres. Les projets liés au Mondial 2030 (stades, routes, hôtels) stimulent fortement la demande.
+
+### 2. Informatique et télécommunications
+La transformation digitale de l'administration marocaine génère une demande croissante en solutions IT, cybersécurité et services cloud.
+
+### 3. Gardiennage et sécurité
+Un secteur stable avec des renouvellements réguliers de contrats par les administrations et établissements publics.
+
+### 4. Fournitures médicales
+La modernisation du système de santé et l'extension de la couverture sociale maintiennent une forte demande.
+
+### 5. Études et ingénierie
+Les grands projets nécessitent des études préalables, du suivi de chantier et de l'assistance technique.
+
+## Tendances 2025
+
+- **Développement durable** : intégration croissante de critères environnementaux
+- **Innovation** : smart cities, IoT, intelligence artificielle
+- **Régionalisation** : décentralisation des marchés vers les collectivités territoriales
+""",
+    },
+    {
+        "slug": "penalites-retard-marches-publics",
+        "title": "Pénalités de retard dans les marchés publics : calcul et bonnes pratiques",
+        "summary": "Comment sont calculées les pénalités de retard et comment les éviter dans l'exécution des marchés publics.",
+        "category": "Décryptage",
+        "date": "2025-05-12",
+        "content": """
+## Cadre juridique
+
+Les pénalités de retard sont prévues par le CCAG (Cahier des Clauses Administratives Générales) applicable au type de marché.
+
+## Calcul des pénalités
+
+### Marchés de travaux
+- **Taux journalier** : 1/1000 du montant du marché par jour de retard
+- **Plafond** : 10% du montant total du marché
+- **Franchise** : pas de pénalité pour les premiers jours (selon CPS)
+
+### Marchés de fournitures
+- **Taux journalier** : 1/1000 à 1/500 du montant du marché
+- **Plafond** : 10% du montant
+
+### Marchés de services
+- Conditions fixées par le CPS spécifique au marché
+
+## Comment éviter les pénalités
+
+1. **Planification rigoureuse** : établissez un calendrier réaliste
+2. **Suivi régulier** : identifiez les retards potentiels dès le début
+3. **Communication** : informez le maître d'ouvrage de tout aléa
+4. **Documentation** : conservez les preuves en cas de force majeure
+5. **Ordres d'arrêt** : demandez-les formellement si nécessaire
+
+## Contestation des pénalités
+
+Le titulaire peut contester les pénalités en justifiant :
+- Un cas de force majeure
+- Un retard imputable au maître d'ouvrage
+- Des ordres de service tardifs
+""",
+    },
+]
+
+
+@app.get("/api/blog")
+async def list_blog_posts():
+    return {"posts": [{k: v for k, v in p.items() if k != "content"} for p in BLOG_POSTS]}
+
+
+@app.get("/api/blog/{slug}")
+async def get_blog_post(slug: str):
+    for p in BLOG_POSTS:
+        if p["slug"] == slug:
+            return p
+    raise HTTPException(status_code=404, detail="Post not found")
+
+
+# ── Assistant juridique (décret 2.22.431) ────────────────────────────────────
+
+class AssistantRequest(BaseModel):
+    question: str
+    procedure: str = ""
+
+
+@app.post("/api/assistant/ask")
+async def assistant_ask(req: AssistantRequest):
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question vide")
+    if len(question) > 1000:
+        raise HTTPException(status_code=400, detail="Question trop longue (1000 caractères max)")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="Assistant non configuré : définissez ANTHROPIC_API_KEY côté serveur.",
+        )
+
+    user_content = question
+    if req.procedure:
+        user_content = f"[Procédure en cours de préparation : {req.procedure}]\n\n{question}"
+
+    client = anthropic.AsyncAnthropic()
+    try:
+        response = await client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=1024,
+            thinking={"type": "adaptive"},
+            # Prompt système statique en tête de prompt pour le prompt caching
+            system=[
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_content}],
+        )
+    except anthropic.AuthenticationError:
+        raise HTTPException(status_code=503, detail="Clé ANTHROPIC_API_KEY invalide.")
+    except anthropic.RateLimitError:
+        raise HTTPException(status_code=429, detail="Assistant saturé, réessayez dans un instant.")
+    except anthropic.APIStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Erreur de l'assistant ({e.status_code}).")
+    except anthropic.APIConnectionError:
+        raise HTTPException(status_code=502, detail="Assistant injoignable, vérifiez la connexion réseau.")
+
+    if response.stop_reason == "refusal":
+        raise HTTPException(status_code=422, detail="L'assistant ne peut pas répondre à cette question.")
+
+    answer = "".join(block.text for block in response.content if block.type == "text").strip()
+    if not answer:
+        raise HTTPException(status_code=502, detail="Réponse vide de l'assistant.")
+    return {"answer": answer}
+
+
+# ── Serve frontend (Docker production) ───────────────────────────────────────
+
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.is_dir():
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file = STATIC_DIR / full_path
+        if file.is_file() and STATIC_DIR in file.resolve().parents:
+            return FileResponse(file)
+        return FileResponse(STATIC_DIR / "index.html")

@@ -14,6 +14,7 @@ export interface Tender {
   location: string;
   detail_url: string;
   scraped_at: string;
+  estimation?: string;
 }
 
 export interface TenderListResponse {
@@ -90,4 +91,99 @@ export interface TenderFilters {
   sort: string;
   order: string;
   page: number;
+}
+
+// Auth
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  plan: string;
+  company?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+// Cities
+export interface CityStats {
+  name: string;
+  total: number;
+  active: number;
+  region: string;
+}
+
+export interface CityDetail {
+  name: string;
+  region: string;
+  total: number;
+  active: number;
+  by_category: { category: string; count: number }[];
+  top_sectors: { sector_code: string; sector_name: string; count: number }[];
+}
+
+// Regions
+export interface RegionStats {
+  name: string;
+  total: number;
+  cities: string[];
+}
+
+export interface RegionDetail {
+  name: string;
+  total: number;
+  active: number;
+  cities: { location: string; total: number }[];
+  by_category: { category: string; count: number }[];
+  top_sectors: { sector_code: string; sector_name: string; count: number }[];
+}
+
+// Sectors
+export interface SectorInfo {
+  sector_code: string;
+  sector_name: string;
+  category: string;
+  count: number;
+}
+
+export interface SectorCategory {
+  name: string;
+  total: number;
+  sectors: SectorInfo[];
+}
+
+export interface SectorDetailResponse {
+  code: string;
+  name: string;
+  total: number;
+  active: number;
+  top_entities: { entity: string; count: number }[];
+  top_locations: { location: string; count: number }[];
+}
+
+// Alerts
+export interface AlertPreference {
+  id: number;
+  user_id: number;
+  name: string;
+  sectors: string;
+  regions: string;
+  keywords: string;
+  min_budget: string;
+  max_budget: string;
+  frequency: string;
+  enabled: number;
+  created_at: string;
+}
+
+// Blog
+export interface BlogPost {
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  date: string;
+  content?: string;
 }

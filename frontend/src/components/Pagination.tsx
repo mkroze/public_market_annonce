@@ -14,33 +14,39 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
   for (let i = start; i <= end; i++) range.push(i);
 
   return (
-    <div className="flex items-center justify-between mt-4">
-      <span className="text-sm text-base-content/60">
-        {total} résultat{total !== 1 ? "s" : ""}
+    <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border-subtle)]">
+      <span className="text-sm text-[var(--color-slate)] font-sans tabular-nums">
+        {total.toLocaleString("fr-FR")} resultat{total !== 1 ? "s" : ""}
       </span>
-      <div className="join">
+      <div className="flex items-center gap-1">
         <button
-          className="join-item btn btn-sm"
+          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] disabled:opacity-40 transition-colors"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
-          «
+          Precedent
         </button>
         {range.map((p) => (
           <button
             key={p}
-            className={`join-item btn btn-sm ${p === page ? "btn-active" : ""}`}
+            className={`
+              w-9 h-9 text-sm font-sans font-medium rounded transition-colors
+              ${p === page
+                ? "bg-[var(--color-crimson)] text-white"
+                : "hover:bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]"
+              }
+            `}
             onClick={() => onPageChange(p)}
           >
             {p}
           </button>
         ))}
         <button
-          className="join-item btn btn-sm"
+          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] disabled:opacity-40 transition-colors"
           disabled={page >= pages}
           onClick={() => onPageChange(page + 1)}
         >
-          »
+          Suivant
         </button>
       </div>
     </div>

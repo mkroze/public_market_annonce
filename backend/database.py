@@ -76,6 +76,45 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_tenders_entity ON tenders(entity);
         CREATE INDEX IF NOT EXISTS idx_tenders_deadline ON tenders(deadline);
         CREATE INDEX IF NOT EXISTS idx_tenders_status ON tenders(status);
+
+        -- User accounts
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            company TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            plan TEXT DEFAULT 'free',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        -- Saved/favorite tenders
+        CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            tender_id TEXT NOT NULL REFERENCES tenders(id),
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, tender_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
+
+        -- Alert preferences
+        CREATE TABLE IF NOT EXISTS alert_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT DEFAULT 'Mon alerte',
+            sectors TEXT DEFAULT '',
+            regions TEXT DEFAULT '',
+            keywords TEXT DEFAULT '',
+            min_budget TEXT DEFAULT '',
+            max_budget TEXT DEFAULT '',
+            frequency TEXT DEFAULT 'daily',
+            enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_alerts_user ON alert_preferences(user_id);
     """)
     await db.commit()
     await db.close()

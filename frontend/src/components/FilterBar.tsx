@@ -33,34 +33,41 @@ export default function FilterBar({ filters, onChange }: Props) {
   const hasFilters = filters.q || filters.category || filters.sector || filters.entity || filters.location;
 
   return (
-    <div className="flex flex-col gap-3">
-      <form onSubmit={handleSearch} className="join w-full">
-        <input
-          type="text"
-          placeholder="Rechercher par mot-clé, référence, entité..."
-          className="input input-bordered join-item flex-1"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        <button type="submit" className="btn btn-primary join-item">
-          <Search size={16} />
+    <div className="space-y-3">
+      {/* Search bar */}
+      <form onSubmit={handleSearch} className="flex">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-slate)]" />
+          <input
+            type="text"
+            placeholder="Rechercher par mot-cle, reference, entite..."
+            className="input input-bordered w-full pl-10 font-sans bg-base-100 border-[var(--color-border-subtle)] focus:border-[var(--color-crimson)] rounded-r-none"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary rounded-l-none font-sans font-semibold">
+          Rechercher
         </button>
       </form>
 
+      {/* Filter row */}
       <div className="flex flex-wrap gap-2 items-center">
+        <span className="label-academic mr-1">Filtres</span>
+
         <select
-          className="select select-bordered select-sm"
+          className="select select-bordered select-sm font-sans bg-base-100 border-[var(--color-border-subtle)]"
           value={filters.category || ""}
           onChange={(e) => update({ category: e.target.value, sector: "" })}
         >
-          <option value="">Toutes catégories</option>
+          <option value="">Toutes categories</option>
           <option value="Travaux">Travaux</option>
           <option value="Fournitures">Fournitures</option>
           <option value="Services">Services</option>
         </select>
 
         <select
-          className="select select-bordered select-sm"
+          className="select select-bordered select-sm font-sans bg-base-100 border-[var(--color-border-subtle)]"
           value={filters.sector || ""}
           onChange={(e) => update({ sector: e.target.value })}
         >
@@ -73,7 +80,7 @@ export default function FilterBar({ filters, onChange }: Props) {
         </select>
 
         <select
-          className="select select-bordered select-sm max-w-xs"
+          className="select select-bordered select-sm max-w-xs font-sans bg-base-100 border-[var(--color-border-subtle)]"
           value={filters.location || ""}
           onChange={(e) => update({ location: e.target.value })}
         >
@@ -86,11 +93,11 @@ export default function FilterBar({ filters, onChange }: Props) {
         </select>
 
         <select
-          className="select select-bordered select-sm max-w-xs"
+          className="select select-bordered select-sm max-w-xs font-sans bg-base-100 border-[var(--color-border-subtle)]"
           value={filters.entity || ""}
           onChange={(e) => update({ entity: e.target.value })}
         >
-          <option value="">Toutes entités</option>
+          <option value="">Toutes entites</option>
           {options?.entities.map((e) => (
             <option key={e} value={e}>
               {e}
@@ -99,7 +106,10 @@ export default function FilterBar({ filters, onChange }: Props) {
         </select>
 
         {hasFilters && (
-          <button className="btn btn-ghost btn-sm" onClick={clearAll}>
+          <button
+            className="flex items-center gap-1 px-2.5 py-1 text-sm font-sans text-[var(--color-crimson)] hover:bg-[var(--color-ivory-dim)] rounded transition-colors"
+            onClick={clearAll}
+          >
             <X size={14} /> Effacer
           </button>
         )}

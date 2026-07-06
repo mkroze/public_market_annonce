@@ -1,0 +1,13 @@
+{
+  "name": "marches-publics",
+  "private": true,
+  "scripts": {
+    "docker:build": "docker build -t marches-publics .",
+    "docker:run": "docker run --rm -p 8000:8000 -v marches-data:/app/data --name marches marches-publics",
+    "docker:stop": "docker stop marches",
+    "tunnel": "cloudflared tunnel --url http://localhost:5173",
+    "dev:backend": "cd backend && .venv/bin/uvicorn main:app --port 8000",
+    "dev:frontend": "cd frontend && npm run dev",
+    "tunnel:dev": "npm run dev:backend & npm run dev:frontend & sleep 3 && cloudflared tunnel --url http://localhost:5173"
+  }
+}
