@@ -24,6 +24,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Alerts from "./pages/Alerts";
 import Favorites from "./pages/Favorites";
+import Partners from "./pages/Partners";
 
 // Chargé à la demande pour ne pas alourdir le bundle des pages de consultation
 const CandidacyAssistant = lazy(() => import("./pages/CandidacyAssistant"));
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/favorites" element={<Favorites />} />
+              <Route path="/partenaires" element={<Partners />} />
             </Routes>
           </main>
         </div>

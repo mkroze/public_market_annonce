@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Search, BarChart3, MapPin, Map, Layers,
   CreditCard, BookOpen, Calculator, Scale, Bell, Heart, LogIn, LogOut, User, Menu,
-  Sun, Moon, Sparkles,
+  Sun, Moon, Sparkles, Handshake,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useState, useEffect } from "react";
@@ -38,6 +38,7 @@ export default function Navbar() {
     { to: "/blog", label: "Blog", icon: BookOpen },
     { to: "/pricing", label: "Tarifs", icon: CreditCard },
     { to: "/calculator", label: "Calculateur", icon: Calculator },
+    { to: "/partenaires", label: "Partenaires", icon: Handshake },
   ];
 
   const isActive = (path: string) =>
