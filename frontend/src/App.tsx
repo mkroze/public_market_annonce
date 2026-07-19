@@ -28,6 +28,7 @@ import Partners from "./pages/Partners";
 
 // Chargé à la demande pour ne pas alourdir le bundle des pages de consultation
 const CandidacyAssistant = lazy(() => import("./pages/CandidacyAssistant"));
+const Guide = lazy(() => import("./pages/Guide"));
 
 export default function App() {
   return (
@@ -65,6 +66,20 @@ export default function App() {
                     }
                   >
                     <CandidacyAssistant />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/guide"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="flex justify-center py-20">
+                        <span className="loading loading-spinner loading-lg text-[var(--color-crimson)]"></span>
+                      </div>
+                    }
+                  >
+                    <Guide />
                   </Suspense>
                 }
               />

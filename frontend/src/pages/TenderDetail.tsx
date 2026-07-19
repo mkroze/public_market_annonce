@@ -169,7 +169,7 @@ export default function TenderDetail() {
       )}
       <div className="flex flex-wrap gap-3 pt-4 border-t border-[var(--color-border-subtle)]">
         <Link
-          to={`/assistant?tender=${tender.id}`}
+          to={`/guide?tender=${tender.id}#assistant`}
           className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-semibold rounded bg-[var(--color-crimson)] text-white hover:opacity-90 transition-opacity"
         >
           <Sparkles size={16} /> Preparer ma candidature
