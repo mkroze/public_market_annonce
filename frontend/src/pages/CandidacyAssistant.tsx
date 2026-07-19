@@ -45,7 +45,7 @@ function loadChecked(key: string): Set<string> {
   }
 }
 
-export default function CandidacyAssistant() {
+export default function CandidacyAssistant({ embedded = false }: { embedded?: boolean }) {
   const [searchParams] = useSearchParams();
   const tenderId = searchParams.get("tender") || "";
 
@@ -101,10 +101,10 @@ export default function CandidacyAssistant() {
     "label-academic mb-1.5 font-sans text-xs uppercase tracking-wider text-[var(--color-slate)] flex items-center";
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <div className={embedded ? "" : "max-w-7xl mx-auto px-4 sm:px-6 py-8"}>
       {/* Header */}
       <div className="mb-8">
-        {tenderId && (
+        {!embedded && tenderId && (
           <Link
             to={`/tenders/${tenderId}`}
             className="inline-flex items-center gap-1.5 mb-3 text-sm font-sans text-[var(--color-crimson)] hover:underline"
@@ -112,15 +112,19 @@ export default function CandidacyAssistant() {
             <ArrowLeft size={14} /> Retour à la consultation
           </Link>
         )}
-        <div className="flex items-center gap-2.5 mb-1">
-          <Sparkles className="w-6 h-6 text-[var(--color-crimson)]" />
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
-            Assistant candidature
-          </h1>
-        </div>
-        <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          Constituez un dossier conforme au décret n° 2.22.431 : pièces exigées, seuils et contrôles de prix.
-        </p>
+        {!embedded && (
+          <>
+            <div className="flex items-center gap-2.5 mb-1">
+              <Sparkles className="w-6 h-6 text-[var(--color-crimson)]" />
+              <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
+                Assistant candidature
+              </h1>
+            </div>
+            <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
+              Constituez un dossier conforme au décret n° 2.22.431 : pièces exigées, seuils et contrôles de prix.
+            </p>
+          </>
+        )}
         {tender && (
           <p className="font-sans text-sm text-[var(--color-charcoal)] ml-[34px] mt-2 border-l-2 border-[var(--color-gold)] pl-3">
             {tender.reference} — {tender.details?.objet || tender.title}
