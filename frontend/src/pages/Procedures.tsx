@@ -23,20 +23,22 @@ const TOOLS = [
   },
 ];
 
-export default function Procedures() {
+export default function Procedures({ embedded = false }: { embedded?: boolean }) {
   return (
-    <div className="px-4 sm:px-6 py-8 space-y-8">
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Scale className="w-6 h-6 text-[var(--color-crimson)]" />
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
-            Procédures de passation
-          </h1>
+    <div className={embedded ? "space-y-8" : "px-4 sm:px-6 py-8 space-y-8"}>
+      {!embedded && (
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Scale className="w-6 h-6 text-[var(--color-crimson)]" />
+            <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
+              Procédures de passation
+            </h1>
+          </div>
+          <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
+            Guide des modes de passation du décret n° 2.22.431 du 8 mars 2023 relatif aux marchés publics
+          </p>
         </div>
-        <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          Guide des modes de passation du décret n° 2.22.431 du 8 mars 2023 relatif aux marchés publics
-        </p>
-      </div>
+      )}
 
       {/* Common legal stages */}
       <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] p-5">
@@ -97,24 +99,26 @@ export default function Procedures() {
       </div>
 
       {/* Tools */}
-      <div>
-        <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)] mb-3">
-          Outils pratiques
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TOOLS.map((t) => (
-            <Link
-              key={t.to}
-              to={t.to}
-              className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] hover:border-[var(--color-border)] transition-colors p-5"
-            >
-              <t.icon size={18} className="text-[var(--color-crimson)] mb-2" />
-              <h3 className="font-display font-bold text-[var(--color-charcoal)]">{t.title}</h3>
-              <p className="font-sans text-sm text-[var(--color-slate)] mt-1">{t.description}</p>
-            </Link>
-          ))}
+      {!embedded && (
+        <div>
+          <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)] mb-3">
+            Outils pratiques
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {TOOLS.map((t) => (
+              <Link
+                key={t.to}
+                to={t.to}
+                className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] hover:border-[var(--color-border)] transition-colors p-5"
+              >
+                <t.icon size={18} className="text-[var(--color-crimson)] mb-2" />
+                <h3 className="font-display font-bold text-[var(--color-charcoal)]">{t.title}</h3>
+                <p className="font-sans text-sm text-[var(--color-slate)] mt-1">{t.description}</p>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <p className="font-sans text-xs text-[var(--color-slate)] border-t border-[var(--color-border-subtle)] pt-4">
         Guide informatif fondé sur le décret n° 2.22.431 du 8 mars 2023 (en vigueur depuis le 1er septembre
