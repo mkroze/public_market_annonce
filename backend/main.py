@@ -141,6 +141,7 @@ async def list_tenders(
     entity: str = Query("", description="Entity name filter"),
     location: str = Query("", description="Location / province filter"),
     status: str = Query("", description="en_cours, cloture"),
+    procedure_type: str = Query("", description="Procedure type like AOO, AOS, AMI"),
     sort: str = Query("deadline", description="Sort field"),
     order: str = Query("asc", description="asc or desc"),
     page: int = Query(1, ge=1),
@@ -168,6 +169,9 @@ async def list_tenders(
     if status:
         conditions.append("status = ?")
         params.append(status)
+    if procedure_type:
+        conditions.append("procedure_type = ?")
+        params.append(procedure_type)
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -181,7 +185,7 @@ async def list_tenders(
     else:
         order_clause = f"t.{sort_col} {sort_dir}"
 
-    where_prefixed = where.replace("WHERE ", "WHERE ").replace("title", "t.title").replace("reference", "t.reference").replace("entity", "t.entity").replace("category", "t.category").replace("sector_code", "t.sector_code").replace("location", "t.location").replace("status", "t.status") if where else ""
+    where_prefixed = where.replace("WHERE ", "WHERE ").replace("title", "t.title").replace("reference", "t.reference").replace("entity", "t.entity").replace("category", "t.category").replace("sector_code", "t.sector_code").replace("location", "t.location").replace("status", "t.status").replace("procedure_type", "t.procedure_type") if where else ""
 
     count_row = await db.execute(f"SELECT COUNT(*) as total FROM tenders t {where_prefixed}", params)
     total = (await count_row.fetchone())[0]
@@ -216,6 +220,7 @@ async def export_tenders(
     entity: str = Query(""),
     location: str = Query(""),
     status: str = Query(""),
+    procedure_type: str = Query(""),
     sort: str = Query("deadline"),
     order: str = Query("asc"),
 ):
@@ -242,6 +247,9 @@ async def export_tenders(
     if status:
         conditions.append("status = ?")
         params.append(status)
+    if procedure_type:
+        conditions.append("procedure_type = ?")
+        params.append(procedure_type)
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -383,6 +391,40 @@ async def stats():
     )
     top_entities = [dict(r) for r in await entity_cursor.fetchall()]
 
+    active = (
+        await (await db.execute("SELECT COUNT(*) FROM tenders WHERE status = 'en_cours'")).fetchone()
+    )[0]
+
+    # deadline is stored as 'DD/MM/YYYY HH:MM' — rebuild an ISO date for comparison
+    closing_7d = (
+        await (
+            await db.execute(
+                """SELECT COUNT(*) FROM tenders
+                   WHERE status = 'en_cours'
+                     AND length(deadline) >= 10
+                     AND substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' || substr(deadline,1,2)
+                         BETWEEN date('now') AND date('now', '+7 day')"""
+            )
+        ).fetchone()
+    )[0]
+
+    new_7d = (
+        await (
+            await db.execute(
+                "SELECT COUNT(*) FROM tenders WHERE scraped_at >= datetime('now', '-7 day')"
+            )
+        ).fetchone()
+    )[0]
+
+    distinct_buyers = (
+        await (await db.execute("SELECT COUNT(DISTINCT entity) FROM tenders")).fetchone()
+    )[0]
+
+    proc_cursor = await db.execute(
+        "SELECT procedure_type, COUNT(*) as count FROM tenders GROUP BY procedure_type ORDER BY count DESC"
+    )
+    by_procedure = [dict(r) for r in await proc_cursor.fetchall()]
+
     await db.close()
 
     return {
@@ -390,6 +432,13 @@ async def stats():
         "by_category": by_category,
         "top_sectors": top_sectors,
         "top_entities": top_entities,
+        "kpis": {
+            "active": active,
+            "closing_7d": closing_7d,
+            "new_7d": new_7d,
+            "distinct_buyers": distinct_buyers,
+        },
+        "by_procedure": by_procedure,
     }
 
 
@@ -412,6 +461,16 @@ async def get_filters():
     )
     location_list = [r[0] for r in await locations.fetchall()]
 
+    statuses = await db.execute(
+        "SELECT DISTINCT status FROM tenders WHERE status != '' ORDER BY status"
+    )
+    status_list = [r[0] for r in await statuses.fetchall()]
+
+    procedures = await db.execute(
+        "SELECT DISTINCT procedure_type FROM tenders WHERE procedure_type != '' ORDER BY procedure_type"
+    )
+    procedure_list = [r[0] for r in await procedures.fetchall()]
+
     await db.close()
 
     return {
@@ -419,6 +478,8 @@ async def get_filters():
         "sectors": sector_list,
         "entities": entity_list,
         "locations": location_list,
+        "statuses": status_list,
+        "procedure_types": procedure_list,
     }
 
 
