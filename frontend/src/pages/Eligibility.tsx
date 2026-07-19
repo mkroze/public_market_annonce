@@ -53,7 +53,7 @@ const VERDICTS: Record<Verdict, { icon: typeof ShieldCheck; title: string; descr
   },
 };
 
-export default function Eligibility() {
+export default function Eligibility({ embedded = false }: { embedded?: boolean }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
 
   const verdict: Verdict = useMemo(() => {
@@ -83,25 +83,27 @@ export default function Eligibility() {
   const answeredCount = ELIGIBILITY_QUESTIONS.filter((q) => answers[q.id]).length;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <Link
-          to="/procedures"
-          className="inline-flex items-center gap-1.5 font-sans text-sm text-[var(--color-slate)] hover:text-[var(--color-crimson)] transition-colors mb-3"
-        >
-          <ArrowLeft size={14} />
-          Procédures de passation
-        </Link>
-        <div className="flex items-center gap-2.5 mb-1">
-          <ShieldCheck className="w-6 h-6 text-[var(--color-crimson)]" />
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
-            Vérificateur d'éligibilité
-          </h1>
+    <div className={embedded ? "space-y-6" : "max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6"}>
+      {!embedded && (
+        <div>
+          <Link
+            to="/procedures"
+            className="inline-flex items-center gap-1.5 font-sans text-sm text-[var(--color-slate)] hover:text-[var(--color-crimson)] transition-colors mb-3"
+          >
+            <ArrowLeft size={14} />
+            Procédures de passation
+          </Link>
+          <div className="flex items-center gap-2.5 mb-1">
+            <ShieldCheck className="w-6 h-6 text-[var(--color-crimson)]" />
+            <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
+              Vérificateur d'éligibilité
+            </h1>
+          </div>
+          <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
+            Conditions de soumission de l'article 27 du décret n° 2.22.431
+          </p>
         </div>
-        <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          Conditions de soumission de l'article 27 du décret n° 2.22.431
-        </p>
-      </div>
+      )}
 
       {/* Verdict */}
       <div className={`rounded border-2 bg-[var(--color-ivory-dim)] p-5 flex items-start gap-3 ${v.className}`}>

@@ -10,7 +10,7 @@ function formatMAD(value: number): string {
   }) + " MAD";
 }
 
-export default function Calculator() {
+export default function Calculator({ embedded = false }: { embedded?: boolean }) {
   // Penalty calculator
   const [montant, setMontant] = useState<number>(0);
   const [jours, setJours] = useState<number>(0);
@@ -38,18 +38,23 @@ export default function Calculator() {
   const priceRisk = estimation > 0 && offre > 0 ? assessPriceRisk(offre, estimation, typePrestation) : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8" style={{ backgroundColor: "var(--color-ivory)" }}>
-      <div className="mb-10">
-        <div className="flex items-center gap-2.5 mb-1">
-          <CalculatorIcon className="w-6 h-6 text-[var(--color-crimson)]" />
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
-            Calculateur
-          </h1>
+    <div
+      className={embedded ? "" : "max-w-4xl mx-auto px-4 sm:px-6 py-8"}
+      style={{ backgroundColor: "var(--color-ivory)" }}
+    >
+      {!embedded && (
+        <div className="mb-10">
+          <div className="flex items-center gap-2.5 mb-1">
+            <CalculatorIcon className="w-6 h-6 text-[var(--color-crimson)]" />
+            <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
+              Calculateur
+            </h1>
+          </div>
+          <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
+            Penalites de retard, caution provisoire & risque de prix
+          </p>
         </div>
-        <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          Penalites de retard, caution provisoire & risque de prix
-        </p>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Penalty Calculator */}

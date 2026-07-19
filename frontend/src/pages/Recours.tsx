@@ -50,7 +50,7 @@ function DeadlineCard({ title, deadline, detail }: { title: string; deadline: Da
   );
 }
 
-export default function Recours() {
+export default function Recours({ embedded = false }: { embedded?: boolean }) {
   const [motifId, setMotifId] = useState<string>(RECOURSE_MOTIFS[0].id);
   const [refDate, setRefDate] = useState<string>("");
 
@@ -67,25 +67,27 @@ export default function Recours() {
       : "Date de réception de la lettre notifiant les motifs d'écartement";
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <Link
-          to="/procedures"
-          className="inline-flex items-center gap-1.5 font-sans text-sm text-[var(--color-slate)] hover:text-[var(--color-crimson)] transition-colors mb-3"
-        >
-          <ArrowLeft size={14} />
-          Procédures de passation
-        </Link>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Gavel className="w-6 h-6 text-[var(--color-crimson)]" />
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
-            Assistant recours
-          </h1>
+    <div className={embedded ? "space-y-6" : "max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6"}>
+      {!embedded && (
+        <div>
+          <Link
+            to="/procedures"
+            className="inline-flex items-center gap-1.5 font-sans text-sm text-[var(--color-slate)] hover:text-[var(--color-crimson)] transition-colors mb-3"
+          >
+            <ArrowLeft size={14} />
+            Procédures de passation
+          </Link>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Gavel className="w-6 h-6 text-[var(--color-crimson)]" />
+            <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">
+              Assistant recours
+            </h1>
+          </div>
+          <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
+            Réclamations et saisine de la CNCP — articles 163 et 164 du décret n° 2.22.431, décret n° 2-14-867
+          </p>
         </div>
-        <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          Réclamations et saisine de la CNCP — articles 163 et 164 du décret n° 2.22.431, décret n° 2-14-867
-        </p>
-      </div>
+      )}
 
       {/* Motif selection */}
       <section className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)]">
