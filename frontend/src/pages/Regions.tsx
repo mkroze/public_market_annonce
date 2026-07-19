@@ -4,7 +4,7 @@ import { Map } from "lucide-react";
 import { getRegions } from "../lib/api";
 import type { RegionStats } from "../lib/types";
 
-export default function Regions() {
+export default function Regions({ embedded = false }: { embedded?: boolean }) {
   const [regions, setRegions] = useState<RegionStats[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,13 +16,15 @@ export default function Regions() {
   }, []);
 
   return (
-    <div className="px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Regions</h1>
-        <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
-          Marches publics par region
-        </p>
-      </div>
+    <div className={embedded ? "pt-2 space-y-6" : "px-4 sm:px-6 py-8 space-y-6"}>
+      {!embedded && (
+        <div>
+          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Regions</h1>
+          <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
+            Marches publics par region
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">

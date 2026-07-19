@@ -16,7 +16,7 @@ function categoryBadgeClass(category: string) {
   return "bg-[var(--color-charcoal)] text-white";
 }
 
-export default function Sectors() {
+export default function Sectors({ embedded = false }: { embedded?: boolean }) {
   const [categories, setCategories] = useState<SectorCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -38,13 +38,15 @@ export default function Sectors() {
   }
 
   return (
-    <div className="px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Secteurs</h1>
-        <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
-          Consultations par secteur d'activite
-        </p>
-      </div>
+    <div className={embedded ? "pt-2 space-y-6" : "px-4 sm:px-6 py-8 space-y-6"}>
+      {!embedded && (
+        <div>
+          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Secteurs</h1>
+          <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
+            Consultations par secteur d'activite
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">

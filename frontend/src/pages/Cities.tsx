@@ -4,7 +4,7 @@ import { MapPin } from "lucide-react";
 import { getCities } from "../lib/api";
 import type { CityStats } from "../lib/types";
 
-export default function Cities() {
+export default function Cities({ embedded = false }: { embedded?: boolean }) {
   const [cities, setCities] = useState<CityStats[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,13 +16,15 @@ export default function Cities() {
   }, []);
 
   return (
-    <div className="px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Villes</h1>
-        <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
-          Marches publics par ville
-        </p>
-      </div>
+    <div className={embedded ? "pt-2 space-y-6" : "px-4 sm:px-6 py-8 space-y-6"}>
+      {!embedded && (
+        <div>
+          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Villes</h1>
+          <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
+            Marches publics par ville
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
