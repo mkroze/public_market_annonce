@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Search, BarChart3, MapPin, Map, Layers,
+  LayoutDashboard, Search, BarChart3,
   CreditCard, BookOpen, Calculator, Scale, Bell, Heart, LogIn, LogOut, User, Menu,
   Sun, Moon, Sparkles, Handshake,
 } from "lucide-react";
@@ -26,9 +26,6 @@ export default function Navbar() {
   const mainLinks = [
     { to: "/", label: "Apercu", icon: LayoutDashboard },
     { to: "/tenders", label: "Consultations", icon: Search },
-    { to: "/cities", label: "Villes", icon: MapPin },
-    { to: "/regions", label: "Regions", icon: Map },
-    { to: "/sectors", label: "Secteurs", icon: Layers },
     { to: "/stats", label: "Statistiques", icon: BarChart3 },
   ];
 
