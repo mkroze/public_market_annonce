@@ -37,11 +37,20 @@ export interface OverviewResponse {
   sectors: SectorCount[];
 }
 
+export interface StatsKpis {
+  active: number;
+  closing_7d: number;
+  new_7d: number;
+  distinct_buyers: number;
+}
+
 export interface StatsResponse {
   total: number;
   by_category: { category: string; count: number }[];
   top_sectors: { sector_code: string; sector_name: string; category: string; count: number }[];
   top_entities: { entity: string; count: number }[];
+  kpis?: StatsKpis;
+  by_procedure?: { procedure_type: string; count: number }[];
 }
 
 export interface FiltersResponse {
@@ -49,6 +58,8 @@ export interface FiltersResponse {
   sectors: { code: string; name: string }[];
   entities: string[];
   locations: string[];
+  statuses: string[];
+  procedure_types: string[];
 }
 
 export interface TenderDetail {
@@ -88,9 +99,12 @@ export interface TenderFilters {
   sector: string;
   entity: string;
   location: string;
+  status: string;
+  procedure_type: string;
   sort: string;
   order: string;
   page: number;
+  per_page: number;
 }
 
 // Auth
