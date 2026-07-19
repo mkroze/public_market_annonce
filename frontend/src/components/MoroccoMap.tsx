@@ -66,6 +66,40 @@ const MOROCCO_CITY_COORDS: Record<string, [number, number]> = {
   Skhirat: [33.85, -7.03],
   Bouskoura: [33.45, -7.65],
   Inezgane: [30.36, -9.54],
+  // Prefecture / province names as returned by the API.
+  "Tanger-Assilah": [35.76, -5.83],
+  "Oujda-Angad": [34.68, -1.91],
+  "Agadir Ida Ou Tanane": [30.42, -9.6],
+  Jerada: [34.31, -2.16],
+  "Sidi Bennour": [32.65, -8.43],
+  "Oued Ed Dahab": [23.68, -15.94],
+  Rehamna: [32.24, -7.95],
+  Benslimane: [33.61, -7.12],
+  Figuig: [32.11, -1.23],
+  Taroudannt: [30.47, -8.88],
+  Azilal: [31.96, -6.57],
+  "Inezgane-Ait Melloul": [30.36, -9.54],
+  Zagora: [30.33, -5.84],
+  "El Kelaa Des Sraghna": [32.05, -7.41],
+  Khenifra: [32.94, -5.67],
+  Tinghir: [31.51, -5.53],
+  Chichaoua: [31.54, -8.76],
+  Taounate: [34.54, -4.64],
+  Tata: [29.75, -7.97],
+  "Mdiq-Fnideq": [35.68, -5.32],
+  "Chtouka-Ait Baha": [30.06, -9.15],
+  "Skhirate-Temara": [33.93, -6.91],
+  "Al Haouz": [31.29, -7.87],
+  Sefrou: [33.83, -4.83],
+  Aousserd: [22.55, -14.33],
+  Boulemane: [33.36, -4.73],
+  "El Hajeb": [33.69, -5.37],
+  "Es-Semara": [26.74, -11.67],
+  Mediouna: [33.45, -7.51],
+  "Moulay Yacoub": [34.09, -5.18],
+  Nouaceur: [33.37, -7.58],
+  Taourirt: [34.41, -2.89],
+  Tarfaya: [27.94, -12.93],
 };
 
 function project(lat: number, lng: number): [number, number] {
@@ -144,8 +178,10 @@ export default function MoroccoMap({ cities }: { cities: CityStats[] }) {
           <g key={`${dot.city.name}-${index}`}>
             {labeledNames.has(dot.city.name) && (
               <text
-                x={dot.x + dot.r + 5}
+                // Anchor eastern labels on the left so they stay inside the viewBox.
+                x={dot.x > VIEW_SIZE * 0.78 ? dot.x - dot.r - 5 : dot.x + dot.r + 5}
                 y={dot.y + 4}
+                textAnchor={dot.x > VIEW_SIZE * 0.78 ? "end" : "start"}
                 fontSize={15}
                 fill="var(--color-slate)"
                 className="pointer-events-none select-none font-sans"
