@@ -72,6 +72,23 @@ export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuida
 export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new Date()): DecisionChecklistItem[] {
   const details = tender.details;
   const urgency = getTenderUrgency(tender.deadline, now);
+  const location = hasValue(details?.lieu_execution)
+    ? details.lieu_execution
+    : hasValue(tender.location)
+      ? tender.location
+      : "";
+  const estimation = hasValue(details?.estimation)
+    ? details.estimation
+    : hasValue(tender.estimation)
+      ? tender.estimation
+      : "";
+  const caution = hasValue(details?.caution_provisoire) ? details.caution_provisoire : "";
+  const qualifications = hasValue(details?.qualifications)
+    ? details.qualifications
+    : hasValue(details?.agrements)
+      ? details.agrements
+      : "";
+  const hasDceUrl = hasValue(details?.dce_url);
 
   return [
     {
@@ -90,36 +107,36 @@ export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new 
     {
       id: "location",
       label: "Lieu d'execution",
-      value: details?.lieu_execution || tender.location || "Non indique",
-      tone: details?.lieu_execution || tender.location ? "neutral" : "warning",
+      value: location || "Non indique",
+      tone: location ? "neutral" : "warning",
       action: "Confirmer que votre entreprise peut intervenir dans cette zone.",
     },
     {
       id: "budget",
       label: "Estimation ou budget",
-      value: details?.estimation || tender.estimation || "A verifier dans le DCE",
-      tone: details?.estimation || tender.estimation ? "positive" : "warning",
+      value: estimation || "A verifier dans le DCE",
+      tone: estimation ? "positive" : "warning",
       action: "Comparer ce montant avec votre capacite commerciale et financiere.",
     },
     {
       id: "caution",
       label: "Caution provisoire",
-      value: details?.caution_provisoire || "A verifier dans le DCE",
-      tone: details?.caution_provisoire ? "neutral" : "warning",
+      value: caution || "A verifier dans le DCE",
+      tone: caution ? "neutral" : "warning",
       action: "Verifier si une garantie bancaire est necessaire avant de preparer l'offre.",
     },
     {
       id: "qualifications",
       label: "Qualifications ou agrements",
-      value: details?.qualifications || details?.agrements || "A verifier dans le DCE",
-      tone: details?.qualifications || details?.agrements ? "warning" : "neutral",
+      value: qualifications || "A verifier dans le DCE",
+      tone: qualifications ? "warning" : "neutral",
       action: "Controler les certificats, agrements ou references demandes.",
     },
     {
       id: "documents",
       label: "Documents",
-      value: details?.dce_url ? "DCE disponible" : "DCE a recuperer sur le portail",
-      tone: details?.dce_url ? "positive" : "warning",
+      value: hasDceUrl ? "DCE disponible" : "DCE a recuperer sur le portail",
+      tone: hasDceUrl ? "positive" : "warning",
       action: "Telecharger le DCE et lire le reglement de consultation en premier.",
     },
   ];
