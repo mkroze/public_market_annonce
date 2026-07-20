@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from digest import (
     budget_ok,
@@ -113,6 +116,93 @@ class RenderDigestTest(unittest.TestCase):
     def test_missing_estimation_shows_non_communiquee(self):
         _, html, _ = render_digest([("A", [make_tender(estimation="")])])
         self.assertIn("Estimation non communiquee", html)
+
+
+class RunDigestTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        import database
+
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_path = database.DB_PATH
+        database.DB_PATH = self.tmp.name
+        await database.init_db()
+
+        db = await database.get_db()
+        await db.execute(
+            "INSERT INTO users (email, password_hash, name) VALUES ('u1@test.com', 'x', 'U1')"
+        )
+        await db.execute(
+            """INSERT INTO alert_preferences (user_id, name, sectors, regions, keywords, enabled)
+               VALUES (1, 'BTP Casa', 'A', '', '', 1)"""
+        )
+        await db.execute(
+            """INSERT INTO tenders (id, reference, title, entity, entity_code, sector_code,
+               sector_name, category, deadline, publication_date, status, procedure_type,
+               location, detail_url)
+               VALUES ('T1', 'R1', 'Construction ecole', 'Commune X', 'C1', 'A',
+               'BTP', 'Travaux', '01/09/2026 10:00', '01/07/2026', 'en_cours', 'AOO',
+               'CASABLANCA', '')"""
+        )
+        await db.commit()
+        await db.close()
+
+    async def asyncTearDown(self):
+        import database
+
+        database.DB_PATH = self._old_path
+        os.unlink(self.tmp.name)
+
+    async def test_sends_one_email_and_logs_then_dedups(self):
+        import digest
+
+        sent = []
+        with patch.object(digest, "email_enabled", return_value=True), patch.object(
+            digest, "send_email", side_effect=lambda to, s, h, t: sent.append((to, s))
+        ):
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 1)
+        self.assertEqual(result["tenders_matched"], 1)
+        self.assertEqual(sent[0][0], "u1@test.com")
+
+        # second run: digest_log dedups, nothing sent
+        with patch.object(digest, "email_enabled", return_value=True), patch.object(
+            digest, "send_email", side_effect=lambda to, s, h, t: sent.append((to, s))
+        ):
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 0)
+        self.assertEqual(len(sent), 1)
+
+    async def test_email_disabled_skips_send_and_does_not_log(self):
+        import database
+        import digest
+
+        with patch.object(digest, "email_enabled", return_value=False):
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 0)
+        self.assertEqual(result["tenders_matched"], 1)
+
+        db = await database.get_db()
+        cursor = await db.execute("SELECT COUNT(*) AS n FROM digest_log")
+        row = await cursor.fetchone()
+        await db.close()
+        self.assertEqual(row["n"], 0)
+
+    async def test_disabled_alert_and_non_matching_tender_ignored(self):
+        import database
+        import digest
+
+        db = await database.get_db()
+        await db.execute("UPDATE alert_preferences SET enabled = 0")
+        await db.commit()
+        await db.close()
+
+        with patch.object(digest, "email_enabled", return_value=True), patch.object(
+            digest, "send_email"
+        ) as mock_send:
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 0)
+        mock_send.assert_not_called()
 
 
 if __name__ == "__main__":

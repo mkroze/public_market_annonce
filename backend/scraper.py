@@ -262,6 +262,40 @@ async def scrape_tender_detail(detail_url: str) -> dict | None:
     }
 
 
+DETAIL_COLS = [
+    "objet", "acheteur", "annonce_type", "procedure",
+    "categorie", "allotissement", "lieu_execution", "estimation",
+    "domaines", "adresse_retrait", "adresse_depot", "lieu_ouverture",
+    "caution_provisoire", "qualifications", "agrements", "variante",
+    "reunion", "visite_lieux", "contact", "documents_url", "dce_url",
+    "avis_url", "reserved_pme", "prix_plans",
+]
+
+
+async def ensure_tender_details(db, tender_id: str, detail_url: str) -> dict | None:
+    """Return stored tender details, lazily scraping and caching them if absent."""
+    cursor = await db.execute(
+        "SELECT * FROM tender_details WHERE tender_id = ?", (tender_id,)
+    )
+    row = await cursor.fetchone()
+    if row:
+        return dict(row)
+    if not detail_url:
+        return None
+    scraped = await scrape_tender_detail(detail_url)
+    if not scraped:
+        return None
+    cols = ["tender_id"] + DETAIL_COLS
+    placeholders = ", ".join(["?"] * len(cols))
+    values = [tender_id] + [scraped.get(c, "") for c in DETAIL_COLS]
+    await db.execute(
+        f"INSERT OR REPLACE INTO tender_details ({', '.join(cols)}) VALUES ({placeholders})",
+        values,
+    )
+    await db.commit()
+    return scraped
+
+
 async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
     """Download the DCE ZIP by filling the form headlessly.
 

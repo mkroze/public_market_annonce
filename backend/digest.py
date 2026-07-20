@@ -121,3 +121,103 @@ def render_digest(sections: list[tuple[str, list[dict]]]) -> tuple[str, str, str
     text_parts.append(f"Gerez vos alertes : {frontend}/alerts")
 
     return subject, "".join(html_parts), "\n".join(text_parts)
+
+
+async def run_digest(new_ids: list[str]) -> dict:
+    """Match new tenders against enabled alerts and email one digest per user."""
+    from main import normalize_location  # imported lazily to avoid a circular import
+    from scraper import ensure_tender_details
+
+    if not new_ids:
+        return {"emails_sent": 0, "tenders_matched": 0}
+
+    db = await get_db()
+    placeholders = ",".join("?" * len(new_ids))
+    cursor = await db.execute(
+        f"""SELECT t.*, td.estimation FROM tenders t
+            LEFT JOIN tender_details td ON td.tender_id = t.id
+            WHERE t.id IN ({placeholders})""",
+        new_ids,
+    )
+    tenders = [dict(r) for r in await cursor.fetchall()]
+    for tender in tenders:
+        tender["region"] = normalize_location(tender.get("location") or "")["region"]
+
+    cursor = await db.execute(
+        """SELECT a.*, u.email AS user_email FROM alert_preferences a
+           JOIN users u ON u.id = a.user_id WHERE a.enabled = 1"""
+    )
+    alerts = [dict(r) for r in await cursor.fetchall()]
+
+    estimation_cache: dict[str, str] = {
+        t["id"]: t.get("estimation") or "" for t in tenders
+    }
+
+    async def estimation_for(tender: dict) -> str:
+        if not estimation_cache.get(tender["id"]) and tender.get("detail_url"):
+            try:
+                detail = await ensure_tender_details(db, tender["id"], tender["detail_url"])
+            except Exception as e:
+                print(f"[digest] detail fetch failed for {tender['id']}: {e}")
+                detail = None
+            estimation_cache[tender["id"]] = (detail or {}).get("estimation") or ""
+        return estimation_cache.get(tender["id"], "")
+
+    per_user: dict[int, dict] = {}
+    for alert in alerts:
+        for tender in tenders:
+            if not match_alert(alert, tender):
+                continue
+            if has_budget_bounds(alert) and not budget_ok(alert, await estimation_for(tender)):
+                continue
+            user = per_user.setdefault(
+                alert["user_id"],
+                {"email": alert["user_email"], "seen": set(), "sections": {}, "rows": []},
+            )
+            if tender["id"] in user["seen"]:
+                continue
+            user["seen"].add(tender["id"])
+            user["sections"].setdefault(alert["name"], []).append(tender)
+            user["rows"].append((alert["id"], tender["id"]))
+
+    emails_sent = 0
+    tenders_matched = 0
+    for user_id, data in per_user.items():
+        cursor = await db.execute(
+            "SELECT tender_id FROM digest_log WHERE user_id = ?", (user_id,)
+        )
+        already_sent = {r["tender_id"] for r in await cursor.fetchall()}
+        sections = []
+        for name, section_tenders in data["sections"].items():
+            kept = [t for t in section_tenders if t["id"] not in already_sent]
+            if kept:
+                sections.append((name, kept))
+        if not sections:
+            continue
+        section_count = sum(len(ts) for _, ts in sections)
+        tenders_matched += section_count
+
+        if not email_enabled():
+            print(
+                f"[digest] email disabled (SMTP_HOST unset); "
+                f"{section_count} tenders for {data['email']} not sent"
+            )
+            continue
+
+        subject, html, text = render_digest(sections)
+        try:
+            await asyncio.to_thread(send_email, data["email"], subject, html, text)
+        except Exception as e:
+            print(f"[digest] send failed for {data['email']}: {e}")
+            continue
+        for alert_id, tender_id in data["rows"]:
+            if tender_id not in already_sent:
+                await db.execute(
+                    "INSERT OR IGNORE INTO digest_log (user_id, alert_id, tender_id) VALUES (?, ?, ?)",
+                    (user_id, alert_id, tender_id),
+                )
+        await db.commit()
+        emails_sent += 1
+
+    await db.close()
+    return {"emails_sent": emails_sent, "tenders_matched": tenders_matched}
