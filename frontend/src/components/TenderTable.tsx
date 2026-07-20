@@ -108,7 +108,7 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
                 <td className="max-w-md">
                   <Link
                     to={toTenderPath(t.id)}
-                    className="font-medium text-sm leading-tight text-[var(--color-charcoal)] hover:underline"
+                    className="font-medium text-sm leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-crimson)] hover:underline"
                     onClick={(event) => event.stopPropagation()}
                   >
                     {t.title || t.reference}

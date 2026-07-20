@@ -1,0 +1,111 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Banknote, Building2, Calendar, Heart, MapPin, Sparkles } from "lucide-react";
+import { addFavorite, removeFavorite } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { getTenderGuidance } from "../lib/tenderGuidance";
+import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
+import type { Tender } from "../lib/types";
+
+interface TenderCardProps {
+  tender: Tender;
+  favoriteIds?: Set<string>;
+  onFavoriteToggle?: () => void;
+  compact?: boolean;
+}
+
+const TONE_CLASS = {
+  positive: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warning: "border-amber-200 bg-amber-50 text-amber-800",
+  critical: "border-red-200 bg-red-50 text-red-800",
+  neutral: "border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-slate)]",
+};
+
+export default function TenderCard({ tender, favoriteIds, onFavoriteToggle, compact = false }: TenderCardProps) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [toggling, setToggling] = useState(false);
+  const guidance = getTenderGuidance(tender);
+  const urgency = getTenderUrgency(tender.deadline);
+  const isFavorite = favoriteIds?.has(tender.id);
+
+  async function toggleFavorite(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!user) {
+      navigate(`/login?returnTo=${encodeURIComponent(toTenderPath(tender.id))}`);
+      return;
+    }
+
+    setToggling(true);
+    try {
+      if (isFavorite) await removeFavorite(tender.id);
+      else await addFavorite(tender.id);
+      onFavoriteToggle?.();
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <article className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] transition-colors hover:border-[var(--color-border)]">
+      <Link to={toTenderPath(tender.id)} className="block p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className={`rounded border px-2 py-0.5 font-sans text-xs font-semibold ${TONE_CLASS[guidance.tone]}`}>
+                {guidance.label}
+              </span>
+              {tender.category && (
+                <span className="rounded border border-[var(--color-border-subtle)] px-2 py-0.5 font-sans text-xs text-[var(--color-slate)]">
+                  {tender.category}
+                </span>
+              )}
+            </div>
+            <h3 className="font-display text-base font-bold leading-snug text-[var(--color-charcoal)]">
+              {tender.title || tender.reference}
+            </h3>
+            {!compact && tender.reference && (
+              <p className="mt-1 font-sans text-xs text-[var(--color-slate)]">{tender.reference}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm btn-square shrink-0 ${isFavorite ? "text-[var(--color-crimson)]" : "text-[var(--color-slate)]"}`}
+            onClick={toggleFavorite}
+            disabled={toggling}
+            aria-label={isFavorite ? "Retirer de mes opportunites" : "Ajouter a mes opportunites"}
+          >
+            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+          </button>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-1 gap-2 font-sans text-sm text-[var(--color-slate)] sm:grid-cols-2">
+          <div className="flex items-center gap-1.5">
+            <Building2 size={14} className="shrink-0 text-[var(--color-crimson)]" />
+            <span className="truncate">{tender.entity || "Acheteur non indique"}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MapPin size={14} className="shrink-0 text-[var(--color-crimson)]" />
+            <span className="truncate">{tender.location || "Lieu a verifier"}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Calendar size={14} className="shrink-0 text-[var(--color-crimson)]" />
+            <span>{tender.deadline || "Date limite a verifier"}{urgency ? ` · ${urgency.label}` : ""}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Banknote size={14} className="shrink-0 text-[var(--color-crimson)]" />
+            <span>{tender.estimation || "Budget a verifier"}</span>
+          </div>
+        </dl>
+
+        {!compact && guidance.reasons.length > 0 && (
+          <p className="mt-3 flex items-start gap-1.5 font-sans text-xs text-[var(--color-slate)]">
+            <Sparkles size={13} className="mt-0.5 shrink-0 text-[var(--color-crimson)]" />
+            {guidance.reasons[0]}
+          </p>
+        )}
+      </Link>
+    </article>
+  );
+}
