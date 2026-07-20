@@ -382,6 +382,7 @@ async def scrape_all_sectors() -> dict:
 
     total_found = 0
     total_new = 0
+    new_ids: list[str] = []
 
     for sector_code in SECTORS:
         tenders = await scrape_sector(sector_code)
@@ -389,6 +390,7 @@ async def scrape_all_sectors() -> dict:
 
         for t in tenders:
             try:
+                before = db.total_changes
                 await db.execute(
                     """INSERT OR IGNORE INTO tenders
                        (id, reference, title, entity, entity_code, sector_code,
@@ -403,8 +405,11 @@ async def scrape_all_sectors() -> dict:
                         t["detail_url"],
                     ),
                 )
-                if db.total_changes:
+                # total_changes is cumulative for the connection, so compare against
+                # its value before the insert to know if this row was actually new
+                if db.total_changes > before:
                     total_new += 1
+                    new_ids.append(t["id"])
             except Exception as e:
                 print(f"[scraper] DB insert error: {e}")
 
@@ -419,7 +424,7 @@ async def scrape_all_sectors() -> dict:
     await db.commit()
     await db.close()
 
-    return {"total_found": total_found, "total_new": total_new}
+    return {"total_found": total_found, "total_new": total_new, "new_ids": new_ids}
 
 
 async def scrape_homepage_counts() -> list[dict]:

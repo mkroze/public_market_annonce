@@ -115,6 +115,17 @@ async def init_db():
             UNIQUE(user_id, name)
         );
         CREATE INDEX IF NOT EXISTS idx_alerts_user ON alert_preferences(user_id);
+
+        -- Digest email log (dedup: a user never receives the same tender twice)
+        CREATE TABLE IF NOT EXISTS digest_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            alert_id INTEGER NOT NULL REFERENCES alert_preferences(id),
+            tender_id TEXT NOT NULL REFERENCES tenders(id),
+            sent_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, tender_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_digest_user ON digest_log(user_id);
     """)
     await db.commit()
     await db.close()
