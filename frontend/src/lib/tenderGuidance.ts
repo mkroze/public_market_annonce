@@ -50,6 +50,14 @@ export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuida
     return { label: "A verifier vite", tone: "warning", reasons };
   }
 
+  if (!urgency) {
+    return {
+      label: "Date limite a verifier",
+      tone: "warning",
+      reasons: ["Verifier la date limite sur le portail source ou dans le DCE."],
+    };
+  }
+
   if (hasValue(tender.estimation)) reasons.push("Estimation disponible pour cadrer l'opportunite.");
   if (hasValue(tender.location)) reasons.push("Localisation indiquee.");
   if (!hasValue(tender.estimation)) reasons.push("Budget a verifier dans le DCE.");
