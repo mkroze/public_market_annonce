@@ -1,14 +1,27 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { RefreshCw, Building2, Layers, TrendingUp, ArrowRight } from "lucide-react";
-import { getOverview, triggerScrape } from "../lib/api";
-import type { OverviewResponse } from "../lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Building2, Layers, RefreshCw, Search, TrendingUp } from "lucide-react";
+import TenderCard from "../components/TenderCard";
+import { getOverview, getTenders, triggerScrape } from "../lib/api";
+import { buildGuidedTenderQuery, type GuidedTenderInput } from "../lib/tenderGuidance";
+import type { OverviewResponse, Tender } from "../lib/types";
 
 export default function Overview() {
+  const navigate = useNavigate();
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<string | null>(null);
+  const [previewTenders, setPreviewTenders] = useState<Tender[]>([]);
+  const [previewError, setPreviewError] = useState("");
+  const [guidedInput, setGuidedInput] = useState<GuidedTenderInput>({
+    activity: "",
+    location: "",
+    deadlineWindow: "any",
+    budgetRange: "any",
+  });
+
+  const guidedQuery = useMemo(() => buildGuidedTenderQuery(guidedInput), [guidedInput]);
 
   useEffect(() => {
     getOverview()
@@ -16,6 +29,27 @@ export default function Overview() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    getTenders({ status: "en_cours", sort: "deadline", order: "asc", page: 1, per_page: 6 })
+      .then((res) => {
+        setPreviewTenders(res.data.slice(0, 6));
+        setPreviewError("");
+      })
+      .catch(() => setPreviewError("Impossible de charger les consultations actives."));
+  }, []);
+
+  function startGuidedSearch(event: React.FormEvent) {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    Object.entries(guidedQuery).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && String(value) !== "") {
+        params.set(key, String(value));
+      }
+    });
+    params.set("view", "guided");
+    navigate(`/tenders?${params.toString()}`);
+  }
 
   async function handleScrape() {
     setScraping(true);
@@ -44,16 +78,54 @@ export default function Overview() {
 
   return (
     <div className="px-4 sm:px-6 py-10 space-y-10">
-      {/* Hero */}
-      <div className="flex items-start justify-between gap-6">
+      {/* Guided discovery hero */}
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold text-[var(--color-charcoal)] leading-tight">
-            Portail des Marches Publics
+          <p className="label-academic mb-2">Je decouvre les marches publics</p>
+          <h1 className="font-display text-3xl font-bold leading-tight text-[var(--color-charcoal)] sm:text-4xl">
+            Trouvez des consultations publiques que vous pouvez comprendre et verifier.
           </h1>
-          <p className="text-[var(--color-slate)] mt-2 text-base font-sans max-w-xl">
-            Consultations en cours sur marchespublics.gov.ma — Donnees actualisees quotidiennement.
+          <p className="mt-3 max-w-2xl font-sans text-base text-[var(--color-slate)]">
+            Commencez avec quelques questions simples. L'application vous montre ensuite les opportunites actives et les points a verifier avant de preparer une candidature.
           </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link to="/tenders?status=en_cours&view=guided" className="btn btn-primary gap-2 font-sans font-semibold">
+              <Search size={16} /> Voir les opportunites
+            </Link>
+            <Link to="/guide" className="btn btn-outline gap-2 font-sans font-semibold">
+              Comprendre les etapes
+            </Link>
+          </div>
         </div>
+
+        <form onSubmit={startGuidedSearch} className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
+          <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">Recherche guidee</h2>
+          <div className="mt-4 space-y-3">
+            <label className="block space-y-1">
+              <span className="label-academic text-xs">Que vendez-vous ?</span>
+              <input className="input input-bordered w-full" value={guidedInput.activity} onChange={(event) => setGuidedInput((current) => ({ ...current, activity: event.target.value }))} placeholder="Ex: nettoyage, travaux, fournitures..." />
+            </label>
+            <label className="block space-y-1">
+              <span className="label-academic text-xs">Ou pouvez-vous intervenir ?</span>
+              <input className="input input-bordered w-full" value={guidedInput.location} onChange={(event) => setGuidedInput((current) => ({ ...current, location: event.target.value }))} placeholder="Ville ou region" />
+            </label>
+            <label className="block space-y-1">
+              <span className="label-academic text-xs">Delai de reponse</span>
+              <select className="select select-bordered w-full" value={guidedInput.deadlineWindow} onChange={(event) => setGuidedInput((current) => ({ ...current, deadlineWindow: event.target.value as GuidedTenderInput["deadlineWindow"] }))}>
+                <option value="any">Tous les delais</option>
+                <option value="7d">Cette semaine</option>
+                <option value="14d">Deux semaines</option>
+                <option value="30d">Un mois</option>
+              </select>
+            </label>
+            <button type="submit" className="btn btn-primary w-full gap-2 font-sans font-semibold">
+              Chercher <ArrowRight size={15} />
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-3">
         <button
           className="btn btn-primary btn-sm gap-2 font-sans font-semibold shrink-0"
           onClick={handleScrape}
@@ -62,13 +134,32 @@ export default function Overview() {
           <RefreshCw size={14} className={scraping ? "animate-spin" : ""} />
           {scraping ? "Import..." : "Importer"}
         </button>
+        {scrapeResult && (
+          <div className="flex-1 px-4 py-2 border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] text-sm font-sans text-[var(--color-charcoal)]">
+            {scrapeResult}
+          </div>
+        )}
       </div>
 
-      {scrapeResult && (
-        <div className="px-4 py-3 border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] text-sm font-sans text-[var(--color-charcoal)]">
-          {scrapeResult}
+      {/* Active tender preview */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-bold text-[var(--color-charcoal)]">Opportunites actives a verifier</h2>
+            <p className="font-sans text-sm text-[var(--color-slate)]">Un premier apercu pour comprendre ce qui est disponible maintenant.</p>
+          </div>
+          <Link to="/tenders?status=en_cours&view=guided" className="hidden font-sans text-sm font-semibold text-[var(--color-crimson)] hover:underline sm:inline">
+            Voir tout
+          </Link>
         </div>
-      )}
+        {previewError ? (
+          <div className="rounded border border-[var(--color-crimson)] border-l-4 px-4 py-3 font-sans text-sm text-[var(--color-charcoal)]">{previewError}</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {previewTenders.map((tender) => <TenderCard key={tender.id} tender={tender} compact />)}
+          </div>
+        )}
+      </section>
 
       {loading ? (
         <div className="flex justify-center py-20">
