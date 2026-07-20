@@ -142,6 +142,7 @@ export interface CityDetail {
 export interface RegionStats {
   name: string;
   total: number;
+  active: number;
   cities: string[];
 }
 
@@ -190,6 +191,12 @@ export interface AlertPreference {
   frequency: string;
   enabled: number;
   created_at: string;
+  last_sent?: string | null;
+}
+
+export interface AlertPreview {
+  count: number;
+  sample: { id: string; title: string; entity: string; location: string; deadline: string }[];
 }
 
 // Blog

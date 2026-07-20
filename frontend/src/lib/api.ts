@@ -14,6 +14,7 @@ import type {
   SectorCategory,
   SectorDetailResponse,
   AlertPreference,
+  AlertPreview,
   BlogPost,
   Tender,
 } from "./types";
@@ -54,9 +55,12 @@ export function getTenders(filters: Partial<TenderFilters> = {}): Promise<Tender
   if (filters.sector) params.sector = filters.sector;
   if (filters.entity) params.entity = filters.entity;
   if (filters.location) params.location = filters.location;
+  if (filters.status) params.status = filters.status;
+  if (filters.procedure_type) params.procedure_type = filters.procedure_type;
   if (filters.sort) params.sort = filters.sort;
   if (filters.order) params.order = filters.order;
   if (filters.page) params.page = String(filters.page);
+  if (filters.per_page) params.per_page = String(filters.per_page);
   return fetchJSON<TenderListResponse>(`${BASE}/tenders`, params);
 }
 
@@ -71,6 +75,8 @@ export async function exportTenders(
   if (filters.sector) params.set("sector", filters.sector);
   if (filters.entity) params.set("entity", filters.entity);
   if (filters.location) params.set("location", filters.location);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.procedure_type) params.set("procedure_type", filters.procedure_type);
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.order) params.set("order", filters.order);
 
@@ -266,6 +272,26 @@ export async function deleteAlert(id: number): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
+}
+
+export async function previewAlert(data: Partial<AlertPreference>): Promise<AlertPreview> {
+  const res = await fetch(`${BASE}/alerts/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function testAlertEmail(): Promise<{ status: string }> {
+  const res = await fetch(`${BASE}/alerts/test-email`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || `API error: ${res.status}`);
+  return body;
 }
 
 // ── Assistant juridique ──
