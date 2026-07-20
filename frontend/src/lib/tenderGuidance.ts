@@ -70,12 +70,14 @@ export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new 
       id: "deadline",
       label: "Delai de reponse",
       value: urgency ? `${tender.deadline} (${urgency.label})` : tender.deadline || "Non indique",
-      tone: urgency?.expired || (urgency && urgency.days <= 3) ? "critical" : urgency && urgency.days <= 7 ? "warning" : "positive",
+      tone: !urgency ? "warning" : urgency.expired || urgency.days <= 3 ? "critical" : urgency.days <= 7 ? "warning" : "positive",
       action: urgency?.expired
         ? "Ne pas poursuivre sans confirmation sur le portail source."
         : urgency && urgency.days <= 3
           ? "Verifier immediatement si le dossier est realiste."
-          : "Planifier la lecture du DCE.",
+          : !urgency
+            ? "Verifier la date limite sur le portail source ou dans le DCE."
+            : "Planifier la lecture du DCE.",
     },
     {
       id: "location",
