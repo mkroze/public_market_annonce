@@ -1,6 +1,9 @@
+import asyncio
 import os
+import re
+import unicodedata
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import csv
 from io import BytesIO, StringIO
@@ -15,15 +18,45 @@ import anthropic
 
 from database import init_db, get_db
 from legal_context import SYSTEM_PROMPT
-from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, download_dce
+from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, download_dce, ensure_tender_details
 from config import SECTORS, CATEGORIES
 from auth import hash_password, verify_password, create_token, decode_token
+from digest import run_digest, match_alert, budget_ok
+from emailer import email_enabled, send_email
+
+
+scrape_lock = asyncio.Lock()
+
+
+async def run_scrape_and_digest() -> dict:
+    async with scrape_lock:
+        result = await scrape_all_sectors()
+        new_ids = result.pop("new_ids", [])
+        digest_result = await run_digest(new_ids)
+        return {**result, **digest_result}
+
+
+async def daily_scheduler():
+    hour = int(os.getenv("DIGEST_HOUR", "7"))
+    while True:
+        now = datetime.now()
+        target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+        try:
+            result = await run_scrape_and_digest()
+            print(f"[scheduler] daily scrape+digest done: {result}")
+        except Exception as e:
+            print(f"[scheduler] daily scrape+digest failed: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    scheduler_task = asyncio.create_task(daily_scheduler())
     yield
+    scheduler_task.cancel()
 
 
 app = FastAPI(title="Marchés Publics Maroc API", version="2.0.0", lifespan=lifespan)
@@ -326,36 +359,12 @@ async def get_tender(tender_id: str):
 
     result = dict(row)
 
-    det_cursor = await db.execute(
-        "SELECT * FROM tender_details WHERE tender_id = ?", (tender_id,)
-    )
-    detail = await det_cursor.fetchone()
-
-    if not detail and result.get("detail_url"):
-        scraped = await scrape_tender_detail(result["detail_url"])
-        if scraped:
-            cols = [
-                "tender_id", "objet", "acheteur", "annonce_type", "procedure",
-                "categorie", "allotissement", "lieu_execution", "estimation",
-                "domaines", "adresse_retrait", "adresse_depot", "lieu_ouverture",
-                "caution_provisoire", "qualifications", "agrements", "variante",
-                "reunion", "visite_lieux", "contact", "documents_url", "dce_url",
-                "avis_url", "reserved_pme", "prix_plans",
-            ]
-            placeholders = ", ".join(["?"] * len(cols))
-            col_names = ", ".join(cols)
-            values = [tender_id] + [scraped.get(c, "") for c in cols[1:]]
-            await db.execute(
-                f"INSERT OR REPLACE INTO tender_details ({col_names}) VALUES ({placeholders})",
-                values,
-            )
-            await db.commit()
-            detail = scraped
+    detail = await ensure_tender_details(db, tender_id, result.get("detail_url") or "")
 
     await db.close()
 
     if detail:
-        result["details"] = dict(detail) if not isinstance(detail, dict) else detail
+        result["details"] = detail
     return result
 
 
@@ -485,44 +494,130 @@ async def get_filters():
 # ── Cities ───────────────────────────────────────────────────────────────────
 
 CITY_REGIONS = {
-    "Rabat": "Rabat-Salé-Kénitra",
-    "Salé": "Rabat-Salé-Kénitra",
-    "Kénitra": "Rabat-Salé-Kénitra",
-    "Témara": "Rabat-Salé-Kénitra",
-    "Skhirate": "Rabat-Salé-Kénitra",
+    "Rabat": "Rabat-Sale-Kenitra",
+    "Sale": "Rabat-Sale-Kenitra",
+    "Kenitra": "Rabat-Sale-Kenitra",
+    "Khemisset": "Rabat-Sale-Kenitra",
+    "Sidi Kacem": "Rabat-Sale-Kenitra",
+    "Sidi Slimane": "Rabat-Sale-Kenitra",
+    "Skhirate-Temara": "Rabat-Sale-Kenitra",
     "Casablanca": "Casablanca-Settat",
     "Mohammedia": "Casablanca-Settat",
     "Settat": "Casablanca-Settat",
     "El Jadida": "Casablanca-Settat",
     "Berrechid": "Casablanca-Settat",
+    "Benslimane": "Casablanca-Settat",
+    "Mediouna": "Casablanca-Settat",
+    "Nouaceur": "Casablanca-Settat",
+    "Sidi Bennour": "Casablanca-Settat",
     "Marrakech": "Marrakech-Safi",
     "Safi": "Marrakech-Safi",
     "Essaouira": "Marrakech-Safi",
-    "Tanger": "Tanger-Tétouan-Al Hoceïma",
-    "Tétouan": "Tanger-Tétouan-Al Hoceïma",
-    "Al Hoceïma": "Tanger-Tétouan-Al Hoceïma",
-    "Larache": "Tanger-Tétouan-Al Hoceïma",
-    "Fès": "Fès-Meknès",
-    "Meknès": "Fès-Meknès",
-    "Taza": "Fès-Meknès",
-    "Ifrane": "Fès-Meknès",
-    "Agadir": "Souss-Massa",
+    "Chichaoua": "Marrakech-Safi",
+    "El Kelaa Des Sraghna": "Marrakech-Safi",
+    "Rehamna": "Marrakech-Safi",
+    "Al Haouz": "Marrakech-Safi",
+    "Youssoufia": "Marrakech-Safi",
+    "Tanger-Assilah": "Tanger-Tetouan-Al Hoceima",
+    "Tetouan": "Tanger-Tetouan-Al Hoceima",
+    "Al Hoceima": "Tanger-Tetouan-Al Hoceima",
+    "Larache": "Tanger-Tetouan-Al Hoceima",
+    "Chefchaouen": "Tanger-Tetouan-Al Hoceima",
+    "Mdiq-Fnideq": "Tanger-Tetouan-Al Hoceima",
+    "Ouezzane": "Tanger-Tetouan-Al Hoceima",
+    "Fahs-Anjra": "Tanger-Tetouan-Al Hoceima",
+    "Fes": "Fes-Meknes",
+    "Meknes": "Fes-Meknes",
+    "Taza": "Fes-Meknes",
+    "Ifrane": "Fes-Meknes",
+    "Taounate": "Fes-Meknes",
+    "Moulay Yacoub": "Fes-Meknes",
+    "Sefrou": "Fes-Meknes",
+    "Boulemane": "Fes-Meknes",
+    "El Hajeb": "Fes-Meknes",
+    "Agadir Ida Ou Tanane": "Souss-Massa",
+    "Inezgane-Ait Melloul": "Souss-Massa",
+    "Chtouka-Ait Baha": "Souss-Massa",
     "Tiznit": "Souss-Massa",
-    "Taroudant": "Souss-Massa",
-    "Oujda": "Oriental",
+    "Taroudannt": "Souss-Massa",
+    "Tata": "Souss-Massa",
+    "Oujda-Angad": "Oriental",
     "Nador": "Oriental",
     "Berkane": "Oriental",
-    "Béni Mellal": "Béni Mellal-Khénifra",
-    "Khénifra": "Béni Mellal-Khénifra",
-    "Khouribga": "Béni Mellal-Khénifra",
-    "Errachidia": "Drâa-Tafilalet",
-    "Ouarzazate": "Drâa-Tafilalet",
+    "Driouch": "Oriental",
+    "Figuig": "Oriental",
+    "Jerada": "Oriental",
+    "Taourirt": "Oriental",
+    "Guercif": "Oriental",
+    "Beni Mellal": "Beni Mellal-Khenifra",
+    "Azilal": "Beni Mellal-Khenifra",
+    "Khenifra": "Beni Mellal-Khenifra",
+    "Khouribga": "Beni Mellal-Khenifra",
+    "Errachidia": "Draa-Tafilalet",
+    "Ouarzazate": "Draa-Tafilalet",
+    "Midelt": "Draa-Tafilalet",
+    "Tinghir": "Draa-Tafilalet",
+    "Zagora": "Draa-Tafilalet",
     "Guelmim": "Guelmim-Oued Noun",
-    "Laâyoune": "Laâyoune-Sakia El Hamra",
+    "Assa-Zag": "Guelmim-Oued Noun",
+    "Tan-Tan": "Guelmim-Oued Noun",
+    "Laayoune": "Laayoune-Sakia El Hamra",
+    "Boujdour": "Laayoune-Sakia El Hamra",
+    "Es-Semara": "Laayoune-Sakia El Hamra",
+    "Tarfaya": "Laayoune-Sakia El Hamra",
     "Dakhla": "Dakhla-Oued Ed-Dahab",
+    "Oued Ed Dahab": "Dakhla-Oued Ed-Dahab",
+    "Aousserd": "Dakhla-Oued Ed-Dahab",
 }
 
 REGIONS = list(set(CITY_REGIONS.values()))
+
+
+def _location_key(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value or "")
+    ascii_value = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    ascii_value = re.sub(r"[^A-Za-z0-9]+", " ", ascii_value.upper())
+    return re.sub(r"\s+", " ", ascii_value).strip()
+
+
+LOCATION_ALIASES = {
+    "TAROUDANT": "Taroudannt",
+    "TAROUDANNT": "Taroudannt",
+    "MOHAMMADIA": "Mohammedia",
+    "KHEMISSAT": "Khemisset",
+}
+
+LOCATION_LOOKUP = {(_location_key(city)): city for city in CITY_REGIONS}
+LOCATION_LOOKUP.update({_location_key(alias): city for alias, city in LOCATION_ALIASES.items()})
+
+
+def normalize_location(raw_location: str) -> dict[str, str]:
+    raw_key = _location_key(raw_location)
+    cleaned = re.sub(
+        r"\b(MAROC|PROVINCE|PREFECTURE|WILAYA|WIALAYA|WIALYA|DE|D|DU|DES|LA|LE)\b",
+        " ",
+        raw_key,
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    matches = []
+    for key, city in LOCATION_LOOKUP.items():
+        pattern = rf"(^|\s){re.escape(key)}($|\s)"
+        raw_match = re.search(pattern, raw_key)
+        cleaned_match = re.search(pattern, cleaned)
+        match = raw_match or cleaned_match
+        if match:
+            matches.append((match.start(), -len(key), city))
+
+    if matches:
+        _, _, city = sorted(matches)[0]
+        return {"city": city, "region": CITY_REGIONS[city]}
+
+    label = (raw_location or "").strip()
+    return {"city": label.title() if label else "Non precise", "region": "Autre"}
+
+
+DEADLINE_DATE_SQL = "substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' || substr(deadline,1,2)"
 
 
 @app.get("/api/cities")
@@ -530,22 +625,31 @@ async def list_cities():
     db = await get_db()
     cursor = await db.execute(
         """SELECT location, COUNT(*) as total,
-           SUM(CASE WHEN deadline >= date('now') THEN 1 ELSE 0 END) as active
+           SUM(CASE WHEN status = 'en_cours'
+                    AND length(deadline) >= 10
+                    AND substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' || substr(deadline,1,2) >= date('now')
+                    THEN 1 ELSE 0 END) as active
            FROM tenders WHERE location != ''
            GROUP BY location ORDER BY total DESC"""
     )
     rows = await cursor.fetchall()
     await db.close()
 
-    cities = []
+    city_stats: dict[str, dict] = {}
     for r in rows:
-        loc = r["location"]
-        cities.append({
-            "name": loc,
-            "total": r["total"],
-            "active": r["active"],
-            "region": CITY_REGIONS.get(loc, ""),
-        })
+        normalized = normalize_location(r["location"])
+        city = normalized["city"]
+        if city not in city_stats:
+            city_stats[city] = {
+                "name": city,
+                "total": 0,
+                "active": 0,
+                "region": normalized["region"],
+            }
+        city_stats[city]["total"] += r["total"]
+        city_stats[city]["active"] += r["active"] or 0
+
+    cities = sorted(city_stats.values(), key=lambda c: c["total"], reverse=True)
     return {"cities": cities}
 
 
@@ -553,35 +657,51 @@ async def list_cities():
 async def city_detail(city_name: str):
     db = await get_db()
     cursor = await db.execute(
-        """SELECT category, COUNT(*) as count FROM tenders
-           WHERE location LIKE ? GROUP BY category ORDER BY count DESC""",
-        (f"%{city_name}%",),
+        f"""SELECT location, category, sector_code, sector_name, status, deadline,
+                   CASE WHEN status = 'en_cours'
+                         AND length(deadline) >= 10
+                         AND {DEADLINE_DATE_SQL} >= date('now')
+                        THEN 1 ELSE 0 END as is_active
+            FROM tenders WHERE location != ''"""
     )
-    by_category = [dict(r) for r in await cursor.fetchall()]
-
-    total_cursor = await db.execute(
-        "SELECT COUNT(*) FROM tenders WHERE location LIKE ?", (f"%{city_name}%",)
-    )
-    total = (await total_cursor.fetchone())[0]
-
-    active_cursor = await db.execute(
-        "SELECT COUNT(*) FROM tenders WHERE location LIKE ? AND deadline >= date('now')",
-        (f"%{city_name}%",),
-    )
-    active = (await active_cursor.fetchone())[0]
-
-    sector_cursor = await db.execute(
-        """SELECT sector_code, sector_name, COUNT(*) as count FROM tenders
-           WHERE location LIKE ? GROUP BY sector_code ORDER BY count DESC LIMIT 10""",
-        (f"%{city_name}%",),
-    )
-    top_sectors = [dict(r) for r in await sector_cursor.fetchall()]
-
+    rows = await cursor.fetchall()
     await db.close()
 
+    target = normalize_location(city_name)
+    total = 0
+    active = 0
+    category_counts: dict[str, int] = {}
+    sector_counts: dict[str, dict] = {}
+
+    for row in rows:
+        normalized = normalize_location(row["location"])
+        if normalized["city"] != target["city"]:
+            continue
+
+        total += 1
+        active += row["is_active"] or 0
+
+        category = row["category"] or "Non classe"
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        sector_code = row["sector_code"] or "Non precise"
+        if sector_code not in sector_counts:
+            sector_counts[sector_code] = {
+                "sector_code": sector_code,
+                "sector_name": row["sector_name"] or sector_code,
+                "count": 0,
+            }
+        sector_counts[sector_code]["count"] += 1
+
+    by_category = [
+        {"category": category, "count": count}
+        for category, count in sorted(category_counts.items(), key=lambda item: item[1], reverse=True)
+    ]
+    top_sectors = sorted(sector_counts.values(), key=lambda item: item["count"], reverse=True)[:10]
+
     return {
-        "name": city_name,
-        "region": CITY_REGIONS.get(city_name, ""),
+        "name": target["city"],
+        "region": target["region"],
         "total": total,
         "active": active,
         "by_category": by_category,
@@ -595,19 +715,27 @@ async def city_detail(city_name: str):
 async def list_regions():
     db = await get_db()
     cursor = await db.execute(
-        "SELECT location, COUNT(*) as total FROM tenders WHERE location != '' GROUP BY location"
+        f"""SELECT location, COUNT(*) as total,
+            SUM(CASE WHEN status = 'en_cours'
+                     AND length(deadline) >= 10
+                     AND {DEADLINE_DATE_SQL} >= date('now')
+                     THEN 1 ELSE 0 END) as active
+            FROM tenders WHERE location != '' GROUP BY location"""
     )
     rows = await cursor.fetchall()
     await db.close()
 
     region_stats: dict[str, dict] = {}
     for r in rows:
-        loc = r["location"]
-        region = CITY_REGIONS.get(loc, "Autre")
+        normalized = normalize_location(r["location"])
+        city = normalized["city"]
+        region = normalized["region"]
         if region not in region_stats:
-            region_stats[region] = {"name": region, "total": 0, "cities": []}
+            region_stats[region] = {"name": region, "total": 0, "active": 0, "cities": []}
         region_stats[region]["total"] += r["total"]
-        region_stats[region]["cities"].append(loc)
+        region_stats[region]["active"] += r["active"] or 0
+        if city not in region_stats[region]["cities"]:
+            region_stats[region]["cities"].append(city)
 
     result = sorted(region_stats.values(), key=lambda x: x["total"], reverse=True)
     return {"regions": result}
@@ -615,46 +743,55 @@ async def list_regions():
 
 @app.get("/api/regions/{region_name}")
 async def region_detail(region_name: str):
-    cities_in_region = [c for c, r in CITY_REGIONS.items() if r == region_name]
-    if not cities_in_region:
-        return {"name": region_name, "total": 0, "cities": [], "by_category": [], "top_sectors": []}
-
     db = await get_db()
-    placeholders = ",".join(["?"] * len(cities_in_region))
-
-    total_cursor = await db.execute(
-        f"SELECT COUNT(*) FROM tenders WHERE location IN ({placeholders})", cities_in_region
+    cursor = await db.execute(
+        f"""SELECT location, category, sector_code, sector_name, status, deadline,
+                   CASE WHEN status = 'en_cours'
+                         AND length(deadline) >= 10
+                         AND {DEADLINE_DATE_SQL} >= date('now')
+                        THEN 1 ELSE 0 END as is_active
+            FROM tenders WHERE location != ''"""
     )
-    total = (await total_cursor.fetchone())[0]
-
-    active_cursor = await db.execute(
-        f"SELECT COUNT(*) FROM tenders WHERE location IN ({placeholders}) AND deadline >= date('now')",
-        cities_in_region,
-    )
-    active = (await active_cursor.fetchone())[0]
-
-    cat_cursor = await db.execute(
-        f"""SELECT category, COUNT(*) as count FROM tenders
-            WHERE location IN ({placeholders}) GROUP BY category ORDER BY count DESC""",
-        cities_in_region,
-    )
-    by_category = [dict(r) for r in await cat_cursor.fetchall()]
-
-    sector_cursor = await db.execute(
-        f"""SELECT sector_code, sector_name, COUNT(*) as count FROM tenders
-            WHERE location IN ({placeholders}) GROUP BY sector_code ORDER BY count DESC LIMIT 10""",
-        cities_in_region,
-    )
-    top_sectors = [dict(r) for r in await sector_cursor.fetchall()]
-
-    city_cursor = await db.execute(
-        f"""SELECT location, COUNT(*) as total FROM tenders
-            WHERE location IN ({placeholders}) GROUP BY location ORDER BY total DESC""",
-        cities_in_region,
-    )
-    city_stats = [dict(r) for r in await city_cursor.fetchall()]
-
+    rows = await cursor.fetchall()
     await db.close()
+
+    total = 0
+    active = 0
+    city_counts: dict[str, int] = {}
+    category_counts: dict[str, int] = {}
+    sector_counts: dict[str, dict] = {}
+
+    for row in rows:
+        normalized = normalize_location(row["location"])
+        if normalized["region"] != region_name:
+            continue
+
+        city = normalized["city"]
+        total += 1
+        active += row["is_active"] or 0
+        city_counts[city] = city_counts.get(city, 0) + 1
+
+        category = row["category"] or "Non classe"
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        sector_code = row["sector_code"] or "Non precise"
+        if sector_code not in sector_counts:
+            sector_counts[sector_code] = {
+                "sector_code": sector_code,
+                "sector_name": row["sector_name"] or sector_code,
+                "count": 0,
+            }
+        sector_counts[sector_code]["count"] += 1
+
+    city_stats = [
+        {"location": city, "total": count}
+        for city, count in sorted(city_counts.items(), key=lambda item: item[1], reverse=True)
+    ]
+    by_category = [
+        {"category": category, "count": count}
+        for category, count in sorted(category_counts.items(), key=lambda item: item[1], reverse=True)
+    ]
+    top_sectors = sorted(sector_counts.values(), key=lambda item: item["count"], reverse=True)[:10]
 
     return {
         "name": region_name,
@@ -807,7 +944,10 @@ async def list_alerts(authorization: str | None = Header(None)):
     user = await require_user(authorization)
     db = await get_db()
     cursor = await db.execute(
-        "SELECT * FROM alert_preferences WHERE user_id = ? ORDER BY created_at DESC",
+        """SELECT a.*,
+                  (SELECT MAX(d.sent_at) FROM digest_log d WHERE d.alert_id = a.id) AS last_sent
+           FROM alert_preferences a
+           WHERE a.user_id = ? ORDER BY a.created_at DESC""",
         (user["id"],),
     )
     rows = [dict(r) for r in await cursor.fetchall()]
@@ -858,6 +998,47 @@ async def delete_alert(alert_id: int, authorization: str | None = Header(None)):
     await db.commit()
     await db.close()
     return {"status": "deleted"}
+
+
+@app.post("/api/alerts/preview")
+async def preview_alert(req: AlertRequest, authorization: str | None = Header(None)):
+    await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT t.*, td.estimation FROM tenders t
+           LEFT JOIN tender_details td ON td.tender_id = t.id
+           WHERE t.status = 'en_cours'"""
+    )
+    rows = [dict(r) for r in await cursor.fetchall()]
+    await db.close()
+
+    criteria = req.model_dump()
+    matches = []
+    for tender in rows:
+        tender["region"] = normalize_location(tender.get("location") or "")["region"]
+        if match_alert(criteria, tender) and budget_ok(criteria, tender.get("estimation")):
+            matches.append(tender)
+
+    sample = [
+        {key: tender.get(key) for key in ("id", "title", "entity", "location", "deadline")}
+        for tender in matches[:5]
+    ]
+    return {"count": len(matches), "sample": sample}
+
+
+@app.post("/api/alerts/test-email")
+async def test_alert_email(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    if not email_enabled():
+        raise HTTPException(status_code=503, detail="SMTP non configure (SMTP_HOST manquant)")
+    subject = "Test - Alertes Marches Publics Maroc"
+    text = "Ceci est un email de test de vos alertes. La configuration SMTP fonctionne."
+    html = "<p>Ceci est un email de test de vos alertes. La configuration SMTP fonctionne.</p>"
+    try:
+        await asyncio.to_thread(send_email, user["email"], subject, html, text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Echec d'envoi: {e}")
+    return {"status": "sent"}
 
 
 # ── PDF Export ───────────────────────────────────────────────────────────────
@@ -990,7 +1171,7 @@ app.add_api_route("/api/tenders/{tender_id:path}", get_tender, methods=["GET"])
 
 @app.post("/api/scrape")
 async def trigger_scrape():
-    result = await scrape_all_sectors()
+    result = await run_scrape_and_digest()
     return {"status": "done", **result}
 
 
