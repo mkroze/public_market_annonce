@@ -1,8 +1,9 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Tender } from "../lib/types";
 import { ExternalLink, ArrowUpDown, MapPin, Heart, Banknote } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { addFavorite, removeFavorite } from "../lib/api";
+import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
 import { useState } from "react";
 
 interface Props {
@@ -20,19 +21,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   Services: "bg-[var(--color-charcoal)] text-white",
 };
 
-function getUrgency(deadline: string): { label: string; dotClass: string; textClass: string } | null {
-  if (!deadline) return null;
-  const now = new Date();
-  const dl = new Date(deadline);
-  const diffMs = dl.getTime() - now.getTime();
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (days < 0) return { label: "Expire", dotClass: "status-dot-expired", textClass: "text-[var(--color-border)]" };
-  if (days <= 3) return { label: `${days}j`, dotClass: "status-dot-active", textClass: "text-[var(--color-crimson)] font-semibold" };
-  if (days <= 7) return { label: `${days}j`, dotClass: "status-dot-pending", textClass: "text-[var(--color-gold)]" };
-  if (days <= 14) return { label: `${days}j`, dotClass: "status-dot-completed", textClass: "text-[var(--color-charcoal)]" };
-  return { label: `${days}j`, dotClass: "status-dot-completed", textClass: "text-[var(--color-slate)]" };
-}
+const URGENCY_STYLES = {
+  expired: { dotClass: "status-dot-expired", textClass: "text-[var(--color-border)]" },
+  critical: { dotClass: "status-dot-active", textClass: "text-[var(--color-crimson)] font-semibold" },
+  warning: { dotClass: "status-dot-pending", textClass: "text-[var(--color-gold)]" },
+  normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-slate)]" },
+};
 
 export default function TenderTable({ tenders, sort, order, onSort, favoriteIds, onFavoriteToggle }: Props) {
   const navigate = useNavigate();
@@ -102,18 +96,23 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
         </thead>
         <tbody>
           {tenders.map((t) => {
-            const urgency = getUrgency(t.deadline);
+            const urgency = getTenderUrgency(t.deadline);
+            const urgencyStyle = urgency && URGENCY_STYLES[urgency.tone];
             const isFav = favoriteIds?.has(t.id);
             return (
               <tr
                 key={t.id}
                 className="hover:bg-[var(--color-ivory-dim)] cursor-pointer transition-colors duration-100"
-                onClick={() => navigate(`/tenders/${t.id}`)}
+                onClick={() => navigate(toTenderPath(t.id))}
               >
                 <td className="max-w-md">
-                  <div className="font-medium text-sm leading-tight text-[var(--color-charcoal)]">
+                  <Link
+                    to={toTenderPath(t.id)}
+                    className="font-medium text-sm leading-tight text-[var(--color-charcoal)] hover:underline"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     {t.title || t.reference}
-                  </div>
+                  </Link>
                   {t.reference && t.title && (
                     <div className="text-xs text-[var(--color-slate)] mt-0.5 font-sans">
                       {t.reference}
@@ -151,9 +150,9 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
                   {t.deadline}
                 </td>
                 <td>
-                  {urgency && (
-                    <span className={`flex items-center gap-1.5 text-xs ${urgency.textClass}`}>
-                      <span className={`status-dot ${urgency.dotClass}`}></span>
+                  {urgency && urgencyStyle && (
+                    <span className={`flex items-center gap-1.5 text-xs ${urgencyStyle.textClass}`}>
+                      <span className={`status-dot ${urgencyStyle.dotClass}`}></span>
                       {urgency.label}
                     </span>
                   )}

@@ -20,6 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
+import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
 import type { TenderWithDetails } from "../lib/types";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -30,6 +31,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function TenderDetail() {
   const { id } = useParams<{ id: string }>();
+  const tenderId = decodeTenderRouteId(id);
   const [tender, setTender] = useState<TenderWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,13 +40,13 @@ export default function TenderDetail() {
   const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!tenderId) return;
     setLoading(true);
-    getTender(id)
+    getTender(tenderId)
       .then(setTender)
       .catch(() => setError("Impossible de charger cette consultation"))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [tenderId]);
 
   if (loading) {
     return (
@@ -68,6 +70,7 @@ export default function TenderDetail() {
   }
 
   const d = tender.details;
+  const urgency = getTenderUrgency(tender.deadline);
 
   return (
     <div className="px-4 sm:px-6 py-8 space-y-8 max-w-4xl mx-auto">
@@ -110,9 +113,9 @@ export default function TenderDetail() {
               <MapPin size={14} /> {d?.lieu_execution || tender.location}
             </span>
           )}
-          <span className="flex items-center gap-1.5 text-[var(--color-crimson)] font-medium">
+          <span className={`flex items-center gap-1.5 font-medium ${urgency?.expired ? "text-[var(--color-border)]" : "text-[var(--color-crimson)]"}`}>
             <Calendar size={14} />
-            Echeance: {tender.deadline}
+            Echeance: {tender.deadline}{urgency ? ` (${urgency.label})` : ""}
           </span>
         </div>
       </div>
@@ -179,10 +182,10 @@ export default function TenderDetail() {
             className="btn btn-primary font-sans font-semibold gap-2"
             disabled={dceLoading}
             onClick={async () => {
-              if (!id) return;
+              if (!tenderId) return;
               setDceLoading(true);
               setDceError("");
-              try { await downloadDce(id); }
+              try { await downloadDce(tenderId); }
               catch (e) { setDceError(e instanceof Error ? e.message : "Echec du telechargement"); }
               finally { setDceLoading(false); }
             }}
@@ -195,9 +198,9 @@ export default function TenderDetail() {
           className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-white transition-colors"
           disabled={pdfLoading}
           onClick={async () => {
-            if (!id) return;
+            if (!tenderId) return;
             setPdfLoading(true);
-            try { await downloadPdf(id); } catch {} finally { setPdfLoading(false); }
+            try { await downloadPdf(tenderId); } catch {} finally { setPdfLoading(false); }
           }}
         >
           {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
