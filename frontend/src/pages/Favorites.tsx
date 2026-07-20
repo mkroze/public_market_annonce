@@ -43,7 +43,7 @@ export default function Favorites() {
       <div className="min-h-[50vh] flex items-center justify-center px-4 sm:px-6 py-8">
         <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-8 text-center">
           <Heart className="w-12 h-12 mx-auto mb-4 text-[var(--color-slate)]" />
-          <p className="text-lg mb-4 font-sans text-[var(--color-charcoal)]">Connectez-vous pour voir vos favoris.</p>
+          <p className="text-lg mb-4 font-sans text-[var(--color-charcoal)]">Connectez-vous pour voir vos opportunites.</p>
           <Link to="/login" className="btn btn-primary font-sans font-semibold rounded">
             Se connecter
           </Link>
@@ -87,7 +87,7 @@ export default function Favorites() {
       ) : favorites.length === 0 ? (
         <div className="text-center py-12 text-[var(--color-slate)]">
           <Heart className="w-12 h-12 mx-auto mb-4" />
-          <p className="font-sans">Aucune consultation sauvegard&eacute;e</p>
+          <p className="font-sans">Aucune opportunite sauvegardee</p>
         </div>
       ) : (
         <div className="border border-[var(--color-border-subtle)] rounded overflow-hidden">
@@ -120,7 +120,7 @@ export default function Favorites() {
                           e.stopPropagation();
                           handleRemove(tender.id);
                         }}
-                        title="Retirer des favoris"
+                        title="Retirer des opportunites"
                       >
                         <Heart className="w-4 h-4 fill-current" />
                       </button>
