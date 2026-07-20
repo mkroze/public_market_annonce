@@ -55,3 +55,31 @@ None.
 ## Concerns
 
 None.
+
+---
+
+# Task 1 Re-Review Fix Report
+
+## What I Fixed
+
+- Updated Favorites and Candidacy Assistant detail navigation to use `toTenderPath`, preserving slash-bearing tender IDs as a single route segment.
+- Encoded the tender ID in the detail-to-guide handoff query string.
+- Corrected the table header to `Échéance`.
+- Removed the unrelated email digest alerts design specification from this branch range.
+
+## Tests Run
+
+- `cd frontend && npm run build` - passed.
+
+## Files Changed
+
+- `frontend/src/pages/Favorites.tsx`
+- `frontend/src/pages/CandidacyAssistant.tsx`
+- `frontend/src/pages/TenderDetail.tsx`
+- `frontend/src/components/TenderTable.tsx`
+- `docs/superpowers/specs/2026-07-20-email-digest-alerts-design.md` (removed)
+- `.superpowers/sdd/task-1-report.md`
+
+## Concerns
+
+None.

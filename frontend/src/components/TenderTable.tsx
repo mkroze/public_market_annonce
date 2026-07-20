@@ -89,7 +89,7 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
             <th>Secteur</th>
             <SortHeader field="location" label="Lieu" />
             <SortHeader field="estimation" label="Estimation" highlight />
-            <SortHeader field="deadline" label="Echeance" />
+            <SortHeader field="deadline" label="Échéance" />
             <th>Delai</th>
             <th></th>
           </tr>

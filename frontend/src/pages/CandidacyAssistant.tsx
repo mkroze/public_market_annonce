@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { getTender } from "../lib/api";
+import { toTenderPath } from "../lib/tenderUtils";
 import type { TenderWithDetails } from "../lib/types";
 import { PROCEDURES, getProcedure, assessPriceRisk } from "../lib/procedures";
 import type { PrestationType } from "../lib/procedures";
@@ -106,7 +107,7 @@ export default function CandidacyAssistant({ embedded = false }: { embedded?: bo
       <div className="mb-8">
         {!embedded && tenderId && (
           <Link
-            to={`/tenders/${tenderId}`}
+            to={toTenderPath(tenderId)}
             className="inline-flex items-center gap-1.5 mb-3 text-sm font-sans text-[var(--color-crimson)] hover:underline"
           >
             <ArrowLeft size={14} /> Retour à la consultation

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { getFavorites, removeFavorite } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { toTenderPath } from "../lib/tenderUtils";
 import type { Tender } from "../lib/types";
 
 export default function Favorites() {
@@ -91,7 +92,7 @@ export default function Favorites() {
                   <tr
                     key={tender.id}
                     className="border-b border-[var(--color-border-subtle)] hover:bg-[var(--color-ivory-dim)] cursor-pointer transition-colors"
-                    onClick={() => navigate(`/tenders/${tender.id}`)}
+                    onClick={() => navigate(toTenderPath(tender.id))}
                   >
                     <td className="max-w-xs truncate font-sans text-[var(--color-charcoal)]">{tender.title}</td>
                     <td className="max-w-[200px] truncate font-sans text-[var(--color-slate)]">{tender.entity}</td>
