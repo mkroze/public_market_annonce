@@ -20,6 +20,10 @@ import type {
 
 const BASE = "/api";
 
+function tenderPathSegment(id: string): string {
+  return encodeURIComponent(id);
+}
+
 function getToken(): string | null {
   return localStorage.getItem("token");
 }
@@ -90,7 +94,7 @@ export async function exportTenders(
 }
 
 export function getTender(id: string): Promise<TenderWithDetails> {
-  return fetchJSON<TenderWithDetails>(`${BASE}/tenders/${id}`);
+  return fetchJSON<TenderWithDetails>(`${BASE}/tenders/${tenderPathSegment(id)}`);
 }
 
 export function getOverview(): Promise<OverviewResponse> {
@@ -110,7 +114,7 @@ export function triggerScrape(): Promise<{ status: string; total_found: number; 
 }
 
 export async function downloadDce(tenderId: string): Promise<void> {
-  const res = await fetch(`${BASE}/tenders/${tenderId}/dce`);
+  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/dce`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Download failed" }));
     throw new Error(err.error || "Download failed");
@@ -131,7 +135,7 @@ export async function downloadDce(tenderId: string): Promise<void> {
 }
 
 export async function downloadPdf(tenderId: string): Promise<void> {
-  const res = await fetch(`${BASE}/tenders/${tenderId}/pdf`);
+  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/pdf`);
   if (!res.ok) throw new Error("PDF export failed");
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition") || "";

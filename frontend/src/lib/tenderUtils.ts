@@ -15,21 +15,21 @@ export function decodeTenderRouteId(routeId: string | undefined): string {
 
 export function parseTenderDeadline(deadline: string): Date | null {
   if (!deadline) return null;
-  const iso = Date.parse(deadline);
-  if (!Number.isNaN(iso)) return new Date(iso);
-
   const match = deadline.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
-  if (!match) return null;
+  if (match) {
+    const [, day, month, year, hour = "00", minute = "00"] = match;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
 
-  const [, day, month, year, hour = "00", minute = "00"] = match;
-  const parsed = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-  );
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const iso = Date.parse(deadline);
+  return Number.isNaN(iso) ? null : new Date(iso);
 }
 
 export function getTenderUrgency(deadline: string, now = new Date()): TenderUrgency | null {

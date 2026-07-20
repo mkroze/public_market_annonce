@@ -115,7 +115,7 @@ export default function TenderDetail() {
           )}
           <span className={`flex items-center gap-1.5 font-medium ${urgency?.expired ? "text-[var(--color-border)]" : "text-[var(--color-crimson)]"}`}>
             <Calendar size={14} />
-            Echeance: {tender.deadline}{urgency ? ` (${urgency.label})` : ""}
+            Échéance: {tender.deadline}{urgency ? ` (${urgency.label})` : ""}
           </span>
         </div>
       </div>

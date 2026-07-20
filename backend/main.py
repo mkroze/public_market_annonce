@@ -315,7 +315,6 @@ async def export_tenders(
     )
 
 
-@app.get("/api/tenders/{tender_id}")
 async def get_tender(tender_id: str):
     db = await get_db()
     cursor = await db.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
@@ -863,7 +862,7 @@ async def delete_alert(alert_id: int, authorization: str | None = Header(None)):
 
 # ── PDF Export ───────────────────────────────────────────────────────────────
 
-@app.get("/api/tenders/{tender_id}/pdf")
+@app.get("/api/tenders/{tender_id:path}/pdf")
 async def export_tender_pdf(tender_id: str):
     db = await get_db()
     cursor = await db.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
@@ -956,7 +955,7 @@ async def export_tender_pdf(tender_id: str):
 
 # ── DCE Download ─────────────────────────────────────────────────────────────
 
-@app.get("/api/tenders/{tender_id}/dce")
+@app.get("/api/tenders/{tender_id:path}/dce")
 async def download_tender_dce(tender_id: str):
     db = await get_db()
     det_cursor = await db.execute(
@@ -981,6 +980,10 @@ async def download_tender_dce(tender_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# Register the catch-all detail route after the download routes so their suffixes win.
+app.add_api_route("/api/tenders/{tender_id:path}", get_tender, methods=["GET"])
 
 
 # ── Scrape ───────────────────────────────────────────────────────────────────
