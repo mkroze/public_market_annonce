@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Scale, ShieldCheck, Calculator as CalcIcon, Sparkles, Gavel } from "lucide-react";
 import Procedures from "./Procedures";
 import Eligibility from "./Eligibility";
@@ -17,6 +17,8 @@ const SECTIONS = [
 
 export default function Guide() {
   const [active, setActive] = useState<string>("procedures");
+  const [searchParams] = useSearchParams();
+  const tenderId = searchParams.get("tender");
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -45,10 +47,22 @@ export default function Guide() {
           </h1>
         </div>
         <p className="font-sans text-sm text-[var(--color-slate)] ml-[34px]">
-          De la procédure au recours : comprendre le mode de passation, vérifier votre éligibilité,
-          chiffrer pénalités et cautions, préparer votre dossier et connaître vos voies de recours.
+          {tenderId
+            ? "Cette page vous aide a preparer la prochaine etape pour la consultation selectionnee."
+            : "Comprendre la procedure, verifier votre eligibilite, chiffrer les cautions et preparer votre dossier."}
         </p>
       </div>
+
+      {tenderId && (
+        <div className="mb-6 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-4 py-3">
+          <p className="font-sans text-sm font-semibold text-[var(--color-charcoal)]">
+            Preparation depuis une consultation
+          </p>
+          <p className="mt-1 font-sans text-xs text-[var(--color-slate)]">
+            Commencez par l'assistant, puis utilisez le calculateur ou les procedures si un point du DCE n'est pas clair.
+          </p>
+        </div>
+      )}
 
       <div className="lg:grid lg:grid-cols-[180px_1fr] lg:gap-8">
         <nav className="hidden lg:block" aria-label="Sommaire">

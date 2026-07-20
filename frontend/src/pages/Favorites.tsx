@@ -56,8 +56,23 @@ export default function Favorites() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <h1 className="font-display text-2xl text-[var(--color-charcoal)] flex items-center gap-2 mb-6">
         <Heart className="w-6 h-6 text-[var(--color-crimson)]" />
-        Mes consultations sauvegard&eacute;es
+        Mes opportunites sauvegardees
       </h1>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-4 py-3">
+          <p className="label-academic">A verifier</p>
+          <p className="font-display text-2xl font-bold text-[var(--color-charcoal)]">{favorites.length}</p>
+        </div>
+        <div className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-4 py-3">
+          <p className="label-academic">Prochaine action</p>
+          <p className="font-sans text-sm text-[var(--color-slate)]">Lire le DCE ou verifier l'eligibilite</p>
+        </div>
+        <div className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-4 py-3">
+          <p className="label-academic">Suivi</p>
+          <Link to="/alerts" className="font-sans text-sm font-semibold text-[var(--color-crimson)] hover:underline">Creer une alerte</Link>
+        </div>
+      </div>
 
       {error && (
         <div className="border border-[var(--color-border-subtle)] border-l-4 border-l-[var(--color-crimson)] rounded bg-[var(--color-ivory-dim)] p-3 mb-4">

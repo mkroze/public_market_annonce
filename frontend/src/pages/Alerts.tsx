@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Bell, Check, Eye, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import {
   createAlert,
@@ -97,6 +97,13 @@ function splitCsv(value: string): string[] {
 
 export default function Alerts() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const tenderContext = {
+    tenderId: searchParams.get("tender") || "",
+    name: searchParams.get("name") || "",
+    sector: searchParams.get("sector") || "",
+    region: searchParams.get("region") || "",
+  };
   const [alerts, setAlerts] = useState<AlertPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -132,6 +139,20 @@ export default function Alerts() {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !tenderContext.tenderId) return;
+    setForm({
+      ...EMPTY_FORM,
+      name: tenderContext.name ? `Opportunites similaires - ${tenderContext.name.slice(0, 60)}` : "Opportunites similaires",
+      sectors: tenderContext.sector ? [tenderContext.sector] : [],
+      regions: tenderContext.region ? [tenderContext.region] : [],
+    });
+    setEditingId(null);
+    setPreview(null);
+    setShowForm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, tenderContext.tenderId]);
 
   async function fetchAlerts() {
     setLoading(true);
@@ -282,9 +303,9 @@ export default function Alerts() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Alertes</h1>
+          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Suivre mes opportunites</h1>
           <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
-            Recevez par email les nouvelles consultations qui correspondent a vos criteres.
+            Recevez par email les nouvelles consultations qui ressemblent a ce que vous cherchez.
           </p>
         </div>
         <div className="flex gap-2">
