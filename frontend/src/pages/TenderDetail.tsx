@@ -18,8 +18,13 @@ import {
   Mail,
   User,
   Sparkles,
+  Bell,
+  CheckCircle2,
+  HelpCircle,
+  Heart,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
+import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
 import type { TenderWithDetails } from "../lib/types";
 
@@ -27,6 +32,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   Travaux: "bg-[var(--color-crimson)] text-white",
   Fournitures: "bg-[var(--color-gold)] text-white",
   Services: "bg-[var(--color-charcoal)] text-white",
+};
+
+const CHECK_TONE_CLASS = {
+  positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  warning: "border-amber-200 bg-amber-50 text-amber-900",
+  critical: "border-red-200 bg-red-50 text-red-900",
+  neutral: "border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]",
 };
 
 export default function TenderDetail() {
@@ -71,6 +83,7 @@ export default function TenderDetail() {
 
   const d = tender.details;
   const urgency = getTenderUrgency(tender.deadline);
+  const checklist = getTenderDecisionChecklist(tender);
 
   return (
     <div className="px-4 sm:px-6 py-8 space-y-8 max-w-4xl mx-auto">
@@ -120,6 +133,106 @@ export default function TenderDetail() {
         </div>
       </div>
 
+      {/* Decision summary */}
+      <section className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="rounded bg-[var(--color-crimson)] p-2 text-white">
+            <HelpCircle size={18} />
+          </div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">
+              Dois-je poursuivre cette opportunite ?
+            </h2>
+            <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
+              Verifiez d'abord les points qui bloquent souvent une PME : delai, lieu, budget, caution, qualifications et documents.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {checklist.map((item) => (
+            <div key={item.id} className={`rounded border p-3 ${CHECK_TONE_CLASS[item.tone]}`}>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-sans text-sm font-semibold">{item.label}</p>
+                  <p className="mt-0.5 font-sans text-sm">{item.value}</p>
+                  <p className="mt-1 font-sans text-xs opacity-80">{item.action}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Actions */}
+      {dceError && (
+        <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
+          {dceError}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-3">
+        <Link
+          to={`/guide?tender=${encodeURIComponent(tender.id)}#assistant`}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-semibold rounded bg-[var(--color-crimson)] text-white hover:opacity-90 transition-opacity"
+        >
+          <Sparkles size={16} /> Preparer ma candidature
+        </Link>
+        <Link
+          to={`/alerts?tender=${encodeURIComponent(tender.id)}&name=${encodeURIComponent(tender.title || tender.reference)}&sector=${encodeURIComponent(tender.sector_code || "")}&region=${encodeURIComponent(tender.location || "")}`}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]"
+        >
+          <Bell size={16} /> Recevoir des opportunites similaires
+        </Link>
+        <Link
+          to="/favorites"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]"
+        >
+          <Heart size={16} /> Voir mes opportunites
+        </Link>
+        {d?.dce_url && (
+          <button
+            className="btn btn-primary font-sans font-semibold gap-2"
+            disabled={dceLoading}
+            onClick={async () => {
+              if (!tenderId) return;
+              setDceLoading(true);
+              setDceError("");
+              try { await downloadDce(tenderId); }
+              catch (e) { setDceError(e instanceof Error ? e.message : "Echec du telechargement"); }
+              finally { setDceLoading(false); }
+            }}
+          >
+            {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
+            {dceLoading ? "Telechargement..." : "Telecharger le DCE"}
+          </button>
+        )}
+        <button
+          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-white transition-colors"
+          disabled={pdfLoading}
+          onClick={async () => {
+            if (!tenderId) return;
+            setPdfLoading(true);
+            try { await downloadPdf(tenderId); } catch {} finally { setPdfLoading(false); }
+          }}
+        >
+          {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
+          Export PDF
+        </button>
+        {d?.avis_url && (
+          <a href={d.avis_url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]">
+            <FileText size={16} /> Avis de publication
+          </a>
+        )}
+        {tender.detail_url && (
+          <a href={tender.detail_url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-sans text-[var(--color-slate)] hover:text-[var(--color-charcoal)] transition-colors">
+            <ExternalLink size={16} /> Voir sur marchespublics.gov.ma
+          </a>
+        )}
+      </div>
+
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard icon={Building2} title="Acheteur public" value={d?.acheteur || tender.entity} />
@@ -164,61 +277,6 @@ export default function TenderDetail() {
         </Section>
       )}
 
-      {/* Actions */}
-      {dceError && (
-        <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
-          {dceError}
-        </div>
-      )}
-      <div className="flex flex-wrap gap-3 pt-4 border-t border-[var(--color-border-subtle)]">
-        <Link
-          to={`/guide?tender=${encodeURIComponent(tender.id)}#assistant`}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-semibold rounded bg-[var(--color-crimson)] text-white hover:opacity-90 transition-opacity"
-        >
-          <Sparkles size={16} /> Preparer ma candidature
-        </Link>
-        {d?.dce_url && (
-          <button
-            className="btn btn-primary font-sans font-semibold gap-2"
-            disabled={dceLoading}
-            onClick={async () => {
-              if (!tenderId) return;
-              setDceLoading(true);
-              setDceError("");
-              try { await downloadDce(tenderId); }
-              catch (e) { setDceError(e instanceof Error ? e.message : "Echec du telechargement"); }
-              finally { setDceLoading(false); }
-            }}
-          >
-            {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
-            {dceLoading ? "Telechargement..." : "Telecharger le DCE"}
-          </button>
-        )}
-        <button
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-white transition-colors"
-          disabled={pdfLoading}
-          onClick={async () => {
-            if (!tenderId) return;
-            setPdfLoading(true);
-            try { await downloadPdf(tenderId); } catch {} finally { setPdfLoading(false); }
-          }}
-        >
-          {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
-          Export PDF
-        </button>
-        {d?.avis_url && (
-          <a href={d.avis_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]">
-            <FileText size={16} /> Avis de publication
-          </a>
-        )}
-        {tender.detail_url && (
-          <a href={tender.detail_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-sans text-[var(--color-slate)] hover:text-[var(--color-charcoal)] transition-colors">
-            <ExternalLink size={16} /> Voir sur marchespublics.gov.ma
-          </a>
-        )}
-      </div>
     </div>
   );
 }
