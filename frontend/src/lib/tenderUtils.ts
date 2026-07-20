@@ -25,7 +25,16 @@ export function parseTenderDeadline(deadline: string): Date | null {
       Number(hour),
       Number(minute),
     );
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    if (Number.isNaN(parsed.getTime())) return null;
+
+    const matchesInput =
+      parsed.getFullYear() === Number(year) &&
+      parsed.getMonth() === Number(month) - 1 &&
+      parsed.getDate() === Number(day) &&
+      parsed.getHours() === Number(hour) &&
+      parsed.getMinutes() === Number(minute);
+
+    return matchesInput ? parsed : null;
   }
 
   const iso = Date.parse(deadline);
