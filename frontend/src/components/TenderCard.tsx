@@ -48,9 +48,9 @@ export default function TenderCard({ tender, favoriteIds, onFavoriteToggle, comp
   }
 
   return (
-    <article className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] transition-colors hover:border-[var(--color-border)]">
-      <Link to={toTenderPath(tender.id)} className="block p-4">
-        <div className="flex items-start justify-between gap-3">
+    <article className="relative rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] transition-colors hover:border-[var(--color-border)]">
+      <div className="flex items-start justify-between gap-3 p-4 pb-0">
+        <Link to={toTenderPath(tender.id)} className="min-w-0 flex-1">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className={`rounded border px-2 py-0.5 font-sans text-xs font-semibold ${TONE_CLASS[guidance.tone]}`}>
@@ -69,21 +69,23 @@ export default function TenderCard({ tender, favoriteIds, onFavoriteToggle, comp
               <p className="mt-1 font-sans text-xs text-[var(--color-slate)]">{tender.reference}</p>
             )}
           </div>
-          <button
-            type="button"
-            className={`btn btn-ghost btn-sm btn-square shrink-0 ${isFavorite ? "text-[var(--color-crimson)]" : "text-[var(--color-slate)]"}`}
-            onClick={toggleFavorite}
-            disabled={toggling}
-            aria-label={isFavorite ? "Retirer de mes opportunites" : "Ajouter a mes opportunites"}
-          >
-            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
-          </button>
-        </div>
+        </Link>
+        <button
+          type="button"
+          className={`btn btn-ghost btn-sm btn-square shrink-0 ${isFavorite ? "text-[var(--color-crimson)]" : "text-[var(--color-slate)]"}`}
+          onClick={toggleFavorite}
+          disabled={toggling}
+          aria-label={isFavorite ? "Retirer de mes opportunites" : "Ajouter a mes opportunites"}
+        >
+          <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+        </button>
+      </div>
 
+      <Link to={toTenderPath(tender.id)} className="block p-4 pt-3">
         <dl className="mt-4 grid grid-cols-1 gap-2 font-sans text-sm text-[var(--color-slate)] sm:grid-cols-2">
           <div className="flex items-center gap-1.5">
             <Building2 size={14} className="shrink-0 text-[var(--color-crimson)]" />
-            <span className="truncate">{tender.entity || "Acheteur non indique"}</span>
+            <span className="truncate">{tender.entity || "Acheteur a verifier"}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <MapPin size={14} className="shrink-0 text-[var(--color-crimson)]" />
