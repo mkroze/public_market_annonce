@@ -2,9 +2,10 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Search, BarChart3,
   CreditCard, BookOpen, Scale, Bell, Heart, LogIn, LogOut, User, Menu,
-  Sun, Moon, Handshake,
+  Sun, Moon, Handshake, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { isAdminRole } from "../admin/permissions";
 import { useState, useEffect } from "react";
 
 export default function Navbar() {
@@ -102,6 +103,16 @@ export default function Navbar() {
                     <Bell size={14} /> Mes suivis
                   </Link>
                 </li>
+                {isAdminRole(user.role) && (
+                  <>
+                    <div className="divider-academic my-1"></div>
+                    <li>
+                      <Link to="/admin" className="text-sm">
+                        <ShieldCheck size={14} /> Espace admin
+                      </Link>
+                    </li>
+                  </>
+                )}
                 <div className="divider-academic my-1"></div>
                 <li>
                   <button onClick={logout} className="text-sm text-[var(--color-crimson)]">

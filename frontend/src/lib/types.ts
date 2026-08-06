@@ -114,6 +114,8 @@ export interface User {
   name: string;
   plan: string;
   company?: string;
+  role?: string;
+  status?: string;
 }
 
 export interface AuthResponse {

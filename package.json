@@ -2,12 +2,16 @@
   "name": "marches-publics",
   "private": true,
   "scripts": {
+    "dev": "npm run superdev",
     "docker:build": "docker build -t marches-publics .",
     "docker:run": "docker run --rm -p 8000:8000 -v marches-data:/app/data --name marches marches-publics",
     "docker:stop": "docker stop marches",
+    "heavyupdocker": "npm run docker:build && npm run docker:run",
     "tunnel": "cloudflared tunnel --url http://localhost:5173",
     "dev:backend": "cd backend && .venv/bin/uvicorn main:app --port 8000",
     "dev:frontend": "cd frontend && npm run dev",
+    "superdev": "trap 'kill 0' SIGINT SIGTERM EXIT; npm run dev:backend & npm run dev:frontend & wait",
+    "light": "npm run superdev",
     "tunnel:dev": "npm run dev:backend & npm run dev:frontend & sleep 3 && cloudflared tunnel --url http://localhost:5173"
   }
 }

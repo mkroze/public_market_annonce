@@ -406,10 +406,11 @@ async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
         return None
 
 
-async def scrape_all_sectors() -> dict:
+async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "scheduled") -> dict:
     db = await get_db()
     log_cursor = await db.execute(
-        "INSERT INTO scrape_log (status) VALUES ('running')"
+        "INSERT INTO scrape_log (status, actor_email, trigger) VALUES ('running', ?, ?)",
+        (actor_email, trigger),
     )
     log_id = log_cursor.lastrowid
     await db.commit()

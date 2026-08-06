@@ -192,6 +192,12 @@ h1, h2, h3, .heading {
   outline: none;
 }
 
+select,
+select option {
+  background-color: var(--color-ivory);
+  color: var(--color-charcoal);
+}
+
 /* ── Navbar — thin bottom border ─────────────────────────────────── */
 .navbar {
   border-bottom: 1px solid var(--color-border-subtle);

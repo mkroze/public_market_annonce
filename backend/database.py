@@ -8,6 +8,15 @@ async def get_db() -> aiosqlite.Connection:
     db.row_factory = aiosqlite.Row
     return db
 
+async def _add_column_if_missing(db, table: str, column: str, ddl: str):
+    """Idempotently add a column to an existing table (CREATE IF NOT EXISTS
+    never alters an already-created table, so migrations need this)."""
+    cursor = await db.execute(f"PRAGMA table_info({table})")
+    existing = {row["name"] for row in await cursor.fetchall()}
+    if column not in existing:
+        await db.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
 async def init_db():
     db = await get_db()
     await db.executescript("""
@@ -126,6 +135,47 @@ async def init_db():
             UNIQUE(user_id, tender_id)
         );
         CREATE INDEX IF NOT EXISTS idx_digest_user ON digest_log(user_id);
+
+        -- Admin audit trail: one row per sensitive admin action or denied access
+        CREATE TABLE IF NOT EXISTS admin_audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_id INTEGER,
+            actor_email TEXT,
+            actor_role TEXT,
+            action TEXT NOT NULL,
+            target_type TEXT,
+            target_id TEXT,
+            result TEXT DEFAULT 'success',
+            ip TEXT,
+            route TEXT,
+            before_json TEXT,
+            after_json TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_logs(action);
+        CREATE INDEX IF NOT EXISTS idx_audit_actor ON admin_audit_logs(actor_id);
     """)
+
+    # ── Migrations for pre-existing tables ──────────────────────────────────
+    # users: admin role/status metadata
+    await _add_column_if_missing(db, "users", "role", "role TEXT DEFAULT 'user'")
+    await _add_column_if_missing(db, "users", "status", "status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(db, "users", "last_login", "last_login TEXT")
+    await _add_column_if_missing(db, "users", "invited_by", "invited_by INTEGER")
+    await _add_column_if_missing(db, "users", "mfa_enabled", "mfa_enabled INTEGER DEFAULT 0")
+
+    # tenders: admin moderation state
+    await _add_column_if_missing(db, "tenders", "admin_status", "admin_status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(db, "tenders", "review_status", "review_status TEXT DEFAULT 'unreviewed'")
+    await _add_column_if_missing(db, "tenders", "flag_note", "flag_note TEXT")
+
+    # scrape_log: attribution + richer import outcome
+    await _add_column_if_missing(db, "scrape_log", "actor_email", "actor_email TEXT")
+    await _add_column_if_missing(db, "scrape_log", "trigger", "trigger TEXT DEFAULT 'scheduled'")
+    await _add_column_if_missing(db, "scrape_log", "tenders_updated", "tenders_updated INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "scrape_log", "tenders_skipped", "tenders_skipped INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "scrape_log", "warnings", "warnings TEXT")
+
     await db.commit()
     await db.close()

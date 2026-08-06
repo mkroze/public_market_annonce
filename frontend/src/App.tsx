@@ -25,19 +25,20 @@ import Register from "./pages/Register";
 import Alerts from "./pages/Alerts";
 import Favorites from "./pages/Favorites";
 import Partners from "./pages/Partners";
+import AdminGuard from "./admin/AdminGuard";
 
 // Chargé à la demande pour ne pas alourdir le bundle des pages de consultation
 const CandidacyAssistant = lazy(() => import("./pages/CandidacyAssistant"));
 const Guide = lazy(() => import("./pages/Guide"));
+// L'espace admin est isolé et chargé à la demande (bundle séparé).
+const AdminApp = lazy(() => import("./admin/AdminApp"));
 
-export default function App() {
+function PublicLayout() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <div className="min-h-screen bg-base-100" data-theme="academic">
-          <Navbar />
-          <main className="max-w-7xl mx-auto">
-            <Routes>
+    <div className="min-h-screen bg-base-100" data-theme="academic">
+      <Navbar />
+      <main className="max-w-7xl mx-auto">
+        <Routes>
               <Route path="/" element={<Overview />} />
               <Route path="/tenders" element={<Tenders />} />
               <Route path="/tenders/:id" element={<TenderDetail />} />
@@ -86,12 +87,38 @@ export default function App() {
               <Route path="/recours" element={<Recours />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/favorites" element={<Favorites />} />
-              <Route path="/partenaires" element={<Partners />} />
-            </Routes>
-          </main>
-        </div>
+          <Route path="/alerts" element={<Alerts />} />
+          <Route path="/favorites" element={<Favorites />} />
+          <Route path="/partenaires" element={<Partners />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+const adminFallback = (
+  <div className="min-h-screen flex justify-center py-20 bg-[var(--color-ivory)]">
+    <span className="loading loading-spinner loading-lg text-[var(--color-crimson)]"></span>
+  </div>
+);
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route
+            path="/admin/*"
+            element={
+              <Suspense fallback={adminFallback}>
+                <AdminGuard>
+                  <AdminApp />
+                </AdminGuard>
+              </Suspense>
+            }
+          />
+          <Route path="/*" element={<PublicLayout />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

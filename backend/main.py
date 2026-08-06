@@ -23,14 +23,15 @@ from config import SECTORS, CATEGORIES
 from auth import hash_password, verify_password, create_token, decode_token
 from digest import run_digest, match_alert, budget_ok
 from emailer import email_enabled, send_email
+from admin import router as admin_router, bootstrap_admins
 
 
 scrape_lock = asyncio.Lock()
 
 
-async def run_scrape_and_digest() -> dict:
+async def run_scrape_and_digest(actor_email: str | None = None, trigger: str = "scheduled") -> dict:
     async with scrape_lock:
-        result = await scrape_all_sectors()
+        result = await scrape_all_sectors(actor_email=actor_email, trigger=trigger)
         new_ids = result.pop("new_ids", [])
         digest_result = await run_digest(new_ids)
         return {**result, **digest_result}
@@ -54,6 +55,7 @@ async def daily_scheduler():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await bootstrap_admins()
     scheduler_task = asyncio.create_task(daily_scheduler())
     yield
     scheduler_task.cancel()
@@ -67,6 +69,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
 
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
@@ -125,7 +129,7 @@ async def register(req: RegisterRequest):
     await db.close()
 
     token = create_token(user_id, req.email)
-    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free"}}
+    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": "user", "status": "active"}}
 
 
 @app.post("/api/auth/login")
@@ -139,6 +143,12 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user = dict(user)
+
+    db = await get_db()
+    await db.execute("UPDATE users SET last_login = datetime('now') WHERE id = ?", (user["id"],))
+    await db.commit()
+    await db.close()
+
     token = create_token(user["id"], user["email"])
     return {
         "token": token,
@@ -148,6 +158,8 @@ async def login(req: LoginRequest):
             "name": user["name"],
             "plan": user["plan"],
             "company": user.get("company", ""),
+            "role": user.get("role", "user"),
+            "status": user.get("status", "active"),
         },
     }
 
@@ -161,6 +173,8 @@ async def me(authorization: str | None = Header(None)):
         "name": user["name"],
         "plan": user["plan"],
         "company": user.get("company", ""),
+        "role": user.get("role", "user"),
+        "status": user.get("status", "active"),
     }
 
 

@@ -56,6 +56,130 @@ These are the first institutions to target.
     - Why: construction and public works are among the largest public procurement categories.
     - Source: <https://www.fnbtp.ma/>
 
+## Priority Data Portals And Transparency Surfaces
+
+These portals are not only partner targets. They are the actual public data and workflow surfaces that can reduce administrative opacity: procurement, legal texts, company identity, land, permits, complaints, budgets, public audits, trade, taxation, employment and socioeconomic baselines.
+
+### Tier 1: Core Integration Targets
+
+1. **Portail Marocain des Marches Publics / PMMP**
+   - Data surface: consultations in progress, advanced tender search, purchase notices, PV extracts, final results, completion reports, forecast programs, excluded companies, buyer/supplier access, guides and procurement regulations.
+   - Product value: primary tender-intelligence source; enables alerts, buyer profiles, award tracking, sector/category intelligence, deadline monitoring and supplier-readiness tools.
+   - Access notes: public web portal with structured pages and documents; official partnership/API access should be pursued through TGR/PMMP before relying on scraping.
+   - Source: <https://www.marchespublics.gov.ma/pmmp/>
+
+2. **Portail National des Donnees Ouvertes / data.gov.ma**
+   - Data surface: national CKAN open-data catalogue, datasets, groups, producers, tags, resources, activity feeds and API endpoints.
+   - Product value: should be the default discovery layer for reusable public datasets; useful for enrichment, cross-referencing and monitoring what administrations publish.
+   - Access notes: CKAN API is documented and exposes package search/list/show and resource search endpoints, but dataset coverage and freshness need dataset-by-dataset validation.
+   - Source: <https://www.data.gov.ma/> and <https://www.data.gov.ma/index.php/fr/guide-api>
+
+3. **SGG / Bulletin Officiel**
+   - Data surface: official laws, decrees, regulations, conventions, legal/judicial/administrative announcements, land-registration announcements, official French translations and bulletin search.
+   - Product value: canonical legal-history layer; lets users connect tenders, procedures and administrative obligations to the official text that created or changed them.
+   - Access notes: public search and downloadable official bulletins; important for citation, versioning and legal-change tracking.
+   - Source: <https://www.sgg.gov.ma/BulletinOfficiel.aspx>
+
+4. **Adala / Ministry of Justice Legal Portal**
+   - Data surface: legal texts, legislative and regulatory sources, advanced legal search, draft laws, circulars, publications, justice-related royal speeches and links to jurisprudence.
+   - Product value: legal navigation layer for citizens, SMEs and professionals who need to understand obligations without reading scattered official texts manually.
+   - Access notes: useful complement to the Bulletin Officiel because it is organized around legal search and legal-source discovery.
+   - Source: <https://adala.justice.gov.ma/>
+
+5. **Directinfo / OMPIC**
+   - Data surface: OMPIC databases, Registre Central du Commerce, industrial property, legal company sheets, financial sheets, statutes, minutes, financial statements, auditor reports and company-creation barometer.
+   - Product value: company identity, supplier verification, beneficial procurement context, competitor discovery, corporate history and SME onboarding.
+   - Access notes: some documents/services are transactional or paid; still a priority because it is the official business identity surface.
+   - Source: <https://www.directinfo.ma/>
+
+6. **HCP / Haut-Commissariat au Plan**
+   - Data surface: official statistics, databases, microdata/open data, visualizations, census/RGPH results, labor market, demographics, economy, living conditions, SDGs, publications and release calendar.
+   - Product value: national baseline for market sizing, territorial context, socioeconomic indicators and policy-impact interpretation.
+   - Access notes: data quality is high relative to many portals; integration should preserve methodology and publication-date metadata.
+   - Source: <https://www.hcp.ma/>
+
+### Tier 2: High-Value Administrative Workflow Portals
+
+7. **ANCFCC / Conservation Fonciere, Cadastre et Cartographie**
+   - Data surface: property certificates, cadastral plans, document verification, price reference, cartography, Mohafadati, land publicity, payments, forms and supplier invoice deposit.
+   - Product value: land and property transparency, project due diligence, construction context, territorial planning and real-estate risk reduction.
+   - Access notes: many services are transactional and document-based; treat as a workflow/reference portal more than a bulk open-data source.
+   - Source: <https://www.ancfcc.gov.ma/>
+
+8. **Chikaya / Portail National des Reclamations**
+   - Data surface: complaints, complaint tracking, observations, suggestions, statistics and public-service feedback channels.
+   - Product value: accountability signal for administrative friction; useful for detecting recurrent service problems by administration, territory or procedure.
+   - Access notes: public statistics are useful, but complaint content can involve personal data and should be handled only through authorized, privacy-preserving access.
+   - Source: <https://www.chikaya.ma/>
+
+9. **Rokhas**
+   - Data surface: administrative permits and authorizations, especially urban-planning and economic-activity authorizations.
+   - Product value: high-impact simplification layer for construction, business activity, licensing and territorial procedures.
+   - Access notes: current public discoverability is weaker than PMMP/data.gov.ma; partnership route through Interior/DGCT/local authorities is likely more realistic than open extraction.
+   - Source: <https://rokhas.ma/>
+
+10. **PortNet**
+    - Data surface: foreign-trade procedures, import/export formalities, licenses, authorizations, port community system, cargo community system, real-time dossier traceability, customs-related workflows and partner administration access.
+    - Product value: removes fog around import/export, logistics, customs coordination and administrative lead times for businesses.
+    - Access notes: operational platform with many authenticated services; public pages are useful for mapping procedures, while detailed workflow data requires partnership.
+    - Source: <https://www.portnet.ma/>
+
+11. **Emploi-public.ma**
+    - Data surface: public-sector recruitment announcements, concours, results, convocations, public job procedures and candidate spaces.
+    - Product value: transparency around public employment opportunities and recruitment timelines.
+    - Access notes: relevant outside procurement because public hiring is one of the main citizen-facing bureaucratic surfaces.
+    - Source: <https://www.emploi-public.ma/>
+
+### Tier 3: Oversight, Finance, Tax And Market-Regulation Surfaces
+
+12. **LOF / Direction du Budget / Ministry of Economy and Finance**
+    - Data surface: finance laws by year, citizen budget, triennial budget programming, ministry budgets, budget documents, settlement laws, public-finance statistics, budget-performance documentation and LOF implementation material.
+    - Product value: connects procurement and public programs to budget authorizations, spending priorities and performance objectives.
+    - Access notes: good document source; structured extraction may require PDF/document parsing.
+    - Source: <https://lof.finances.gov.ma/fr>
+
+13. **Cour des Comptes**
+    - Data surface: annual reports, finance-law execution reports, thematic reports, regional court material, audit findings, recommendations and public-accountability publications.
+    - Product value: strongest public source for audit signals, governance risks, repeated management failures and follow-up opportunities.
+    - Access notes: largely document/report based; useful for entity risk scoring and policy/funding analysis.
+    - Source: <https://www.courdescomptes.ma/>
+
+14. **Conseil de la Concurrence**
+    - Data surface: consultative opinions, merger-control decisions, anti-competitive practice decisions, sector studies, annual reports, communiques, guidelines and enforcement statistics.
+    - Product value: market-structure and competition-risk layer; useful for detecting concentration, regulated-market issues and procurement market distortions.
+    - Access notes: primarily document/publication based, but highly valuable for sector intelligence.
+    - Source: <https://conseil-concurrence.ma/>
+
+15. **Direction Generale des Impots / DGI**
+    - Data surface: tax guidance, online appointments, taxpayer services, forms, tax news, documentation and taxpayer-facing procedures.
+    - Product value: important for supplier readiness, compliance calendars, tax attestation workflows and SME administrative navigation.
+    - Access notes: many useful services are authenticated; public material remains valuable for procedure mapping.
+    - Source: <https://www.tax.gov.ma/>
+
+16. **Administration des Douanes et Impots Indirects / ADII**
+    - Data surface: customs rules, tariff/nomenclature information, import/export compliance, procedures and customs services.
+    - Product value: trade compliance and import-cost transparency; strongest when combined with PortNet and Office des Changes data.
+    - Access notes: some pages may restrict automated access; partnership or official service channels are preferable.
+    - Source: <https://www.douane.gov.ma/>
+
+17. **Office des Changes**
+    - Data surface: foreign-exchange regulation, balance-of-payments statistics, foreign-trade statistics, exchange-office information and circulars.
+    - Product value: import/export intelligence, macro context and regulatory clarity for cross-border operations.
+    - Access notes: useful for data enrichment around trade flows and foreign-exchange obligations.
+    - Source: <https://www.oc.gov.ma/>
+
+## Portal Evaluation Criteria
+
+For each portal above, evaluate the opportunity with the same checklist:
+
+- **Authority:** Is it the canonical official source or only a convenience portal?
+- **Data richness:** Does it expose records, documents, statistics, workflows, decisions, or only generic information?
+- **Freshness:** Are publication dates, update dates and historical archives available?
+- **Access model:** Open API, public pages, downloadable files, authenticated workflow, paid documents, or partnership-only access.
+- **Linkability:** Can records be connected to a company, public buyer, ministry, commune, region, legal text, budget line or project?
+- **Privacy/compliance:** Does it contain personal data, protected business data or complaint data requiring CNDP/privacy controls?
+- **Operational value:** Does it help a citizen, SME, journalist, investor or public buyer understand what to do, what changed, who decided, who won, what was spent or what went wrong?
+
 ## Core Public Procurement, Legal And Governance Partners
 
 - TGR / Tresorerie Generale du Royaume
