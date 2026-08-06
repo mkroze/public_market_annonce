@@ -8,7 +8,7 @@ from pathlib import Path
 import csv
 from io import BytesIO, StringIO
 
-from fastapi import FastAPI, Query, Header, HTTPException
+from fastapi import FastAPI, Query, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -71,6 +71,33 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+
+
+# ── V1 catalog surface guard ─────────────────────────────────────────────────
+
+# Public catalog surface, plus the gated admin surface the launch keeps:
+# session login/me and everything under /api/admin (each admin route enforces
+# its own auth). Public registration stays closed — admins bootstrap via
+# ADMIN_EMAILS — so /api/auth/register is intentionally left blocked.
+V1_ALLOWED_API_PATHS = {"/api/filters", "/api/auth/login", "/api/auth/me"}
+
+
+def is_v1_catalog_api_path(path: str) -> bool:
+    return (
+        path in V1_ALLOWED_API_PATHS
+        or path == "/api/tenders"
+        or path.startswith("/api/tenders/")
+        or path == "/api/admin"
+        or path.startswith("/api/admin/")
+    )
+
+
+@app.middleware("http")
+async def restrict_v1_api_surface(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not is_v1_catalog_api_path(path):
+        return Response(status_code=404)
+    return await call_next(request)
 
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────

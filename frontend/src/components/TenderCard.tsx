@@ -1,16 +1,11 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Banknote, Building2, Calendar, Heart, MapPin, Sparkles } from "lucide-react";
-import { addFavorite, removeFavorite } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { Link } from "react-router-dom";
+import { Banknote, Building2, Calendar, MapPin, Sparkles } from "lucide-react";
 import { getTenderGuidance } from "../lib/tenderGuidance";
 import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
 import type { Tender } from "../lib/types";
 
 interface TenderCardProps {
   tender: Tender;
-  favoriteIds?: Set<string>;
-  onFavoriteToggle?: () => void;
   compact?: boolean;
 }
 
@@ -21,31 +16,9 @@ const TONE_CLASS = {
   neutral: "border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-slate)]",
 };
 
-export default function TenderCard({ tender, favoriteIds, onFavoriteToggle, compact = false }: TenderCardProps) {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const [toggling, setToggling] = useState(false);
+export default function TenderCard({ tender, compact = false }: TenderCardProps) {
   const guidance = getTenderGuidance(tender);
   const urgency = getTenderUrgency(tender.deadline);
-  const isFavorite = favoriteIds?.has(tender.id);
-
-  async function toggleFavorite(event: React.MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!user) {
-      navigate(`/login?returnTo=${encodeURIComponent(toTenderPath(tender.id))}`);
-      return;
-    }
-
-    setToggling(true);
-    try {
-      if (isFavorite) await removeFavorite(tender.id);
-      else await addFavorite(tender.id);
-      onFavoriteToggle?.();
-    } finally {
-      setToggling(false);
-    }
-  }
 
   return (
     <article className="relative rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] transition-colors hover:border-[var(--color-border)]">
@@ -70,15 +43,6 @@ export default function TenderCard({ tender, favoriteIds, onFavoriteToggle, comp
             )}
           </div>
         </Link>
-        <button
-          type="button"
-          className={`btn btn-ghost btn-sm btn-square shrink-0 ${isFavorite ? "text-[var(--color-crimson)]" : "text-[var(--color-slate)]"}`}
-          onClick={toggleFavorite}
-          disabled={toggling}
-          aria-label={isFavorite ? "Retirer de mes opportunites" : "Ajouter a mes opportunites"}
-        >
-          <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
-        </button>
       </div>
 
       <Link to={toTenderPath(tender.id)} className="block p-4 pt-3">

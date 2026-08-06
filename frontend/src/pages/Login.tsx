@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { login } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -79,13 +79,6 @@ export default function Login() {
             {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
-
-        <p className="text-center mt-6 text-sm font-sans text-[var(--color-slate)]">
-          Pas encore de compte ?{" "}
-          <Link to="/register" className="text-[var(--color-crimson)] hover:underline">
-            Cr&eacute;er un compte
-          </Link>
-        </p>
       </div>
     </div>
   );
