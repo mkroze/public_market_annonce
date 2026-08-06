@@ -8,7 +8,7 @@ from pathlib import Path
 import csv
 from io import BytesIO, StringIO
 
-from fastapi import FastAPI, Query, Header, HTTPException
+from fastapi import FastAPI, Query, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -67,6 +67,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── V1 catalog surface guard ─────────────────────────────────────────────────
+
+V1_ALLOWED_API_PATHS = {"/api/filters"}
+
+
+def is_v1_catalog_api_path(path: str) -> bool:
+    return (
+        path in V1_ALLOWED_API_PATHS
+        or path == "/api/tenders"
+        or path.startswith("/api/tenders/")
+    )
+
+
+@app.middleware("http")
+async def restrict_v1_api_surface(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not is_v1_catalog_api_path(path):
+        return Response(status_code=404)
+    return await call_next(request)
 
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────

@@ -17,11 +17,8 @@ import {
   Eye,
   Mail,
   User,
-  Sparkles,
-  Bell,
   CheckCircle2,
   HelpCircle,
-  Heart,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
@@ -172,24 +169,6 @@ export default function TenderDetail() {
         </div>
       )}
       <div className="flex flex-wrap gap-3">
-        <Link
-          to={`/guide?tender=${encodeURIComponent(tender.id)}#assistant`}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-semibold rounded bg-[var(--color-crimson)] text-white hover:opacity-90 transition-opacity"
-        >
-          <Sparkles size={16} /> Preparer ma candidature
-        </Link>
-        <Link
-          to={`/alerts?tender=${encodeURIComponent(tender.id)}&name=${encodeURIComponent(tender.title || tender.reference)}&sector=${encodeURIComponent(tender.sector_code || "")}&region=${encodeURIComponent(tender.location || "")}`}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]"
-        >
-          <Bell size={16} /> Recevoir des opportunites similaires
-        </Link>
-        <Link
-          to="/favorites"
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]"
-        >
-          <Heart size={16} /> Voir mes opportunites
-        </Link>
         {d?.dce_url && (
           <button
             className="btn btn-primary font-sans font-semibold gap-2"

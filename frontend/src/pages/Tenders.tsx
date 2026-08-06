@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getTenders, getFavoriteIds, exportTenders } from "../lib/api";
+import { getTenders, exportTenders } from "../lib/api";
 import type { TenderListResponse, TenderFilters } from "../lib/types";
-import { useAuth } from "../lib/auth";
 import FilterBar from "../components/FilterBar";
 import TenderCard from "../components/TenderCard";
 import TenderTable from "../components/TenderTable";
@@ -23,9 +22,7 @@ export default function Tenders() {
   const [result, setResult] = useState<TenderListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<ToastData[]>([]);
-  const { user } = useAuth();
 
   const filters: Partial<TenderFilters> = useMemo(
     () => ({
@@ -78,18 +75,6 @@ export default function Tenders() {
       cancelled = true;
     };
   }, [filters]);
-
-  const loadFavorites = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await getFavoriteIds();
-      setFavoriteIds(new Set(res.ids));
-    } catch {}
-  }, [user]);
-
-  useEffect(() => {
-    loadFavorites();
-  }, [loadFavorites]);
 
   const urgentSegmentActive = searchParams.get("urgent") === "true" && filters.status === "en_cours";
   const viewMode = searchParams.get("view") === "expert" ? "expert" : "guided";
@@ -224,8 +209,6 @@ export default function Tenders() {
                 <TenderCard
                   key={tender.id}
                   tender={tender}
-                  favoriteIds={favoriteIds}
-                  onFavoriteToggle={loadFavorites}
                 />
               ))}
             </div>
@@ -235,8 +218,6 @@ export default function Tenders() {
               sort={filters.sort || "deadline"}
               order={filters.order || "asc"}
               onSort={handleSort}
-              favoriteIds={favoriteIds}
-              onFavoriteToggle={loadFavorites}
             />
           )}
           <Pagination

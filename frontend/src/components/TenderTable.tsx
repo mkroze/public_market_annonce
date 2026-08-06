@@ -1,18 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import type { Tender } from "../lib/types";
-import { ExternalLink, ArrowUpDown, MapPin, Heart, Banknote } from "lucide-react";
-import { useAuth } from "../lib/auth";
-import { addFavorite, removeFavorite } from "../lib/api";
+import { ExternalLink, ArrowUpDown, MapPin, Banknote } from "lucide-react";
 import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
-import { useState } from "react";
 
 interface Props {
   tenders: Tender[];
   sort: string;
   order: string;
   onSort: (field: string) => void;
-  favoriteIds?: Set<string>;
-  onFavoriteToggle?: () => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -28,29 +23,8 @@ const URGENCY_STYLES = {
   normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-slate)]" },
 };
 
-export default function TenderTable({ tenders, sort, order, onSort, favoriteIds, onFavoriteToggle }: Props) {
+export default function TenderTable({ tenders, sort, order, onSort }: Props) {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  async function handleFavorite(e: React.MouseEvent, tenderId: string) {
-    e.stopPropagation();
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    setTogglingId(tenderId);
-    try {
-      if (favoriteIds?.has(tenderId)) {
-        await removeFavorite(tenderId);
-      } else {
-        await addFavorite(tenderId);
-      }
-      onFavoriteToggle?.();
-    } finally {
-      setTogglingId(null);
-    }
-  }
 
   function SortHeader({ field, label, highlight }: { field: string; label: string; highlight?: boolean }) {
     const active = sort === field;
@@ -98,7 +72,6 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
           {tenders.map((t) => {
             const urgency = getTenderUrgency(t.deadline);
             const urgencyStyle = urgency && URGENCY_STYLES[urgency.tone];
-            const isFav = favoriteIds?.has(t.id);
             return (
               <tr
                 key={t.id}
@@ -159,14 +132,6 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
                 </td>
                 <td>
                   <div className="flex items-center gap-0.5">
-                    <button
-                      className={`btn btn-ghost btn-xs btn-square ${isFav ? "text-[var(--color-crimson)]" : "text-[var(--color-slate)]"}`}
-                      onClick={(e) => handleFavorite(e, t.id)}
-                      disabled={togglingId === t.id}
-                      aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-                    >
-                      <Heart size={14} fill={isFav ? "currentColor" : "none"} />
-                    </button>
                     {t.detail_url && (
                       <a
                         href={t.detail_url}

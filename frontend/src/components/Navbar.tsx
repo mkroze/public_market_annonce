@@ -1,15 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard, Search, BarChart3,
-  CreditCard, BookOpen, Scale, Bell, Heart, LogIn, LogOut, User, Menu,
-  Sun, Moon, Handshake,
-} from "lucide-react";
-import { useAuth } from "../lib/auth";
+import { Search, Menu, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function Navbar() {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
 
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -23,21 +17,9 @@ export default function Navbar() {
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
-  const mainLinks = [
-    { to: "/", label: "Decouvrir", icon: LayoutDashboard },
-    { to: "/favorites", label: "Mes opportunites", icon: Heart },
-    { to: "/guide", label: "Preparer", icon: Scale },
-    { to: "/alerts", label: "Suivre", icon: Bell },
-  ];
-
-  const moreLinks = [
+  const navLinks = [
     { to: "/tenders", label: "Toutes les consultations", icon: Search },
-    { to: "/stats", label: "Statistiques", icon: BarChart3 },
-    { to: "/blog", label: "Blog", icon: BookOpen },
-    { to: "/pricing", label: "Tarifs", icon: CreditCard },
-    { to: "/partenaires", label: "Partenaires", icon: Handshake },
   ];
-  const navLinks = [...mainLinks, ...moreLinks];
 
   const isActive = (path: string) =>
     path === "/" ? pathname === "/" : pathname.startsWith(path);
@@ -46,7 +28,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 bg-[var(--color-ivory)] border-b border-[var(--color-border-subtle)]">
       {/* Top bar — brand + auth */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-        <Link to="/" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+        <Link to="/tenders" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <div className="w-8 h-8 rounded bg-[var(--color-crimson)] flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-sm font-sans">MP</span>
           </div>
@@ -69,58 +51,6 @@ export default function Navbar() {
           >
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-
-          {user ? (
-            <div className="dropdown dropdown-end">
-              <div
-                tabIndex={0}
-                role="button"
-                className="flex items-center gap-2 px-3 py-1.5 rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors cursor-pointer"
-              >
-                <div className="w-6 h-6 rounded-full bg-[var(--color-ivory-deep)] flex items-center justify-center">
-                  <User size={13} className="text-[var(--color-slate)]" />
-                </div>
-                <span className="text-sm font-medium text-[var(--color-charcoal)] hidden sm:inline">
-                  {user.name}
-                </span>
-              </div>
-              <ul
-                tabIndex={0}
-                className="dropdown-content menu bg-[var(--color-ivory)] border border-[var(--color-border-subtle)] rounded w-52 p-1.5 mt-2 shadow-sm z-50"
-              >
-                <li className="px-3 py-1.5 text-xs text-[var(--color-slate)]">
-                  {user.email}
-                </li>
-                <div className="divider-academic my-1"></div>
-                <li>
-                  <Link to="/favorites" className="text-sm">
-                    <Heart size={14} /> Mes opportunites
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/alerts" className="text-sm">
-                    <Bell size={14} /> Mes suivis
-                  </Link>
-                </li>
-                <div className="divider-academic my-1"></div>
-                <li>
-                  <button onClick={logout} className="text-sm text-[var(--color-crimson)]">
-                    <LogOut size={14} /> Déconnexion
-                  </button>
-                </li>
-              </ul>
-            </div>
-          ) : (
-            <Link
-              to="/login"
-              className="btn btn-primary btn-sm font-sans font-semibold gap-1.5 px-2 sm:px-3"
-              aria-label="Commencer"
-              title="Commencer"
-            >
-              <LogIn size={14} />
-              <span className="hidden sm:inline">Commencer</span>
-            </Link>
-          )}
 
           {/* Mobile menu */}
           <div className="dropdown dropdown-end md:hidden">
