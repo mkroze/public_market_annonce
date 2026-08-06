@@ -1,0 +1,39 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# ---- Data / generated ----
+*.db
+*.sqlite
+*.sqlite3
+backend/data/*.db
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Editor / OS ----
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ---- Local agent tooling ----
+.claude/
+.agents/
+skills-lock.json
