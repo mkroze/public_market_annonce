@@ -15,6 +15,6 @@ export function isDetected(value: DisplayValue | undefined): boolean {
 
 export function signalTone(value: DisplayValue | undefined): "strong" | "muted" | "warning" {
   if (!value || value.status === "missing" || value.status === "not_applicable") return "muted";
-  if (value.status === "needs_verification" || value.confidence === "low") return "warning";
+  if (value.status === "needs_verification" || value.confidence !== "high") return "warning";
   return "strong";
 }

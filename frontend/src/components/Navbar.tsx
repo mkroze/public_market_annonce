@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Search, Menu, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 import logoFull from "../assets/logo-full.svg";
+import logoFullReversed from "../assets/logo-full-reversed.svg";
 
 export default function Navbar() {
   const { pathname } = useLocation();
@@ -31,8 +32,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
         <Link to="/tenders" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <img
-            src={logoFull}
-            alt="Marches Publics Maroc"
+            src={dark ? logoFullReversed : logoFull}
+            alt="Marchés Publics Maroc"
             className="h-10 w-auto max-w-[190px] shrink-0"
           />
         </Link>

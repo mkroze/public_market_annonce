@@ -114,8 +114,48 @@ class TenderDisplayTest(unittest.TestCase):
     def test_parse_money_supports_moroccan_formats(self):
         self.assertEqual(parse_money("1 234 567,89 MAD"), 1234567.89)
         self.assertEqual(parse_money("1.234.567,89 DH"), 1234567.89)
+        self.assertEqual(parse_money("20.000 DH"), 20000.0)
         self.assertEqual(parse_money("1234567.89"), 1234567.89)
         self.assertIsNone(parse_money("Non communique"))
+
+    def test_nonnumeric_primary_estimation_retries_labeled_stored_text(self):
+        result = build_tender_display(
+            {},
+            {
+                "estimation": "Non communique",
+                "contact": "Estimation TTC: 1 200 000,00 MAD",
+            },
+        )
+
+        self.assertEqual(result["signals"]["estimation"]["value"], "1 200 000,00 MAD")
+        self.assertEqual(result["signals"]["estimation"]["source"], "regex")
+
+    def test_market_price_requires_explicit_currency_for_labeled_text(self):
+        ambiguous = build_tender_display({}, {"contact": "Offre retenue: 3 candidats"})
+        monetary = build_tender_display({}, {"contact": "Offre retenue: 20.000 DH"})
+
+        self.assertEqual(ambiguous["signals"]["market_price"]["status"], "missing")
+        self.assertEqual(monetary["signals"]["market_price"]["status"], "needs_verification")
+        self.assertEqual(monetary["signals"]["market_price"]["value"], "20.000 DH")
+
+    def test_buyer_prefers_fuller_equivalent_base_value(self):
+        result = build_tender_display(
+            {"entity": "Commune de Zegzel, Province de Berkane"},
+            {"acheteur": "Commune de Zegzel"},
+        )
+
+        self.assertEqual(result["display"]["buyer"]["value"], "Commune de Zegzel, Province de Berkane")
+        self.assertEqual(result["display"]["buyer"]["source"], "base")
+
+    def test_location_uses_cautious_title_fallback_when_no_raw_location_exists(self):
+        result = build_tender_display(
+            {"title": "Travaux de voirie - Commune de Taza"},
+            {"objet": "Travaux de voirie - Commune de Taza"},
+        )
+
+        self.assertEqual(result["display"]["location"]["value"], "Commune de Taza")
+        self.assertEqual(result["display"]["location"]["status"], "needs_verification")
+        self.assertEqual(result["display"]["location"]["source"], "computed")
 
     def test_zero_estimation_is_missing_but_zero_plan_price_is_detected(self):
         tender = {

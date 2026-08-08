@@ -45,7 +45,7 @@ function rawOrMissing(value: string | undefined | null, missing = "Non detecte")
 
 function sourceLabel(value: DisplayValue | undefined): string {
   if (!value || value.source === "none") return "";
-  if (value.status === "needs_verification") return "A verifier";
+  if (value.status === "needs_verification" || value.confidence !== "high") return "A verifier";
   if (value.source === "regex") return "Detecte";
   if (value.source === "agent_import") return "Importe";
   return "";
@@ -253,7 +253,6 @@ export default function TenderDetail() {
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard icon={Building2} title="Acheteur public" value={buyer} />
         <InfoCard icon={Landmark} title="Domaine d'activite" value={rawOrMissing(d?.domaines || tender.sector_name)} />
         {isDetected(signals?.plan_price) && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={displayText(signals?.plan_price)} highlight />}
         {d?.variante && <InfoCard icon={FileText} title="Variante" value={d.variante} />}
@@ -437,20 +436,45 @@ function RawSourceDrawer({ tender }: { tender: TenderWithDetails }) {
   const d = tender.details;
   const rows = [
     ["Titre source", tender.title],
-    ["Acheteur source", tender.entity],
-    ["Lieu source", tender.location],
     ["Reference", tender.reference],
+    ["Acheteur source", tender.entity],
+    ["Code acheteur", tender.entity_code],
+    ["Categorie source", tender.category],
+    ["Secteur", tender.sector_name],
+    ["Code secteur", tender.sector_code],
     ["Procedure source", tender.procedure_type],
+    ["Lieu source", tender.location],
+    ["Date limite", tender.deadline],
+    ["Date publication", tender.publication_date],
+    ["Statut", tender.status],
+    ["URL source", tender.detail_url],
+    ["Horodatage source", tender.scraped_at],
+    ["Estimation source", tender.estimation],
     ["Objet detail", d?.objet],
     ["Acheteur detail", d?.acheteur],
+    ["Type d'annonce", d?.annonce_type],
+    ["Procedure detail", d?.procedure],
+    ["Categorie detail", d?.categorie],
     ["Lieu execution detail", d?.lieu_execution],
     ["Estimation detail", d?.estimation],
+    ["Domaines", d?.domaines],
     ["Caution detail", d?.caution_provisoire],
     ["Prix plans detail", d?.prix_plans],
     ["Allotissement", d?.allotissement],
     ["Qualifications", d?.qualifications],
     ["Agrements", d?.agrements],
+    ["Adresse retrait", d?.adresse_retrait],
+    ["Adresse depot", d?.adresse_depot],
+    ["Lieu ouverture", d?.lieu_ouverture],
+    ["Variante", d?.variante],
+    ["Reunion", d?.reunion],
+    ["Visite des lieux", d?.visite_lieux],
+    ["Reserve TPE/PME", d?.reserved_pme],
     ["Contact", d?.contact],
+    ["URL documents", d?.documents_url],
+    ["URL DCE", d?.dce_url],
+    ["URL avis", d?.avis_url],
+    ["Horodatage detail", d?.scraped_at],
   ].filter(([, value]) => value && String(value).trim());
 
   if (!rows.length) return null;

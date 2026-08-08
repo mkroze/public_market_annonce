@@ -1,4 +1,4 @@
-import type { Tender, TenderFilters, TenderWithDetails } from "./types";
+import type { DisplayValue, Tender, TenderFilters, TenderWithDetails } from "./types";
 import { getTenderUrgency } from "./tenderUtils";
 
 export type GuidanceTone = "positive" | "warning" | "critical" | "neutral";
@@ -26,6 +26,11 @@ export interface GuidedTenderInput {
 
 function hasValue(value: string | undefined | null): value is string {
   return Boolean(value && value.trim());
+}
+
+function normalizedText(value: DisplayValue | undefined): string | undefined {
+  if (!value || value.status !== "detected" || value.value === null || value.value === "") return undefined;
+  return typeof value.value === "boolean" ? (value.value ? "Disponible" : undefined) : String(value.value);
 }
 
 export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuidance {
@@ -72,23 +77,33 @@ export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuida
 export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new Date()): DecisionChecklistItem[] {
   const details = tender.details;
   const urgency = getTenderUrgency(tender.deadline, now);
-  const location = hasValue(details?.lieu_execution)
-    ? details.lieu_execution
-    : hasValue(tender.location)
-      ? tender.location
+  const location = tender.display
+    ? normalizedText(tender.display.location)
+    : hasValue(details?.lieu_execution)
+      ? details.lieu_execution
+      : hasValue(tender.location)
+        ? tender.location
+        : "";
+  const estimation = tender.signals
+    ? normalizedText(tender.signals.estimation)
+    : hasValue(details?.estimation)
+      ? details.estimation
+      : hasValue(tender.estimation)
+        ? tender.estimation
+        : "";
+  const caution = tender.signals
+    ? normalizedText(tender.signals.caution)
+    : hasValue(details?.caution_provisoire)
+      ? details.caution_provisoire
       : "";
-  const estimation = hasValue(details?.estimation)
-    ? details.estimation
-    : hasValue(tender.estimation)
-      ? tender.estimation
-      : "";
-  const caution = hasValue(details?.caution_provisoire) ? details.caution_provisoire : "";
   const qualifications = hasValue(details?.qualifications)
     ? details.qualifications
     : hasValue(details?.agrements)
       ? details.agrements
       : "";
-  const hasDceUrl = hasValue(details?.dce_url);
+  const hasDceUrl = tender.signals
+    ? normalizedText(tender.signals.dce_available) === "Disponible"
+    : hasValue(details?.dce_url);
 
   return [
     {

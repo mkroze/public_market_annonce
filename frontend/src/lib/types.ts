@@ -94,6 +94,7 @@ export interface TenderSignals {
 }
 
 export interface TenderDetail {
+  tender_id?: string;
   objet: string;
   acheteur: string;
   annonce_type: string;
@@ -118,6 +119,7 @@ export interface TenderDetail {
   avis_url: string;
   reserved_pme: string;
   prix_plans: string;
+  scraped_at?: string;
 }
 
 export interface TenderWithDetails extends Tender {

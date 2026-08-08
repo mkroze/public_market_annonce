@@ -52,6 +52,40 @@ def _first_value(*items: tuple[Any, str]) -> tuple[str, str, Any]:
     return "", "none", None
 
 
+def _is_strict_expansion(value: str, other: str) -> bool:
+    folded_value = _fold(value)
+    folded_other = _fold(other)
+    return bool(
+        folded_value
+        and folded_other
+        and folded_value != folded_other
+        and folded_value.startswith(f"{folded_other} ")
+    )
+
+
+def _select_buyer(details: dict, tender: dict) -> tuple[str, str, Any]:
+    detail_value, detail_source, detail_raw = _first_value((details.get("acheteur", ""), "detail"))
+    base_value, base_source, base_raw = _first_value((tender.get("entity", ""), "base"))
+    if detail_value and base_value and _is_strict_expansion(base_value, detail_value):
+        return base_value, base_source, base_raw
+    if detail_value:
+        return detail_value, detail_source, detail_raw
+    return base_value, base_source, base_raw
+
+
+def _location_from_title(*values: Any) -> tuple[str, Any]:
+    pattern = re.compile(
+        r"\b((?:commune|province|préfecture)\s+(?:de|d'|du|des)\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' -]{1,80}?)(?=$|[,;|])",
+        flags=re.IGNORECASE,
+    )
+    for value in values:
+        raw = clean_text(value)
+        match = pattern.search(raw)
+        if match:
+            return clean_text(match.group(1)), value
+    return "", None
+
+
 def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> str:
     cleaned = clean_text(title)
     folded_location = _fold(location)
@@ -80,7 +114,7 @@ def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> 
 
 def parse_money(text: str) -> float | None:
     cleaned = clean_text(text)
-    match = re.search(r"(\d[\d\s.]*,\d{1,2}|\d[\d\s.]*\.\d{1,2}|\d[\d\s.]*)", cleaned)
+    match = re.search(r"(\d(?:[\d\s.,]*\d)?)", cleaned)
     if not match:
         return None
     number = match.group(1).replace(" ", "")
@@ -88,7 +122,7 @@ def parse_money(text: str) -> float | None:
         number = number.replace(".", "").replace(",", ".")
     else:
         pieces = number.split(".")
-        if len(pieces) > 2:
+        if len(pieces) > 2 or (len(pieces) == 2 and len(pieces[1]) == 3):
             number = "".join(pieces)
     try:
         return float(number)
@@ -102,11 +136,21 @@ def _detail_text(details: dict | None) -> str:
     return " | ".join(clean_text(v) for v in details.values() if clean_text(v))
 
 
-def _money_signal(primary: Any, source: str, raw_text: str, labels: tuple[str, ...], allow_zero: bool = False, raw: Any = None) -> dict:
+def _money_signal(
+    primary: Any,
+    source: str,
+    raw_text: str,
+    labels: tuple[str, ...],
+    allow_zero: bool = False,
+    raw: Any = None,
+    require_currency_for_regex: bool = False,
+    regex_status: str = "detected",
+) -> dict:
     value = clean_text(primary)
     raw_value = raw
     detected_source = source
-    if not value and raw_text:
+    parsed = parse_money(value)
+    if parsed is None and raw_text:
         label_pattern = "|".join(re.escape(label) for label in labels)
         match = re.search(
             rf"(?:{label_pattern})\s*[:\-]?\s*([0-9][0-9\s.,]*(?:MAD|DH|DHS)?)",
@@ -117,10 +161,18 @@ def _money_signal(primary: Any, source: str, raw_text: str, labels: tuple[str, .
             value = clean_text(match.group(1))
             raw_value = match.group(0)
             detected_source = "regex"
-    parsed = parse_money(value)
+            parsed = parse_money(value)
+            if require_currency_for_regex and not re.search(r"\b(?:MAD|DH|DHS)\b", value, flags=re.IGNORECASE):
+                parsed = None
     if parsed is None or (parsed == 0 and not allow_zero):
         return dict(MISSING)
-    return display_value(value, source=detected_source, confidence="high" if detected_source != "regex" else "medium", raw=raw_value)
+    return display_value(
+        value,
+        status=regex_status if detected_source == "regex" else "detected",
+        source=detected_source,
+        confidence="high" if detected_source != "regex" else "medium",
+        raw=raw_value,
+    )
 
 
 def _applications_signal(raw_text: str) -> dict:
@@ -142,14 +194,17 @@ def build_tender_display(tender: dict, details: dict | None = None) -> dict:
         (tender.get("title", ""), "base"),
         (f"Consultation {tender.get('reference', '')}", "computed"),
     )
-    buyer, buyer_source, buyer_raw = _first_value(
-        (details.get("acheteur", ""), "detail"),
-        (tender.get("entity", ""), "base"),
-    )
+    buyer, buyer_source, buyer_raw = _select_buyer(details, tender)
     location, location_source, location_raw = _first_value(
         (details.get("lieu_execution", ""), "detail"),
         (tender.get("location", ""), "base"),
     )
+    location_from_title = False
+    if not location:
+        location, location_raw = _location_from_title(details.get("objet", ""), tender.get("title", ""))
+        if location:
+            location_source = "computed"
+            location_from_title = True
     title = _remove_duplicate_location_suffix(title_raw, location, buyer)
     raw_text = " | ".join(
         clean_text(value)
@@ -185,7 +240,13 @@ def build_tender_display(tender: dict, details: dict | None = None) -> dict:
         "display": {
             "title": display_value(title, source=title_source, confidence="high", raw=title_raw),
             "buyer": display_value(buyer, source=buyer_source, confidence="high", raw=buyer_raw) if buyer else dict(MISSING),
-            "location": display_value(location, source=location_source, confidence="high", raw=location_raw) if location else dict(MISSING),
+            "location": display_value(
+                location,
+                status="needs_verification" if location_from_title else "detected",
+                source=location_source,
+                confidence="low" if location_from_title else "high",
+                raw=location_raw,
+            ) if location else dict(MISSING),
             "procedure": display_value(procedure, source=procedure_source, confidence="high", raw=procedure_raw) if procedure else dict(MISSING),
             "category": display_value(category, source=category_source, confidence="high", raw=category_raw) if category else dict(MISSING),
             "deadline": display_value(deadline, source=deadline_source, confidence="high", raw=deadline_raw) if deadline else dict(MISSING),
@@ -197,6 +258,14 @@ def build_tender_display(tender: dict, details: dict | None = None) -> dict:
             "plan_price": _money_signal(plan_price, plan_price_source, raw_text, ("Prix d'acquisition des plans",), allow_zero=True, raw=plan_price_raw),
             "dce_available": display_value(True, source="detail", confidence="high", raw=dce_url_raw) if dce_url else display_value(False, status="missing", source="none", confidence="none"),
             "applications_count": _applications_signal(raw_text),
-            "market_price": _money_signal("", "none", raw_text, ("montant du marché", "prix du marché", "montant attribué", "offre retenue"), allow_zero=False),
+            "market_price": _money_signal(
+                "",
+                "none",
+                raw_text,
+                ("montant du marché", "prix du marché", "montant attribué", "offre retenue"),
+                allow_zero=False,
+                require_currency_for_regex=True,
+                regex_status="needs_verification",
+            ),
         },
     }
