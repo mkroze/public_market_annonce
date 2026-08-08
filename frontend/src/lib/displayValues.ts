@@ -13,8 +13,21 @@ export function isDetected(value: DisplayValue | undefined): boolean {
   return Boolean(value && value.status === "detected" && value.value !== null && value.value !== "");
 }
 
+export function isHighConfidenceDetected(value: DisplayValue | undefined): boolean {
+  return isDetected(value) && value?.confidence === "high";
+}
+
+export function requiresVerification(value: DisplayValue | undefined): boolean {
+  return Boolean(
+    value
+    && value.status !== "missing"
+    && value.status !== "not_applicable"
+    && (value.status === "needs_verification" || value.confidence !== "high"),
+  );
+}
+
 export function signalTone(value: DisplayValue | undefined): "strong" | "muted" | "warning" {
   if (!value || value.status === "missing" || value.status === "not_applicable") return "muted";
-  if (value.status === "needs_verification" || value.confidence !== "high") return "warning";
+  if (requiresVerification(value)) return "warning";
   return "strong";
 }

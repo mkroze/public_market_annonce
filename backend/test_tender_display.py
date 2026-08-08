@@ -52,6 +52,26 @@ class TenderDisplayTest(unittest.TestCase):
             "Travaux de voirie - Commune de Taza",
         )
 
+    def test_title_preserves_location_suffix_when_removal_leaves_generic_title(self):
+        tender = {
+            "title": "Travaux à la commune de Taza",
+            "entity": "Commune de Taza",
+        }
+
+        result = build_tender_display(tender)
+
+        self.assertEqual(result["display"]["title"]["value"], "Travaux à la commune de Taza")
+
+    def test_generic_detail_object_falls_back_to_descriptive_base_title(self):
+        tender = {"title": "Travaux de voirie de la commune de Taza"}
+        details = {"objet": "Travaux"}
+
+        result = build_tender_display(tender, details)
+
+        self.assertEqual(result["display"]["title"]["value"], tender["title"])
+        self.assertEqual(result["display"]["title"]["source"], "base")
+        self.assertEqual(result["display"]["title"]["raw"], tender["title"])
+
     def test_display_fields_preserve_original_selected_source_values(self):
         tender = {
             "reference": " REF-RAW ",
@@ -194,6 +214,13 @@ class TenderDisplayTest(unittest.TestCase):
         self.assertEqual(result_without_label["signals"]["applications_count"]["status"], "missing")
         self.assertEqual(result_with_label["signals"]["applications_count"]["value"], 7)
         self.assertEqual(result_with_label["signals"]["applications_count"]["source"], "regex")
+
+    def test_candidate_count_does_not_partially_parse_year_or_four_digit_number(self):
+        for value in ("Candidats 2026", "Nombre de plis: 2026"):
+            with self.subTest(value=value):
+                result = build_tender_display({}, {"contact": value})
+
+                self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
 
 
 if __name__ == "__main__":

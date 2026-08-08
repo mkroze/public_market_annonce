@@ -21,7 +21,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
-import { displayText, isDetected, signalTone } from "../lib/displayValues";
+import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
 import type { DisplayValue, TenderWithDetails } from "../lib/types";
@@ -44,8 +44,8 @@ function rawOrMissing(value: string | undefined | null, missing = "Non detecte")
 }
 
 function sourceLabel(value: DisplayValue | undefined): string {
-  if (!value || value.source === "none") return "";
-  if (value.status === "needs_verification" || value.confidence !== "high") return "A verifier";
+  if (!value || value.source === "none" || value.status === "missing" || value.status === "not_applicable") return "";
+  if (requiresVerification(value)) return "A verifier";
   if (value.source === "regex") return "Detecte";
   if (value.source === "agent_import") return "Importe";
   return "";
@@ -105,7 +105,8 @@ export default function TenderDetail() {
     source: "base",
     confidence: tender.deadline ? "high" : "none",
   } as DisplayValue;
-  const urgency = getTenderUrgency(tender.deadline);
+  const deadline = displayText(deadlineSignal, "");
+  const urgency = getTenderUrgency(deadline);
   const checklist = getTenderDecisionChecklist(tender);
 
   return (
@@ -154,10 +155,12 @@ export default function TenderDetail() {
               <MapPin size={14} /> {location}
             </span>
           )}
-          <span className={`flex items-center gap-1.5 font-medium ${urgency?.expired ? "text-[var(--color-border)]" : "text-[var(--color-crimson)]"}`}>
-            <Calendar size={14} />
-            Échéance: {tender.deadline}{urgency ? ` (${urgency.label})` : ""}
-          </span>
+          {deadline && (
+            <span className={`flex items-center gap-1.5 font-medium ${urgency?.expired ? "text-[var(--color-border)]" : "text-[var(--color-crimson)]"}`}>
+              <Calendar size={14} />
+              Échéance: {deadline}{urgency ? ` (${urgency.label})` : ""}
+            </span>
+          )}
         </div>
       </div>
 
@@ -254,7 +257,7 @@ export default function TenderDetail() {
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard icon={Landmark} title="Domaine d'activite" value={rawOrMissing(d?.domaines || tender.sector_name)} />
-        {isDetected(signals?.plan_price) && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={displayText(signals?.plan_price)} highlight />}
+        {isHighConfidenceDetected(signals?.plan_price) && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={displayText(signals?.plan_price)} highlight />}
         {d?.variante && <InfoCard icon={FileText} title="Variante" value={d.variante} />}
       </div>
 

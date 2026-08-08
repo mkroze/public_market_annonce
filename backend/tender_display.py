@@ -10,6 +10,15 @@ MISSING = {
     "confidence": "none",
 }
 
+GENERIC_TITLES = {
+    "travaux",
+    "fournitures",
+    "services",
+    "prestations",
+    "consultation",
+    "marche",
+}
+
 
 def clean_text(value: object) -> str:
     if value is None:
@@ -50,6 +59,20 @@ def _first_value(*items: tuple[Any, str]) -> tuple[str, str, Any]:
         if cleaned:
             return cleaned, source, value
     return "", "none", None
+
+
+def _is_generic_title(value: str) -> bool:
+    return _fold(value) in GENERIC_TITLES
+
+
+def _select_title(details: dict, tender: dict) -> tuple[str, str, Any]:
+    detail_value, detail_source, detail_raw = _first_value((details.get("objet", ""), "detail"))
+    base_value, base_source, base_raw = _first_value((tender.get("title", ""), "base"))
+    if detail_value and not _is_generic_title(detail_value):
+        return detail_value, detail_source, detail_raw
+    if base_value:
+        return base_value, base_source, base_raw
+    return _first_value((f"Consultation {tender.get('reference', '')}", "computed"))
 
 
 def _is_strict_expansion(value: str, other: str) -> bool:
@@ -106,9 +129,11 @@ def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> 
         suffix = match.group(0)
         folded_suffix = _fold(suffix)
         if folded_location and folded_location in folded_suffix:
-            return clean_text(cleaned[: match.start()])
+            trimmed = clean_text(cleaned[: match.start()])
+            return cleaned if _is_generic_title(trimmed) else trimmed
         if folded_buyer and folded_buyer in folded_suffix:
-            return clean_text(cleaned[: match.start()])
+            trimmed = clean_text(cleaned[: match.start()])
+            return cleaned if _is_generic_title(trimmed) else trimmed
     return cleaned
 
 
@@ -177,8 +202,8 @@ def _money_signal(
 
 def _applications_signal(raw_text: str) -> dict:
     patterns = [
-        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})",
-        r"(\d{1,3})\s+(?:plis|offres|soumissionnaires|concurrents|candidats|dossiers)\s+(?:reçus|déposés|admis|retenus)",
+        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})(?!\d)",
+        r"(?<!\d)(\d{1,3})(?!\d)\s+(?:plis|offres|soumissionnaires|concurrents|candidats|dossiers)\s+(?:reçus|déposés|admis|retenus)",
     ]
     for pattern in patterns:
         match = re.search(pattern, raw_text, flags=re.IGNORECASE)
@@ -189,11 +214,7 @@ def _applications_signal(raw_text: str) -> dict:
 
 def build_tender_display(tender: dict, details: dict | None = None) -> dict:
     details = details or {}
-    title, title_source, title_raw = _first_value(
-        (details.get("objet", ""), "detail"),
-        (tender.get("title", ""), "base"),
-        (f"Consultation {tender.get('reference', '')}", "computed"),
-    )
+    title, title_source, title_raw = _select_title(details, tender)
     buyer, buyer_source, buyer_raw = _select_buyer(details, tender)
     location, location_source, location_raw = _first_value(
         (details.get("lieu_execution", ""), "detail"),

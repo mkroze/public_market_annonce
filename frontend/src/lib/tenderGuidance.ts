@@ -1,4 +1,5 @@
 import type { DisplayValue, Tender, TenderFilters, TenderWithDetails } from "./types";
+import { isHighConfidenceDetected } from "./displayValues";
 import { getTenderUrgency } from "./tenderUtils";
 
 export type GuidanceTone = "positive" | "warning" | "critical" | "neutral";
@@ -28,8 +29,8 @@ function hasValue(value: string | undefined | null): value is string {
   return Boolean(value && value.trim());
 }
 
-function normalizedText(value: DisplayValue | undefined): string | undefined {
-  if (!value || value.status !== "detected" || value.value === null || value.value === "") return undefined;
+function confirmedText(value: DisplayValue | undefined): string | undefined {
+  if (!value || !isHighConfidenceDetected(value)) return undefined;
   return typeof value.value === "boolean" ? (value.value ? "Disponible" : undefined) : String(value.value);
 }
 
@@ -76,23 +77,24 @@ export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuida
 
 export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new Date()): DecisionChecklistItem[] {
   const details = tender.details;
-  const urgency = getTenderUrgency(tender.deadline, now);
+  const deadline = tender.display ? confirmedText(tender.display.deadline) || "" : tender.deadline;
+  const urgency = getTenderUrgency(deadline, now);
   const location = tender.display
-    ? normalizedText(tender.display.location)
+    ? confirmedText(tender.display.location)
     : hasValue(details?.lieu_execution)
       ? details.lieu_execution
       : hasValue(tender.location)
         ? tender.location
         : "";
   const estimation = tender.signals
-    ? normalizedText(tender.signals.estimation)
+    ? confirmedText(tender.signals.estimation)
     : hasValue(details?.estimation)
       ? details.estimation
       : hasValue(tender.estimation)
         ? tender.estimation
         : "";
   const caution = tender.signals
-    ? normalizedText(tender.signals.caution)
+    ? confirmedText(tender.signals.caution)
     : hasValue(details?.caution_provisoire)
       ? details.caution_provisoire
       : "";
@@ -102,14 +104,14 @@ export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new 
       ? details.agrements
       : "";
   const hasDceUrl = tender.signals
-    ? normalizedText(tender.signals.dce_available) === "Disponible"
+    ? confirmedText(tender.signals.dce_available) === "Disponible"
     : hasValue(details?.dce_url);
 
   return [
     {
       id: "deadline",
       label: "Delai de reponse",
-      value: urgency ? `${tender.deadline} (${urgency.label})` : tender.deadline || "Non indique",
+      value: urgency ? `${deadline} (${urgency.label})` : deadline || "Non indique",
       tone: !urgency ? "warning" : urgency.expired || urgency.days <= 3 ? "critical" : urgency.days <= 7 ? "warning" : "positive",
       action: urgency?.expired
         ? "Ne pas poursuivre sans confirmation sur le portail source."
