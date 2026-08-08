@@ -37,6 +37,59 @@ class TenderDisplayTest(unittest.TestCase):
         self.assertEqual(result["display"]["buyer"]["value"], "Commune de Zegzel")
         self.assertEqual(result["display"]["location"]["value"], "Commune de Zegzel")
 
+    def test_title_preserves_non_matching_commune_suffix(self):
+        tender = {
+            "reference": "REF-LOCATION",
+            "title": "Travaux de voirie - Commune de Taza",
+            "entity": "Commune de Berkane",
+            "location": "Berkane",
+        }
+
+        result = build_tender_display(tender)
+
+        self.assertEqual(
+            result["display"]["title"]["value"],
+            "Travaux de voirie - Commune de Taza",
+        )
+
+    def test_display_fields_preserve_original_selected_source_values(self):
+        tender = {
+            "reference": " REF-RAW ",
+            "title": " Base title - ",
+            "entity": " Base buyer ",
+            "location": " Base location ",
+            "procedure_type": " BASE PROCEDURE ",
+            "category": " BASE CATEGORY ",
+            "deadline": " 20/09/2026 09:00 ",
+        }
+        details = {
+            "objet": "  Detail title - ",
+            "acheteur": " Detail buyer ",
+            "lieu_execution": " Detail location ",
+            "procedure": " Detail procedure ",
+            "categorie": " Detail category ",
+        }
+
+        result = build_tender_display(tender, details)
+        display = result["display"]
+
+        self.assertEqual(display["title"]["raw"], "  Detail title - ")
+        self.assertEqual(display["buyer"]["raw"], " Detail buyer ")
+        self.assertEqual(display["location"]["raw"], " Detail location ")
+        self.assertEqual(display["procedure"]["raw"], " Detail procedure ")
+        self.assertEqual(display["category"]["raw"], " Detail category ")
+        self.assertEqual(display["deadline"]["raw"], " 20/09/2026 09:00 ")
+        self.assertEqual(display["reference"]["raw"], " REF-RAW ")
+
+    def test_whitespace_detail_estimation_uses_base_source(self):
+        tender = {"estimation": " 1 000 MAD "}
+
+        result = build_tender_display(tender, {"estimation": "   "})
+
+        self.assertEqual(result["signals"]["estimation"]["value"], "1 000 MAD")
+        self.assertEqual(result["signals"]["estimation"]["source"], "base")
+        self.assertEqual(result["signals"]["estimation"]["raw"], " 1 000 MAD ")
+
     def test_base_tender_only_returns_missing_signal_states(self):
         tender = {
             "reference": "REF-1",

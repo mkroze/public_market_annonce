@@ -31,7 +31,7 @@ def display_value(
     status: str = "detected",
     source: str = "computed",
     confidence: str = "medium",
-    raw: str | None = None,
+    raw: Any = None,
 ) -> dict:
     payload = {
         "value": value,
@@ -44,12 +44,12 @@ def display_value(
     return payload
 
 
-def _first_value(*items: tuple[str, str]) -> tuple[str, str]:
+def _first_value(*items: tuple[Any, str]) -> tuple[str, str, Any]:
     for value, source in items:
         cleaned = clean_text(value)
         if cleaned:
-            return cleaned, source
-    return "", "none"
+            return cleaned, source, value
+    return "", "none", None
 
 
 def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> str:
@@ -74,8 +74,6 @@ def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> 
         if folded_location and folded_location in folded_suffix:
             return clean_text(cleaned[: match.start()])
         if folded_buyer and folded_buyer in folded_suffix:
-            return clean_text(cleaned[: match.start()])
-        if folded_suffix.startswith(("commune", "province", "prefecture")):
             return clean_text(cleaned[: match.start()])
     return cleaned
 
@@ -104,9 +102,9 @@ def _detail_text(details: dict | None) -> str:
     return " | ".join(clean_text(v) for v in details.values() if clean_text(v))
 
 
-def _money_signal(primary: str, source: str, raw_text: str, labels: tuple[str, ...], allow_zero: bool = False) -> dict:
+def _money_signal(primary: Any, source: str, raw_text: str, labels: tuple[str, ...], allow_zero: bool = False, raw: Any = None) -> dict:
     value = clean_text(primary)
-    raw = value
+    raw_value = raw
     detected_source = source
     if not value and raw_text:
         label_pattern = "|".join(re.escape(label) for label in labels)
@@ -117,12 +115,12 @@ def _money_signal(primary: str, source: str, raw_text: str, labels: tuple[str, .
         )
         if match:
             value = clean_text(match.group(1))
-            raw = match.group(0)
+            raw_value = match.group(0)
             detected_source = "regex"
     parsed = parse_money(value)
     if parsed is None or (parsed == 0 and not allow_zero):
         return dict(MISSING)
-    return display_value(value, source=detected_source, confidence="high" if detected_source != "regex" else "medium", raw=raw)
+    return display_value(value, source=detected_source, confidence="high" if detected_source != "regex" else "medium", raw=raw_value)
 
 
 def _applications_signal(raw_text: str) -> dict:
@@ -139,16 +137,16 @@ def _applications_signal(raw_text: str) -> dict:
 
 def build_tender_display(tender: dict, details: dict | None = None) -> dict:
     details = details or {}
-    title_raw, title_source = _first_value(
+    title, title_source, title_raw = _first_value(
         (details.get("objet", ""), "detail"),
         (tender.get("title", ""), "base"),
         (f"Consultation {tender.get('reference', '')}", "computed"),
     )
-    buyer, buyer_source = _first_value(
+    buyer, buyer_source, buyer_raw = _first_value(
         (details.get("acheteur", ""), "detail"),
         (tender.get("entity", ""), "base"),
     )
-    location, location_source = _first_value(
+    location, location_source, location_raw = _first_value(
         (details.get("lieu_execution", ""), "detail"),
         (tender.get("location", ""), "base"),
     )
@@ -164,23 +162,40 @@ def build_tender_display(tender: dict, details: dict | None = None) -> dict:
         if clean_text(value)
     )
 
-    dce_url = clean_text(details.get("dce_url", ""))
+    dce_url_raw = details.get("dce_url", "")
+    dce_url = clean_text(dce_url_raw)
+    procedure, procedure_source, procedure_raw = _first_value(
+        (details.get("procedure", ""), "detail"),
+        (tender.get("procedure_type", ""), "base"),
+    )
+    category, category_source, category_raw = _first_value(
+        (details.get("categorie", ""), "detail"),
+        (tender.get("category", ""), "base"),
+    )
+    deadline, deadline_source, deadline_raw = _first_value((tender.get("deadline", ""), "base"))
+    reference, reference_source, reference_raw = _first_value((tender.get("reference", ""), "base"))
+    estimation, estimation_source, estimation_raw = _first_value(
+        (details.get("estimation", ""), "detail"),
+        (tender.get("estimation", ""), "base"),
+    )
+    caution, caution_source, caution_raw = _first_value((details.get("caution_provisoire", ""), "detail"))
+    plan_price, plan_price_source, plan_price_raw = _first_value((details.get("prix_plans", ""), "detail"))
 
     return {
         "display": {
             "title": display_value(title, source=title_source, confidence="high", raw=title_raw),
-            "buyer": display_value(buyer, source=buyer_source, confidence="high") if buyer else dict(MISSING),
-            "location": display_value(location, source=location_source, confidence="high") if location else dict(MISSING),
-            "procedure": display_value(clean_text(details.get("procedure") or tender.get("procedure_type")), source="detail" if details.get("procedure") else "base", confidence="high") if clean_text(details.get("procedure") or tender.get("procedure_type")) else dict(MISSING),
-            "category": display_value(clean_text(details.get("categorie") or tender.get("category")), source="detail" if details.get("categorie") else "base", confidence="high") if clean_text(details.get("categorie") or tender.get("category")) else dict(MISSING),
-            "deadline": display_value(clean_text(tender.get("deadline")), source="base", confidence="high") if clean_text(tender.get("deadline")) else dict(MISSING),
-            "reference": display_value(clean_text(tender.get("reference")), source="base", confidence="high") if clean_text(tender.get("reference")) else dict(MISSING),
+            "buyer": display_value(buyer, source=buyer_source, confidence="high", raw=buyer_raw) if buyer else dict(MISSING),
+            "location": display_value(location, source=location_source, confidence="high", raw=location_raw) if location else dict(MISSING),
+            "procedure": display_value(procedure, source=procedure_source, confidence="high", raw=procedure_raw) if procedure else dict(MISSING),
+            "category": display_value(category, source=category_source, confidence="high", raw=category_raw) if category else dict(MISSING),
+            "deadline": display_value(deadline, source=deadline_source, confidence="high", raw=deadline_raw) if deadline else dict(MISSING),
+            "reference": display_value(reference, source=reference_source, confidence="high", raw=reference_raw) if reference else dict(MISSING),
         },
         "signals": {
-            "estimation": _money_signal(details.get("estimation", "") or tender.get("estimation", ""), "detail" if details.get("estimation") else "base", raw_text, ("Estimation", "Estimation TTC", "montant estimatif", "budget prévisionnel")),
-            "caution": _money_signal(details.get("caution_provisoire", ""), "detail", raw_text, ("Caution provisoire", "cautionnement provisoire", "garantie provisoire")),
-            "plan_price": _money_signal(details.get("prix_plans", ""), "detail", raw_text, ("Prix d'acquisition des plans",), allow_zero=True),
-            "dce_available": display_value(True, source="detail", confidence="high", raw=dce_url) if dce_url else display_value(False, status="missing", source="none", confidence="none"),
+            "estimation": _money_signal(estimation, estimation_source, raw_text, ("Estimation", "Estimation TTC", "montant estimatif", "budget prévisionnel"), raw=estimation_raw),
+            "caution": _money_signal(caution, caution_source, raw_text, ("Caution provisoire", "cautionnement provisoire", "garantie provisoire"), raw=caution_raw),
+            "plan_price": _money_signal(plan_price, plan_price_source, raw_text, ("Prix d'acquisition des plans",), allow_zero=True, raw=plan_price_raw),
+            "dce_available": display_value(True, source="detail", confidence="high", raw=dce_url_raw) if dce_url else display_value(False, status="missing", source="none", confidence="none"),
             "applications_count": _applications_signal(raw_text),
             "market_price": _money_signal("", "none", raw_text, ("montant du marché", "prix du marché", "montant attribué", "offre retenue"), allow_zero=False),
         },
