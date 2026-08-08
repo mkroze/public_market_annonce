@@ -1,0 +1,14 @@
+<svg width="300" height="64" viewBox="0 0 300 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Marches Publics Maroc</title>
+  <desc id="desc">Logo for Marches Publics Maroc.</desc>
+  <rect x="8" y="6" width="42" height="52" rx="4" fill="#FAFAEB" stroke="#81001D" stroke-width="4"/>
+  <path d="M40 6L50 16H42C40.8954 16 40 15.1046 40 14V6Z" fill="#C2A95F"/>
+  <path d="M20 24H42" stroke="#1B1C14" stroke-width="4" stroke-linecap="round"/>
+  <path d="M20 34H42" stroke="#81001D" stroke-width="4" stroke-linecap="round"/>
+  <path d="M20 44H32" stroke="#705C1A" stroke-width="4" stroke-linecap="round"/>
+  <rect x="44" y="40" width="12" height="12" rx="2" fill="#81001D"/>
+  <path d="M47 46H53" stroke="#FAFAEB" stroke-width="2" stroke-linecap="round"/>
+  <path d="M50 43V49" stroke="#FAFAEB" stroke-width="2" stroke-linecap="round"/>
+  <text x="72" y="29" fill="#1B1C14" font-family="Merriweather, Georgia, serif" font-size="20" font-weight="700">Marches Publics</text>
+  <text x="72" y="48" fill="#594141" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600">Maroc</text>
+</svg>
