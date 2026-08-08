@@ -24,6 +24,7 @@ from auth import hash_password, verify_password, create_token, decode_token
 from digest import run_digest, match_alert, budget_ok
 from emailer import email_enabled, send_email
 from admin import router as admin_router, bootstrap_admins
+from tender_display import build_tender_display
 
 
 scrape_lock = asyncio.Lock()
@@ -400,12 +401,20 @@ async def get_tender(tender_id: str):
 
     result = dict(row)
 
-    detail = await ensure_tender_details(db, tender_id, result.get("detail_url") or "")
+    detail_cursor = await db.execute(
+        "SELECT * FROM tender_details WHERE tender_id = ?", (tender_id,)
+    )
+    detail_row = await detail_cursor.fetchone()
+    detail = dict(detail_row) if detail_row else None
 
     await db.close()
 
     if detail:
         result["details"] = detail
+
+    normalized = build_tender_display(result, detail)
+    result["display"] = normalized["display"]
+    result["signals"] = normalized["signals"]
     return result
 
 
