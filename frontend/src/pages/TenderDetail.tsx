@@ -21,9 +21,10 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
+import { displayText, isDetected, signalTone } from "../lib/displayValues";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
-import type { TenderWithDetails } from "../lib/types";
+import type { DisplayValue, TenderWithDetails } from "../lib/types";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Travaux: "bg-[var(--color-crimson)] text-white",
@@ -37,6 +38,18 @@ const CHECK_TONE_CLASS = {
   critical: "border-red-200 bg-red-50 text-red-900",
   neutral: "border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]",
 };
+
+function rawOrMissing(value: string | undefined | null, missing = "Non detecte"): string {
+  return value && value.trim() ? value : missing;
+}
+
+function sourceLabel(value: DisplayValue | undefined): string {
+  if (!value || value.source === "none") return "";
+  if (value.status === "needs_verification") return "A verifier";
+  if (value.source === "regex") return "Detecte";
+  if (value.source === "agent_import") return "Importe";
+  return "";
+}
 
 export default function TenderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -79,6 +92,19 @@ export default function TenderDetail() {
   }
 
   const d = tender.details;
+  const display = tender.display;
+  const signals = tender.signals;
+  const title = displayText(display?.title, rawOrMissing(d?.objet || tender.title, `Consultation ${tender.reference}`));
+  const buyer = displayText(display?.buyer, rawOrMissing(d?.acheteur || tender.entity));
+  const location = displayText(display?.location, rawOrMissing(d?.lieu_execution || tender.location));
+  const procedure = displayText(display?.procedure, tender.procedure_type || d?.procedure || "Non detecte");
+  const category = displayText(display?.category, tender.category || d?.categorie || "Non detecte");
+  const deadlineSignal = display?.deadline || {
+    value: tender.deadline,
+    status: tender.deadline ? "detected" : "missing",
+    source: "base",
+    confidence: tender.deadline ? "high" : "none",
+  } as DisplayValue;
   const urgency = getTenderUrgency(tender.deadline);
   const checklist = getTenderDecisionChecklist(tender);
 
@@ -95,13 +121,13 @@ export default function TenderDetail() {
       {/* Header */}
       <div className="border-b border-[var(--color-border-subtle)] pb-6">
         <div className="flex flex-wrap gap-2 items-center mb-3">
-          {tender.category && (
-            <span className={`inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded ${CATEGORY_COLORS[tender.category] || "bg-base-300"}`}>
-              {tender.category}
+          {category !== "Non detecte" && (
+            <span className={`inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded ${CATEGORY_COLORS[category] || "bg-base-300"}`}>
+              {category}
             </span>
           )}
           <span className="inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded border border-[var(--color-border-subtle)] text-[var(--color-slate)]">
-            {tender.procedure_type || d?.procedure || "—"}
+            {procedure}
           </span>
           {d?.annonce_type && (
             <span className="inline-block px-2.5 py-1 text-xs font-sans rounded bg-[var(--color-ivory-dim)] text-[var(--color-slate)]">
@@ -111,16 +137,21 @@ export default function TenderDetail() {
         </div>
 
         <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)] leading-tight">
-          {d?.objet || tender.title}
+          {title}
         </h1>
 
         <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm font-sans text-[var(--color-slate)]">
           <span className="flex items-center gap-1.5">
-            <Tag size={14} /> {tender.reference}
+            <Tag size={14} /> {displayText(display?.reference, tender.reference)}
           </span>
-          {(tender.location || d?.lieu_execution) && (
+          {buyer !== "Non detecte" && (
             <span className="flex items-center gap-1.5">
-              <MapPin size={14} /> {d?.lieu_execution || tender.location}
+              <Building2 size={14} /> {buyer}
+            </span>
+          )}
+          {location !== "Non detecte" && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={14} /> {location}
             </span>
           )}
           <span className={`flex items-center gap-1.5 font-medium ${urgency?.expired ? "text-[var(--color-border)]" : "text-[var(--color-crimson)]"}`}>
@@ -130,7 +161,15 @@ export default function TenderDetail() {
         </div>
       </div>
 
-      {/* Decision summary */}
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <SignalCard icon={Calendar} title="Echeance" value={deadlineSignal} />
+        <SignalCard icon={Banknote} title="Budget estime" value={signals?.estimation} />
+        <SignalCard icon={Shield} title="Caution" value={signals?.caution} />
+        <SignalCard icon={Download} title="DCE" value={signals?.dce_available} />
+        <SignalCard icon={Users} title="Applications" value={signals?.applications_count} />
+        <SignalCard icon={Landmark} title="Prix marche" value={signals?.market_price} />
+      </section>
+
       <section className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <div className="rounded bg-[var(--color-crimson)] p-2 text-white">
@@ -141,7 +180,7 @@ export default function TenderDetail() {
               Dois-je poursuivre cette opportunite ?
             </h2>
             <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
-              Verifiez d'abord les points qui bloquent souvent une PME : delai, lieu, budget, caution, qualifications et documents.
+              Les donnees detectees peuvent etre incompletes. Verifiez les points critiques dans le DCE avant de preparer une offre.
             </p>
           </div>
         </div>
@@ -214,11 +253,9 @@ export default function TenderDetail() {
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard icon={Building2} title="Acheteur public" value={d?.acheteur || tender.entity} />
-        <InfoCard icon={Landmark} title="Domaine d'activite" value={d?.domaines || tender.sector_name} />
-        {d?.estimation && <InfoCard icon={Banknote} title="Estimation (TTC)" value={d.estimation} highlight />}
-        {d?.caution_provisoire && <InfoCard icon={Shield} title="Caution provisoire" value={d.caution_provisoire} highlight />}
-        {d?.prix_plans && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={d.prix_plans} highlight />}
+        <InfoCard icon={Building2} title="Acheteur public" value={buyer} />
+        <InfoCard icon={Landmark} title="Domaine d'activite" value={rawOrMissing(d?.domaines || tender.sector_name)} />
+        {isDetected(signals?.plan_price) && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={displayText(signals?.plan_price)} highlight />}
         {d?.variante && <InfoCard icon={FileText} title="Variante" value={d.variante} />}
       </div>
 
@@ -256,6 +293,8 @@ export default function TenderDetail() {
         </Section>
       )}
 
+      <RawSourceDrawer tender={tender} />
+
     </div>
   );
 }
@@ -292,6 +331,35 @@ function InfoCard({ icon: Icon, title, value, highlight = false }: {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SignalCard({ icon: Icon, title, value }: {
+  icon: typeof Building2;
+  title: string;
+  value: DisplayValue | undefined;
+}) {
+  const tone = signalTone(value);
+  const label = sourceLabel(value);
+  const toneClass = tone === "strong"
+    ? "border-[var(--color-crimson)] text-[var(--color-charcoal)]"
+    : tone === "warning"
+      ? "border-[var(--color-gold)] text-[var(--color-charcoal)]"
+      : "border-[var(--color-border-subtle)] text-[var(--color-slate)]";
+
+  return (
+    <div className={`rounded border bg-[var(--color-ivory)] px-4 py-3 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Icon size={15} className={tone === "muted" ? "text-[var(--color-slate)]" : "text-[var(--color-crimson)]"} />
+          <p className="label-academic">{title}</p>
+        </div>
+        {label && <span className="text-[11px] font-sans text-[var(--color-slate)]">{label}</span>}
+      </div>
+      <p className={`mt-2 font-sans leading-snug ${tone === "strong" ? "text-base font-bold tabular-nums" : "text-sm font-medium"}`}>
+        {displayText(value)}
+      </p>
     </div>
   );
 }
@@ -362,5 +430,41 @@ function ContactBlock({ text }: { text: string }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function RawSourceDrawer({ tender }: { tender: TenderWithDetails }) {
+  const d = tender.details;
+  const rows = [
+    ["Titre source", tender.title],
+    ["Acheteur source", tender.entity],
+    ["Lieu source", tender.location],
+    ["Reference", tender.reference],
+    ["Procedure source", tender.procedure_type],
+    ["Objet detail", d?.objet],
+    ["Acheteur detail", d?.acheteur],
+    ["Lieu execution detail", d?.lieu_execution],
+    ["Estimation detail", d?.estimation],
+    ["Caution detail", d?.caution_provisoire],
+    ["Prix plans detail", d?.prix_plans],
+    ["Allotissement", d?.allotissement],
+    ["Qualifications", d?.qualifications],
+    ["Agrements", d?.agrements],
+    ["Contact", d?.contact],
+  ].filter(([, value]) => value && String(value).trim());
+
+  if (!rows.length) return null;
+
+  return (
+    <details className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)]">
+      <summary className="cursor-pointer px-5 py-3 font-sans text-sm font-semibold text-[var(--color-charcoal)]">
+        Donnees source
+      </summary>
+      <div className="divide-y divide-[var(--color-border-subtle)] px-5">
+        {rows.map(([label, value]) => (
+          <Field key={label} label={label || ""} value={String(value)} />
+        ))}
+      </div>
+    </details>
   );
 }
