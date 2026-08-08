@@ -62,6 +62,37 @@ export interface FiltersResponse {
   procedure_types: string[];
 }
 
+export type DisplayValueStatus = "detected" | "missing" | "not_applicable" | "needs_verification";
+export type DisplayValueSource = "base" | "detail" | "regex" | "agent_import" | "computed" | "none";
+export type DisplayValueConfidence = "high" | "medium" | "low" | "none";
+
+export interface DisplayValue {
+  value: string | number | boolean | null;
+  status: DisplayValueStatus;
+  source: DisplayValueSource;
+  confidence: DisplayValueConfidence;
+  raw?: string;
+}
+
+export interface TenderDisplay {
+  title: DisplayValue;
+  buyer: DisplayValue;
+  location: DisplayValue;
+  procedure: DisplayValue;
+  category: DisplayValue;
+  deadline: DisplayValue;
+  reference: DisplayValue;
+}
+
+export interface TenderSignals {
+  estimation: DisplayValue;
+  caution: DisplayValue;
+  plan_price: DisplayValue;
+  dce_available: DisplayValue;
+  applications_count: DisplayValue;
+  market_price: DisplayValue;
+}
+
 export interface TenderDetail {
   objet: string;
   acheteur: string;
@@ -91,6 +122,8 @@ export interface TenderDetail {
 
 export interface TenderWithDetails extends Tender {
   details?: TenderDetail;
+  display?: TenderDisplay;
+  signals?: TenderSignals;
 }
 
 export interface TenderFilters {
