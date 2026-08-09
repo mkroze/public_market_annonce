@@ -52,6 +52,19 @@ class TenderDisplayTest(unittest.TestCase):
             "Travaux de voirie - Commune de Taza",
         )
 
+    def test_title_preserves_commune_suffix_when_canonical_location_is_token_prefix(self):
+        tender = {
+            "title": "Travaux de voirie - Commune de Tazaghine",
+            "location": "Taza",
+        }
+
+        result = build_tender_display(tender)
+
+        self.assertEqual(
+            result["display"]["title"]["value"],
+            "Travaux de voirie - Commune de Tazaghine",
+        )
+
     def test_title_preserves_location_suffix_when_removal_leaves_generic_title(self):
         tender = {
             "title": "Travaux à la commune de Taza",
@@ -221,6 +234,16 @@ class TenderDisplayTest(unittest.TestCase):
                 result = build_tender_display({}, {"contact": value})
 
                 self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
+
+    def test_candidate_count_rejects_slash_separated_date_value(self):
+        result = build_tender_display({}, {"contact": "Offres reçues: 09/08/2026"})
+
+        self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
+
+    def test_candidate_count_rejects_dash_separated_date_value(self):
+        result = build_tender_display({}, {"contact": "Offres reçues: 09-08-2026"})
+
+        self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
 
 
 if __name__ == "__main__":

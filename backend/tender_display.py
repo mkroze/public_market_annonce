@@ -109,10 +109,21 @@ def _location_from_title(*values: Any) -> tuple[str, Any]:
     return "", None
 
 
+def _has_token_bounded_match(value: str, candidate: str) -> bool:
+    folded_value = _fold(value)
+    folded_candidate = _fold(candidate)
+    if not folded_value or not folded_candidate:
+        return False
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9]){re.escape(folded_value)}(?![a-z0-9])",
+            folded_candidate,
+        )
+    )
+
+
 def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> str:
     cleaned = clean_text(title)
-    folded_location = _fold(location)
-    folded_buyer = _fold(buyer)
     if not cleaned:
         return cleaned
 
@@ -127,11 +138,10 @@ def _remove_duplicate_location_suffix(title: str, location: str, buyer: str) -> 
         if not match:
             continue
         suffix = match.group(0)
-        folded_suffix = _fold(suffix)
-        if folded_location and folded_location in folded_suffix:
+        if _has_token_bounded_match(location, suffix):
             trimmed = clean_text(cleaned[: match.start()])
             return cleaned if _is_generic_title(trimmed) else trimmed
-        if folded_buyer and folded_buyer in folded_suffix:
+        if _has_token_bounded_match(buyer, suffix):
             trimmed = clean_text(cleaned[: match.start()])
             return cleaned if _is_generic_title(trimmed) else trimmed
     return cleaned
@@ -202,7 +212,7 @@ def _money_signal(
 
 def _applications_signal(raw_text: str) -> dict:
     patterns = [
-        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})(?!\d)",
+        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})(?!\d|[/-])",
         r"(?<!\d)(\d{1,3})(?!\d)\s+(?:plis|offres|soumissionnaires|concurrents|candidats|dossiers)\s+(?:reçus|déposés|admis|retenus)",
     ]
     for pattern in patterns:

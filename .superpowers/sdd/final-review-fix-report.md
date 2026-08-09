@@ -154,3 +154,29 @@ dist/assets/index-BYr0yVpF.js     336.30 kB │ gzip: 101.24 kB
 
 ✓ built in 390ms
 ```
+
+## Remaining Final Re-review Fixes
+
+### Files Changed
+
+- `backend/tender_display.py`
+- `backend/test_tender_display.py`
+- `.superpowers/sdd/final-review-fix-report.md`
+
+### Fixes
+
+- Replaced location and buyer suffix substring checks with normalized token-bounded matching, so `Taza` does not match `Tazaghine`.
+- Rejected candidate-count captures immediately followed by `/` or `-`, preventing `DD/MM/YYYY` and `DD-MM-YYYY` values from being interpreted as counts.
+
+### Regression Coverage
+
+- `Travaux de voirie - Commune de Tazaghine` remains intact when the canonical location is `Taza`.
+- `Offres reçues: 09/08/2026` and `Offres reçues: 09-08-2026` produce a missing application-count signal.
+
+### Verification
+
+```text
+cd backend && .venv/bin/python -m unittest test_tender_display test_tender_routes test_v1_api_surface -v
+Ran 26 tests in 0.024s
+OK
+```
