@@ -212,7 +212,7 @@ def _money_signal(
 
 def _applications_signal(raw_text: str) -> dict:
     patterns = [
-        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})(?!\d|[/-])",
+        r"(?:nombre\s+de\s+plis|nombre\s+d'offres|offres\s+reçues|soumissionnaires|concurrents|candidats|dossiers\s+déposés)\s*[:\-]?\s*(\d{1,3})(?!\d|\s*[./-])",
         r"(?<!\d)(\d{1,3})(?!\d)\s+(?:plis|offres|soumissionnaires|concurrents|candidats|dossiers)\s+(?:reçus|déposés|admis|retenus)",
     ]
     for pattern in patterns:

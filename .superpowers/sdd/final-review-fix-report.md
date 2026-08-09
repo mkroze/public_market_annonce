@@ -180,3 +180,25 @@ cd backend && .venv/bin/python -m unittest test_tender_display test_tender_route
 Ran 26 tests in 0.024s
 OK
 ```
+
+## Final Candidate-Count Date Fix
+
+### Files Changed
+
+- `backend/tender_display.py`
+- `backend/test_tender_display.py`
+- `.superpowers/sdd/final-review-fix-report.md`
+
+### Fixes
+
+- Candidate-count extraction now rejects date separators `.`, `/`, and `-` after optional whitespace.
+- Added regressions for `Offres reçues: 09 / 08 / 2026` and `Offres reçues: 09.08.2026`.
+- Preserved valid extraction for `Nombre de plis: 7`.
+
+### Verification
+
+```text
+cd backend && .venv/bin/python -m unittest test_tender_display test_tender_routes test_v1_api_surface -v
+Ran 28 tests in 0.020s
+OK
+```

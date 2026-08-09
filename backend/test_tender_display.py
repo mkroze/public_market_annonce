@@ -245,6 +245,16 @@ class TenderDisplayTest(unittest.TestCase):
 
         self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
 
+    def test_candidate_count_rejects_whitespace_slash_separated_date_value(self):
+        result = build_tender_display({}, {"contact": "Offres reçues: 09 / 08 / 2026"})
+
+        self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
+
+    def test_candidate_count_rejects_dot_separated_date_value(self):
+        result = build_tender_display({}, {"contact": "Offres reçues: 09.08.2026"})
+
+        self.assertEqual(result["signals"]["applications_count"]["status"], "missing")
+
 
 if __name__ == "__main__":
     unittest.main()
