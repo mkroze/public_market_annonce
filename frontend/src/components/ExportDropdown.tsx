@@ -9,7 +9,7 @@ interface Props {
 const FORMATS = [
   { key: "csv" as const, label: "CSV", sublabel: "Standard", icon: FileText },
   { key: "excel" as const, label: "Excel", sublabel: "Compatible FR", icon: FileSpreadsheet },
-  { key: "json" as const, label: "JSON", sublabel: "Developpeurs", icon: FileJson },
+  { key: "json" as const, label: "JSON", sublabel: "Développeurs", icon: FileJson },
 ];
 
 export default function ExportDropdown({ total, onExport }: Props) {
@@ -53,7 +53,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
           border transition-all duration-150
           ${isExporting
             ? "border-[var(--color-border-subtle)] text-[var(--color-slate)] cursor-wait"
-            : "border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-white cursor-pointer"
+            : "border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] cursor-pointer"
           }
         `}
         onClick={() => setOpen(!open)}
@@ -82,7 +82,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
         >
           <div className="px-3 py-2 border-b border-[var(--color-border-subtle)]">
             <p className="label-academic tabular-nums">
-              {total.toLocaleString("fr-FR")} resultats
+              {total.toLocaleString("fr-FR")} résultats
             </p>
           </div>
           {FORMATS.map((f) => (

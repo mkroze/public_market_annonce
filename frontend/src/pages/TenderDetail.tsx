@@ -24,30 +24,18 @@ import { getTender, downloadDce, downloadPdf } from "../lib/api";
 import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
+import { CATEGORY_COLORS, CATEGORY_FALLBACK, TONE_PANEL } from "../lib/tone";
 import type { DisplayValue, TenderWithDetails } from "../lib/types";
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Travaux: "bg-[var(--color-crimson)] text-white",
-  Fournitures: "bg-[var(--color-gold)] text-white",
-  Services: "bg-[var(--color-charcoal)] text-white",
-};
-
-const CHECK_TONE_CLASS = {
-  positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  warning: "border-amber-200 bg-amber-50 text-amber-900",
-  critical: "border-red-200 bg-red-50 text-red-900",
-  neutral: "border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]",
-};
-
-function rawOrMissing(value: string | undefined | null, missing = "Non detecte"): string {
+function rawOrMissing(value: string | undefined | null, missing = "Non détecté"): string {
   return value && value.trim() ? value : missing;
 }
 
 function sourceLabel(value: DisplayValue | undefined): string {
   if (!value || value.source === "none" || value.status === "missing" || value.status === "not_applicable") return "";
-  if (requiresVerification(value)) return "A verifier";
-  if (value.source === "regex") return "Detecte";
-  if (value.source === "agent_import") return "Importe";
+  if (requiresVerification(value)) return "À vérifier";
+  if (value.source === "regex") return "Détecté";
+  if (value.source === "agent_import") return "Importé";
   return "";
 }
 
@@ -60,6 +48,7 @@ export default function TenderDetail() {
   const [dceLoading, setDceLoading] = useState(false);
   const [dceError, setDceError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState("");
 
   useEffect(() => {
     if (!tenderId) return;
@@ -97,8 +86,8 @@ export default function TenderDetail() {
   const title = displayText(display?.title, rawOrMissing(d?.objet || tender.title, `Consultation ${tender.reference}`));
   const buyer = displayText(display?.buyer, rawOrMissing(d?.acheteur || tender.entity));
   const location = displayText(display?.location, rawOrMissing(d?.lieu_execution || tender.location));
-  const procedure = displayText(display?.procedure, tender.procedure_type || d?.procedure || "Non detecte");
-  const category = displayText(display?.category, tender.category || d?.categorie || "Non detecte");
+  const procedure = displayText(display?.procedure, tender.procedure_type || d?.procedure || "Non détecté");
+  const category = displayText(display?.category, tender.category || d?.categorie || "Non détecté");
   const deadlineSignal = display?.deadline || {
     value: tender.deadline,
     status: tender.deadline ? "detected" : "missing",
@@ -122,8 +111,8 @@ export default function TenderDetail() {
       {/* Header */}
       <div className="border-b border-[var(--color-border-subtle)] pb-6">
         <div className="flex flex-wrap gap-2 items-center mb-3">
-          {category !== "Non detecte" && (
-            <span className={`inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded ${CATEGORY_COLORS[category] || "bg-base-300"}`}>
+          {category !== "Non détecté" && (
+            <span className={`inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded ${CATEGORY_COLORS[category] || CATEGORY_FALLBACK}`}>
               {category}
             </span>
           )}
@@ -145,12 +134,12 @@ export default function TenderDetail() {
           <span className="flex items-center gap-1.5">
             <Tag size={14} /> {displayText(display?.reference, tender.reference)}
           </span>
-          {buyer !== "Non detecte" && (
+          {buyer !== "Non détecté" && (
             <span className="flex items-center gap-1.5">
               <Building2 size={14} /> {buyer}
             </span>
           )}
-          {location !== "Non detecte" && (
+          {location !== "Non détecté" && (
             <span className="flex items-center gap-1.5">
               <MapPin size={14} /> {location}
             </span>
@@ -165,32 +154,32 @@ export default function TenderDetail() {
       </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <SignalCard icon={Calendar} title="Echeance" value={deadlineSignal} />
-        <SignalCard icon={Banknote} title="Budget estime" value={signals?.estimation} />
+        <SignalCard icon={Calendar} title="Échéance" value={deadlineSignal} />
+        <SignalCard icon={Banknote} title="Budget estimé" value={signals?.estimation} />
         <SignalCard icon={Shield} title="Caution" value={signals?.caution} />
         <SignalCard icon={Download} title="DCE" value={signals?.dce_available} />
-        <SignalCard icon={Users} title="Applications" value={signals?.applications_count} />
-        <SignalCard icon={Landmark} title="Prix marche" value={signals?.market_price} />
+        <SignalCard icon={Users} title="Candidatures" value={signals?.applications_count} />
+        <SignalCard icon={Landmark} title="Prix marché" value={signals?.market_price} />
       </section>
 
       <section className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
         <div className="flex items-start gap-3">
-          <div className="rounded bg-[var(--color-crimson)] p-2 text-white">
+          <div className="rounded bg-[var(--color-crimson)] p-2 text-[var(--color-ivory)]">
             <HelpCircle size={18} />
           </div>
           <div>
             <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">
-              Dois-je poursuivre cette opportunite ?
+              Dois-je poursuivre cette opportunité ?
             </h2>
             <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
-              Les donnees detectees peuvent etre incompletes. Verifiez les points critiques dans le DCE avant de preparer une offre.
+              Les données détectées peuvent être incomplètes. Vérifiez les points critiques dans le DCE avant de préparer une offre.
             </p>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           {checklist.map((item) => (
-            <div key={item.id} className={`rounded border p-3 ${CHECK_TONE_CLASS[item.tone]}`}>
+            <div key={item.id} className={`rounded border p-3 ${TONE_PANEL[item.tone]}`}>
               <div className="flex items-start gap-2">
                 <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
                 <div>
@@ -205,9 +194,9 @@ export default function TenderDetail() {
       </section>
 
       {/* Actions */}
-      {dceError && (
+      {(dceError || pdfError) && (
         <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
-          {dceError}
+          {dceError || pdfError}
         </div>
       )}
       <div className="flex flex-wrap gap-3">
@@ -220,21 +209,24 @@ export default function TenderDetail() {
               setDceLoading(true);
               setDceError("");
               try { await downloadDce(tenderId); }
-              catch (e) { setDceError(e instanceof Error ? e.message : "Echec du telechargement"); }
+              catch (e) { setDceError(e instanceof Error ? e.message : "Échec du téléchargement"); }
               finally { setDceLoading(false); }
             }}
           >
             {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
-            {dceLoading ? "Telechargement..." : "Telecharger le DCE"}
+            {dceLoading ? "Téléchargement..." : "Télécharger le DCE"}
           </button>
         )}
         <button
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-white transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] transition-colors"
           disabled={pdfLoading}
           onClick={async () => {
             if (!tenderId) return;
             setPdfLoading(true);
-            try { await downloadPdf(tenderId); } catch {} finally { setPdfLoading(false); }
+            setPdfError("");
+            try { await downloadPdf(tenderId); }
+            catch (e) { setPdfError(e instanceof Error ? e.message : "Échec de l'export PDF"); }
+            finally { setPdfLoading(false); }
           }}
         >
           {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
@@ -256,7 +248,7 @@ export default function TenderDetail() {
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard icon={Landmark} title="Domaine d'activite" value={rawOrMissing(d?.domaines || tender.sector_name)} />
+        <InfoCard icon={Landmark} title="Domaine d'activité" value={rawOrMissing(d?.domaines || tender.sector_name)} />
         {isHighConfidenceDetected(signals?.plan_price) && <InfoCard icon={Banknote} title="Prix d'acquisition des plans" value={displayText(signals?.plan_price)} highlight />}
         {d?.variante && <InfoCard icon={FileText} title="Variante" value={d.variante} />}
       </div>
@@ -265,7 +257,7 @@ export default function TenderDetail() {
       {(d?.adresse_retrait || d?.adresse_depot || d?.lieu_ouverture) && (
         <Section icon={MapPin} title="Adresses">
           {d?.adresse_retrait && <Field label="Retrait des dossiers" value={d.adresse_retrait} />}
-          {d?.adresse_depot && <Field label="Depot des offres" value={d.adresse_depot} />}
+          {d?.adresse_depot && <Field label="Dépôt des offres" value={d.adresse_depot} />}
           {d?.lieu_ouverture && <Field label="Ouverture des plis" value={d.lieu_ouverture} />}
         </Section>
       )}
@@ -275,15 +267,15 @@ export default function TenderDetail() {
         <Section icon={Users} title="Conditions de participation">
           {d?.allotissement && <Field label="Allotissement" value={d.allotissement} />}
           {d?.qualifications && <Field label="Qualifications requises" value={d.qualifications} />}
-          {d?.agrements && <Field label="Agrements requis" value={d.agrements} />}
-          {d?.reserved_pme && <Field label="Reserve TPE/PME" value={d.reserved_pme} />}
+          {d?.agrements && <Field label="Agréments requis" value={d.agrements} />}
+          {d?.reserved_pme && <Field label="Réservé TPE/PME" value={d.reserved_pme} />}
         </Section>
       )}
 
       {/* Reunion & Visite */}
       {(d?.reunion || d?.visite_lieux) && (
-        <Section icon={Eye} title="Reunion & Visite">
-          {d?.reunion && <Field label="Reunion" value={d.reunion} />}
+        <Section icon={Eye} title="Réunion & Visite">
+          {d?.reunion && <Field label="Réunion" value={d.reunion} />}
           {d?.visite_lieux && <Field label="Visite des lieux" value={d.visite_lieux} />}
         </Section>
       )}
@@ -295,7 +287,8 @@ export default function TenderDetail() {
         </Section>
       )}
 
-      <RawSourceDrawer tender={tender} />
+      {/* Données source brutes : outil de diagnostic, réservé au développement. */}
+      {import.meta.env.DEV && <RawSourceDrawer tender={tender} />}
 
     </div>
   );
@@ -485,7 +478,7 @@ function RawSourceDrawer({ tender }: { tender: TenderWithDetails }) {
   return (
     <details className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)]">
       <summary className="cursor-pointer px-5 py-3 font-sans text-sm font-semibold text-[var(--color-charcoal)]">
-        Donnees source
+        Données source
       </summary>
       <div className="divide-y divide-[var(--color-border-subtle)] px-5">
         {rows.map(([label, value]) => (

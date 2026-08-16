@@ -1,20 +1,18 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { LogIn, Eye, EyeOff } from "lucide-react";
-import { login } from "../lib/api";
+import { Link, useNavigate } from "react-router-dom";
+import { UserPlus, Eye, EyeOff } from "lucide-react";
+import { register } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
-export default function Login() {
+export default function Register() {
   const { setAuth } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  // Reprend l'intention initiale : si l'utilisateur visait une page protégée,
-  // on l'y renvoie après connexion plutôt que vers l'accueil.
-  const from = (location.state as { from?: string } | null)?.from || "/";
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [company, setCompany] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,11 +21,16 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await login(email, password);
+      const res = await register({
+        name,
+        email,
+        password,
+        company: company || undefined,
+      });
       setAuth(res.token, res.user);
-      navigate(from, { replace: true });
+      navigate("/", { replace: true });
     } catch (err: any) {
-      setError(err.message || "Erreur de connexion");
+      setError(err.message || "Erreur lors de l'inscription");
     } finally {
       setLoading(false);
     }
@@ -37,8 +40,8 @@ export default function Login() {
     <div className="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 py-8">
       <div className="w-full max-w-md border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-8">
         <h2 className="font-display text-2xl text-[var(--color-charcoal)] text-center flex items-center justify-center gap-2 mb-6">
-          <LogIn className="w-6 h-6 text-[var(--color-crimson)]" />
-          Se connecter
+          <UserPlus className="w-6 h-6 text-[var(--color-crimson)]" />
+          Cr&eacute;er un compte
         </h2>
 
         {error && (
@@ -52,11 +55,27 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="form-control">
-            <label htmlFor="login-email" className="label">
+            <label htmlFor="register-name" className="label">
+              <span className="label-academic">Nom complet</span>
+            </label>
+            <input
+              id="register-name"
+              type="text"
+              autoComplete="name"
+              className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
+              placeholder="Votre nom"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-control">
+            <label htmlFor="register-email" className="label">
               <span className="label-academic">Email</span>
             </label>
             <input
-              id="login-email"
+              id="register-email"
               type="email"
               autoComplete="email"
               className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
@@ -68,16 +87,18 @@ export default function Login() {
           </div>
 
           <div className="form-control">
-            <label htmlFor="login-password" className="label">
+            <label htmlFor="register-password" className="label">
               <span className="label-academic">Mot de passe</span>
             </label>
             <div className="relative">
               <input
-                id="login-password"
+                id="register-password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
+                autoComplete="new-password"
+                minLength={8}
+                aria-describedby="register-password-hint"
                 className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded pr-10"
-                placeholder="Votre mot de passe"
+                placeholder="Au moins 8 caractères"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -92,6 +113,24 @@ export default function Login() {
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            <p id="register-password-hint" className="mt-1 font-sans text-xs text-[var(--color-slate)]">
+              Au moins 8 caractères.
+            </p>
+          </div>
+
+          <div className="form-control">
+            <label htmlFor="register-company" className="label">
+              <span className="label-academic">Entreprise (optionnel)</span>
+            </label>
+            <input
+              id="register-company"
+              type="text"
+              autoComplete="organization"
+              className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
+              placeholder="Nom de l'entreprise"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+            />
           </div>
 
           <button
@@ -100,14 +139,14 @@ export default function Login() {
             disabled={loading}
           >
             {loading && <span className="loading loading-spinner loading-sm"></span>}
-            {loading ? "Connexion..." : "Se connecter"}
+            {loading ? "Inscription..." : "Créer un compte"}
           </button>
         </form>
 
         <p className="text-center mt-6 text-sm font-sans text-[var(--color-slate)]">
-          Pas encore de compte ?{" "}
-          <Link to="/register" className="text-[var(--color-crimson)] hover:underline">
-            Cr&eacute;er un compte
+          D&eacute;j&agrave; un compte ?{" "}
+          <Link to="/login" className="text-[var(--color-crimson)] hover:underline">
+            Se connecter
           </Link>
         </p>
       </div>

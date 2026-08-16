@@ -16,7 +16,7 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
   return (
     <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border-subtle)]">
       <span className="text-sm text-[var(--color-slate)] font-sans tabular-nums">
-        {total.toLocaleString("fr-FR")} resultat{total !== 1 ? "s" : ""}
+        {total.toLocaleString("fr-FR")} résultat{total !== 1 ? "s" : ""}
       </span>
       <div className="flex items-center gap-1">
         <button
@@ -24,7 +24,7 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
-          Precedent
+          Précédent
         </button>
         {range.map((p) => (
           <button
@@ -32,7 +32,7 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
             className={`
               w-9 h-9 text-sm font-sans font-medium rounded transition-colors
               ${p === page
-                ? "bg-[var(--color-crimson)] text-white"
+                ? "bg-[var(--color-crimson)] text-[var(--color-ivory)]"
                 : "hover:bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]"
               }
             `}

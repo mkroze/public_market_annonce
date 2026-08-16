@@ -1,6 +1,6 @@
 import type { DisplayValue } from "./types";
 
-export function displayText(value: DisplayValue | undefined, missingLabel = "Non detecte"): string {
+export function displayText(value: DisplayValue | undefined, missingLabel = "Non détecté"): string {
   if (!value) return missingLabel;
   if (value.status === "missing") return missingLabel;
   if (value.status === "not_applicable") return "Non applicable";

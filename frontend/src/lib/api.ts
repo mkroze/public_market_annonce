@@ -34,6 +34,19 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/**
+ * Session expirée / token invalide : le middleware backend renvoie 401 sur
+ * toute route authentifiée. On purge le token et on renvoie l'utilisateur vers
+ * la connexion plutôt que de le laisser sur un écran d'erreur sans issue.
+ */
+function handleUnauthorized() {
+  localStorage.removeItem("token");
+  const path = window.location.pathname;
+  if (path !== "/login" && path !== "/register") {
+    window.location.assign("/login");
+  }
+}
+
 async function fetchJSON<T>(path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(path, window.location.origin);
   if (params) {
@@ -42,6 +55,7 @@ async function fetchJSON<T>(path: string, params?: Record<string, string>): Prom
     });
   }
   const res = await fetch(url.toString(), { headers: authHeaders() });
+  if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -80,7 +94,8 @@ export async function exportTenders(
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.order) params.set("order", filters.order);
 
-  const res = await fetch(`${BASE}/tenders/export?${params.toString()}`);
+  const res = await fetch(`${BASE}/tenders/export?${params.toString()}`, { headers: authHeaders() });
+  if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw new Error("Export failed");
 
   const blob = await res.blob();
@@ -120,7 +135,8 @@ export function triggerScrape(): Promise<{ status: string; total_found: number; 
 }
 
 export async function downloadDce(tenderId: string): Promise<void> {
-  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/dce`);
+  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/dce`, { headers: authHeaders() });
+  if (res.status === 401) handleUnauthorized();
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Download failed" }));
     throw new Error(err.error || "Download failed");
@@ -141,7 +157,8 @@ export async function downloadDce(tenderId: string): Promise<void> {
 }
 
 export async function downloadPdf(tenderId: string): Promise<void> {
-  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/pdf`);
+  const res = await fetch(`${BASE}/tenders/${tenderPathSegment(tenderId)}/pdf`, { headers: authHeaders() });
+  if (res.status === 401) handleUnauthorized();
   if (!res.ok) throw new Error("PDF export failed");
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition") || "";

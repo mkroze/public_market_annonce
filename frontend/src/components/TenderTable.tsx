@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Tender } from "../lib/types";
 import { ExternalLink, ArrowUpDown, MapPin, Banknote } from "lucide-react";
 import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
+import { CATEGORY_COLORS, CATEGORY_FALLBACK } from "../lib/tone";
 
 interface Props {
   tenders: Tender[];
@@ -9,12 +10,6 @@ interface Props {
   order: string;
   onSort: (field: string) => void;
 }
-
-const CATEGORY_COLORS: Record<string, string> = {
-  Travaux: "bg-[var(--color-crimson)] text-white",
-  Fournitures: "bg-[var(--color-gold)] text-white",
-  Services: "bg-[var(--color-charcoal)] text-white",
-};
 
 const URGENCY_STYLES = {
   expired: { dotClass: "status-dot-expired", textClass: "text-[var(--color-border)]" },
@@ -46,25 +41,29 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
   if (tenders.length === 0) {
     return (
       <div className="text-center py-16 text-[var(--color-slate)]">
-        <p className="font-display text-lg">Aucune consultation trouvee</p>
-        <p className="text-sm mt-1">Modifiez vos filtres ou lancez un import.</p>
+        <p className="font-display text-lg">Aucune consultation trouvée</p>
+        <p className="text-sm mt-1">Modifiez ou réinitialisez vos filtres pour voir plus de résultats.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto border border-[var(--color-border-subtle)] rounded">
+    <div className="border border-[var(--color-border-subtle)] rounded">
+      <p className="lg:hidden px-3 py-1.5 text-xs text-[var(--color-slate)] border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
+        Faites défiler horizontalement pour voir toutes les colonnes →
+      </p>
+      <div className="overflow-x-auto">
       <table className="table table-sm">
         <thead>
           <tr className="bg-[var(--color-ivory-dim)]">
             <SortHeader field="title" label="Objet" />
-            <SortHeader field="entity" label="Entite" />
+            <SortHeader field="entity" label="Entité" />
             <th>Cat.</th>
             <th>Secteur</th>
             <SortHeader field="location" label="Lieu" />
             <SortHeader field="estimation" label="Estimation" highlight />
             <SortHeader field="deadline" label="Échéance" />
-            <th>Delai</th>
+            <th>Délai</th>
             <th></th>
           </tr>
         </thead>
@@ -95,7 +94,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
                 <td className="text-sm max-w-48 truncate text-[var(--color-charcoal)]">{t.entity}</td>
                 <td>
                   {t.category && (
-                    <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded ${CATEGORY_COLORS[t.category] || "bg-base-300"}`}>
+                    <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded ${CATEGORY_COLORS[t.category] || CATEGORY_FALLBACK}`}>
                       {t.category}
                     </span>
                   )}
@@ -151,6 +150,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

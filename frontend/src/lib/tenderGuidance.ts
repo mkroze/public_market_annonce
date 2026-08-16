@@ -40,36 +40,36 @@ export function getTenderGuidance(tender: Tender, now = new Date()): TenderGuida
 
   if (urgency?.expired) {
     return {
-      label: "Expiree",
+      label: "Expirée",
       tone: "critical",
-      reasons: ["La date limite est deja passee."],
+      reasons: ["La date limite est déjà passée."],
     };
   }
 
   if (urgency && urgency.days <= 3) {
-    reasons.push("Delai tres court pour verifier le dossier.");
-    return { label: "Delai court", tone: "critical", reasons };
+    reasons.push("Délai très court pour vérifier le dossier.");
+    return { label: "Délai court", tone: "critical", reasons };
   }
 
   if (urgency && urgency.days <= 7) {
-    reasons.push("A verifier rapidement cette semaine.");
-    return { label: "A verifier vite", tone: "warning", reasons };
+    reasons.push("À vérifier rapidement cette semaine.");
+    return { label: "À vérifier vite", tone: "warning", reasons };
   }
 
   if (!urgency) {
     return {
-      label: "Date limite a verifier",
+      label: "Date limite à vérifier",
       tone: "warning",
-      reasons: ["Verifier la date limite sur le portail source ou dans le DCE."],
+      reasons: ["Vérifier la date limite sur le portail source ou dans le DCE."],
     };
   }
 
-  if (hasValue(tender.estimation)) reasons.push("Estimation disponible pour cadrer l'opportunite.");
-  if (hasValue(tender.location)) reasons.push("Localisation indiquee.");
-  if (!hasValue(tender.estimation)) reasons.push("Budget a verifier dans le DCE.");
+  if (hasValue(tender.estimation)) reasons.push("Estimation disponible pour cadrer l'opportunité.");
+  if (hasValue(tender.location)) reasons.push("Localisation indiquée.");
+  if (!hasValue(tender.estimation)) reasons.push("Budget à vérifier dans le DCE.");
 
   return {
-    label: hasValue(tender.estimation) ? "Facile a comparer" : "Budget a verifier",
+    label: hasValue(tender.estimation) ? "Facile à comparer" : "Budget à vérifier",
     tone: hasValue(tender.estimation) ? "positive" : "neutral",
     reasons,
   };
@@ -110,51 +110,51 @@ export function getTenderDecisionChecklist(tender: TenderWithDetails, now = new 
   return [
     {
       id: "deadline",
-      label: "Delai de reponse",
-      value: urgency ? `${deadline} (${urgency.label})` : deadline || "Non indique",
+      label: "Délai de réponse",
+      value: urgency ? `${deadline} (${urgency.label})` : deadline || "Non indiqué",
       tone: !urgency ? "warning" : urgency.expired || urgency.days <= 3 ? "critical" : urgency.days <= 7 ? "warning" : "positive",
       action: urgency?.expired
         ? "Ne pas poursuivre sans confirmation sur le portail source."
         : urgency && urgency.days <= 3
-          ? "Verifier immediatement si le dossier est realiste."
+          ? "Vérifier immédiatement si le dossier est réaliste."
           : !urgency
-            ? "Verifier la date limite sur le portail source ou dans le DCE."
+            ? "Vérifier la date limite sur le portail source ou dans le DCE."
             : "Planifier la lecture du DCE.",
     },
     {
       id: "location",
-      label: "Lieu d'execution",
-      value: location || "Non indique",
+      label: "Lieu d'exécution",
+      value: location || "Non indiqué",
       tone: location ? "neutral" : "warning",
       action: "Confirmer que votre entreprise peut intervenir dans cette zone.",
     },
     {
       id: "budget",
       label: "Estimation ou budget",
-      value: estimation || "A verifier dans le DCE",
+      value: estimation || "À vérifier dans le DCE",
       tone: estimation ? "positive" : "warning",
-      action: "Comparer ce montant avec votre capacite commerciale et financiere.",
+      action: "Comparer ce montant avec votre capacité commerciale et financière.",
     },
     {
       id: "caution",
       label: "Caution provisoire",
-      value: caution || "A verifier dans le DCE",
+      value: caution || "À vérifier dans le DCE",
       tone: caution ? "neutral" : "warning",
-      action: "Verifier si une garantie bancaire est necessaire avant de preparer l'offre.",
+      action: "Vérifier si une garantie bancaire est nécessaire avant de préparer l'offre.",
     },
     {
       id: "qualifications",
-      label: "Qualifications ou agrements",
-      value: qualifications || "A verifier dans le DCE",
+      label: "Qualifications ou agréments",
+      value: qualifications || "À vérifier dans le DCE",
       tone: qualifications ? "warning" : "neutral",
-      action: "Controler les certificats, agrements ou references demandes.",
+      action: "Contrôler les certificats, agréments ou références demandés.",
     },
     {
       id: "documents",
       label: "Documents",
-      value: hasDceUrl ? "DCE disponible" : "DCE a recuperer sur le portail",
+      value: hasDceUrl ? "DCE disponible" : "DCE à récupérer sur le portail",
       tone: hasDceUrl ? "positive" : "warning",
-      action: "Telecharger le DCE et lire le reglement de consultation en premier.",
+      action: "Télécharger le DCE et lire le règlement de consultation en premier.",
     },
   ];
 }

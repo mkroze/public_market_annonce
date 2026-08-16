@@ -1,110 +1,135 @@
 @import "tailwindcss";
-@plugin "daisyui" {
-  themes: academic --default;
+@plugin "daisyui";
+
+/* ── daisyUI v5 themes ────────────────────────────────────────────────
+   Semantic tokens (primary / base / accent / …) MUST live here: daisyUI 5
+   reads --color-primary, --color-base-100, etc. (the old v4 --p/--b1/--bc
+   names are ignored). This is what gives .btn-primary, .dropdown, .alert,
+   bg-base-100 their editorial colours instead of falling back to unstyled.
+   The custom --color-ivory / --color-crimson tokens stay in @theme below. */
+@plugin "daisyui/theme" {
+  name: "academic";
+  default: true;
+  color-scheme: light;
+  --color-base-100: #f4f1ea;
+  --color-base-200: #eae5db;
+  --color-base-300: #e0dacd;
+  --color-base-content: #17150f;
+  --color-primary: #17150f;
+  --color-primary-content: #f4f1ea;
+  --color-secondary: #6f6a5e;
+  --color-secondary-content: #f4f1ea;
+  --color-accent: #b4462f;
+  --color-accent-content: #f4f1ea;
+  --color-neutral: #17150f;
+  --color-neutral-content: #f4f1ea;
+  --color-info: #17150f;
+  --color-info-content: #f4f1ea;
+  --color-success: #375237;
+  --color-success-content: #f4f1ea;
+  --color-warning: #8a6d1f;
+  --color-warning-content: #f4f1ea;
+  --color-error: #b4462f;
+  --color-error-content: #f4f1ea;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
 }
 
-/* ── Academic Public Square Theme ────────────────────────────────── */
+@plugin "daisyui/theme" {
+  name: "academic-dark";
+  color-scheme: dark;
+  --color-base-100: #16150f;
+  --color-base-200: #1e1d16;
+  --color-base-300: #26251d;
+  --color-base-content: #f0ece2;
+  --color-primary: #f0ece2;
+  --color-primary-content: #17150f;
+  --color-secondary: #9b968a;
+  --color-secondary-content: #17150f;
+  --color-accent: #d1663f;
+  --color-accent-content: #17150f;
+  --color-neutral: #dcd8ce;
+  --color-neutral-content: #17150f;
+  --color-info: #f0ece2;
+  --color-info-content: #17150f;
+  --color-success: #7aa07a;
+  --color-success-content: #17150f;
+  --color-warning: #c2a95f;
+  --color-warning-content: #17150f;
+  --color-error: #d1663f;
+  --color-error-content: #17150f;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* ── Editorial Catalog Theme ─────────────────────────────────────────
+   Minimalist black-on-cream. "crimson" is kept as the token name for the
+   interactive/emphasis colour (now near-black); a single terracotta accent
+   is reserved for urgency. --font-serif now maps to a grotesque display. */
 @theme {
-  --color-ivory: #fafaeb;
-  --color-ivory-dim: #efefe0;
-  --color-ivory-deep: #e3e3d5;
-  --color-crimson: #81001d;
-  --color-crimson-dark: #5c0015;
-  --color-crimson-light: #a51c30;
-  --color-crimson-muted: #ffb3b3;
-  --color-charcoal: #1b1c14;
-  --color-slate: #594141;
-  --color-gold: #705c1a;
+  --color-ivory: #f4f1ea;
+  --color-ivory-dim: #eae5db;
+  --color-ivory-deep: #e0dacd;
+  --color-crimson: #17150f;
+  --color-crimson-dark: #000000;
+  --color-crimson-light: #3a352b;
+  --color-crimson-muted: #d9d4c8;
+  --color-accent: #b4462f;
+  --color-accent-soft: #e7d9d1;
+  --color-charcoal: #17150f;
+  --color-slate: #6f6a5e;
+  --color-gold: #8a6d1f;
   --color-gold-light: #c2a95f;
-  --color-border: #e1bebe;
-  --color-border-subtle: #dbdbcd;
-  --font-serif: "Merriweather", Georgia, "Times New Roman", serif;
+  --color-border: #c9c3b4;
+  --color-border-subtle: #ddd8cb;
+  /* Tone tokens for guidance badges/panels — theme-aware (dark values below),
+     so no more hard-coded emerald/amber/red pastels that break in dark mode. */
+  --color-tone-positive: #375237;
+  --color-tone-positive-soft: #e4ebe0;
+  --color-tone-warning: #8a6d1f;
+  --color-tone-warning-soft: #efe7cf;
+  --color-tone-critical: #b4462f;
+  --color-tone-critical-soft: #f1ddd5;
+  --font-serif: "Archivo", "Inter", system-ui, sans-serif;
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
-  [data-theme="academic"] {
-    --p: 81 0 29;       /* #81001d crimson */
-    --pf: 92 28 48;     /* #5c0015 darker crimson */
-    --pc: 255 255 255;  /* white on primary */
-    --s: 95 94 94;      /* #5f5e5e charcoal */
-    --sf: 71 71 71;     /* darker */
-    --sc: 255 255 255;
-    --a: 112 92 26;     /* #705c1a gold */
-    --af: 87 69 2;
-    --ac: 255 255 255;
-    --n: 47 49 40;      /* #2f3128 */
-    --nf: 27 28 20;
-    --nc: 241 242 227;
-    --b1: 250 250 235;  /* #fafaeb ivory */
-    --b2: 239 239 224;  /* #efefe0 */
-    --b3: 227 227 213;  /* #e3e3d5 */
-    --bc: 27 28 20;     /* #1b1c14 */
-    --in: 37 99 235;
-    --inc: 255 255 255;
-    --su: 22 163 74;
-    --suc: 255 255 255;
-    --wa: 112 92 26;
-    --wac: 255 255 255;
-    --er: 186 26 26;    /* #ba1a1a */
-    --erc: 255 255 255;
-    --rounded-box: 0.25rem;
-    --rounded-btn: 0.25rem;
-    --rounded-badge: 0.25rem;
-    --animation-btn: 0.15s;
-    --animation-input: 0.15s;
-    --btn-focus-scale: 0.99;
-    --tab-radius: 0.25rem;
-  }
-
   [data-theme="academic-dark"] {
-    --p: 165 28 48;     /* #a51c30 lighter crimson for dark bg */
-    --pf: 81 0 29;      /* #81001d */
-    --pc: 255 255 255;
-    --s: 160 160 150;
-    --sf: 130 130 120;
-    --sc: 27 28 20;
-    --a: 194 169 95;    /* #c2a95f gold-light */
-    --af: 112 92 26;
-    --ac: 27 28 20;
-    --n: 200 200 190;
-    --nf: 220 220 210;
-    --nc: 35 36 28;
-    --b1: 30 31 24;     /* dark base */
-    --b2: 40 41 33;
-    --b3: 50 51 43;
-    --bc: 230 230 220;  /* light text */
-    --in: 96 165 250;
-    --inc: 27 28 20;
-    --su: 74 222 128;
-    --suc: 27 28 20;
-    --wa: 194 169 95;
-    --wac: 27 28 20;
-    --er: 248 113 113;
-    --erc: 27 28 20;
-    --rounded-box: 0.25rem;
-    --rounded-btn: 0.25rem;
-    --rounded-badge: 0.25rem;
-    --animation-btn: 0.15s;
-    --animation-input: 0.15s;
-    --btn-focus-scale: 0.99;
-    --tab-radius: 0.25rem;
-  }
-
-  [data-theme="academic-dark"] {
-    --color-ivory: #1e1f18;
-    --color-ivory-dim: #282921;
-    --color-ivory-deep: #32332b;
-    --color-charcoal: #e6e6dc;
-    --color-slate: #a8a898;
-    --color-crimson: #d4566a;
-    --color-crimson-dark: #a51c30;
-    --color-crimson-light: #e87a8c;
-    --color-crimson-muted: #5c2030;
+    --color-ivory: #16150f;
+    --color-ivory-dim: #1e1d16;
+    --color-ivory-deep: #26251d;
+    --color-charcoal: #f0ece2;
+    --color-slate: #9b968a;
+    --color-crimson: #f0ece2;
+    --color-crimson-dark: #ffffff;
+    --color-crimson-light: #cfcabc;
+    --color-crimson-muted: #33322a;
+    --color-accent: #d1663f;
+    --color-accent-soft: #3a2a22;
     --color-gold: #c2a95f;
     --color-gold-light: #d4bc78;
-    --color-border: #4a3535;
-    --color-border-subtle: #3a3b33;
+    --color-border: #3e3d33;
+    --color-border-subtle: #2c2b23;
+    --color-tone-positive: #7aa07a;
+    --color-tone-positive-soft: #212a1f;
+    --color-tone-warning: #c2a95f;
+    --color-tone-warning-soft: #2b2717;
+    --color-tone-critical: #d1663f;
+    --color-tone-critical-soft: #2f211b;
   }
 }
 
@@ -118,13 +143,31 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Serif headings */
+/* Grotesque display headings */
 .font-display {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
 }
 
 h1, h2, h3, .heading {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
+}
+
+/* Oversized editorial page title — uppercase, heavy, tightly tracked */
+.display-editorial {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.015em;
+  line-height: 0.92;
+}
+
+/* Editorial control label — used for nav, filters, sort, meta captions */
+.editorial-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* Academic label style — small caps, tracked */
@@ -266,6 +309,18 @@ select option {
 
 .animate-in {
   animation: fadeSlideIn 150ms ease-out;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Prose for blog posts ────────────────────────────────────────── */

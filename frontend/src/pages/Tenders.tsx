@@ -79,9 +79,29 @@ export default function Tenders() {
   const urgentSegmentActive = searchParams.get("urgent") === "true" && filters.status === "en_cours";
   const viewMode = searchParams.get("view") === "expert" ? "expert" : "guided";
 
+  // Un résultat vide « à cause des filtres » n'est pas un catalogue vide : on
+  // distingue les deux pour proposer la bonne action (réinitialiser vs patienter).
+  const filtersActive =
+    Boolean(
+      filters.q ||
+        filters.category ||
+        filters.sector ||
+        filters.entity ||
+        filters.location ||
+        filters.procedure_type,
+    ) ||
+    filters.status !== "en_cours" ||
+    urgentSegmentActive;
+
   function setViewMode(mode: "guided" | "expert") {
     const params = new URLSearchParams(searchParams);
     params.set("view", mode);
+    setSearchParams(params);
+  }
+
+  function resetFilters() {
+    const params = new URLSearchParams();
+    params.set("view", viewMode);
     setSearchParams(params);
   }
 
@@ -114,12 +134,12 @@ export default function Tenders() {
 
   async function handleExport(format: "csv" | "excel" | "json") {
     const formatLabels = { csv: "CSV", excel: "Excel", json: "JSON" };
-    addToast(`Preparation de l'export ${formatLabels[format]}...`, "info");
+    addToast(`Préparation de l'export ${formatLabels[format]}...`, "info");
     try {
       await exportTenders(filters, format);
-      addToast(`Export ${formatLabels[format]} termine avec succes`, "success");
+      addToast(`Export ${formatLabels[format]} terminé avec succès`, "success");
     } catch {
-      addToast("Erreur lors de l'export. Veuillez reessayer.", "error");
+      addToast("Erreur lors de l'export. Veuillez réessayer.", "error");
     }
   }
 
@@ -139,7 +159,9 @@ export default function Tenders() {
           <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Consultations</h1>
           {result && !loading && (
             <p className="text-sm text-[var(--color-slate)] mt-0.5 tabular-nums font-sans">
-              {result.total.toLocaleString("fr-FR")} resultats
+              {urgentSegmentActive
+                ? `${displayedTenders.length} consultation${displayedTenders.length !== 1 ? "s" : ""} urgente${displayedTenders.length !== 1 ? "s" : ""} sur cette page`
+                : `${result.total.toLocaleString("fr-FR")} résultats`}
             </p>
           )}
         </div>
@@ -151,11 +173,11 @@ export default function Tenders() {
       <div className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-4 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-sans text-sm font-semibold text-[var(--color-charcoal)]">Comparez les opportunites avant d'ouvrir le detail.</p>
-            <p className="font-sans text-xs text-[var(--color-slate)]">La vue guidee met en avant le delai, le lieu, le budget et les points a verifier.</p>
+            <p className="font-sans text-sm font-semibold text-[var(--color-charcoal)]">Comparez les opportunités avant d'ouvrir le détail.</p>
+            <p className="font-sans text-xs text-[var(--color-slate)]">La vue guidée met en avant le délai, le lieu, le budget et les points à vérifier.</p>
           </div>
           <div className="join">
-            <button type="button" className={`btn join-item btn-sm ${viewMode === "guided" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("guided")}>Guidee</button>
+            <button type="button" className={`btn join-item btn-sm ${viewMode === "guided" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("guided")}>Guidée</button>
             <button type="button" className={`btn join-item btn-sm ${viewMode === "expert" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("expert")}>Tableau</button>
           </div>
         </div>
@@ -201,6 +223,24 @@ export default function Tenders() {
             Réessayer
           </button>
         </div>
+      ) : result && displayedTenders.length === 0 ? (
+        <div className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-6 py-14 text-center">
+          <p className="font-display text-lg text-[var(--color-charcoal)]">
+            {filtersActive
+              ? "Aucune consultation ne correspond à vos critères."
+              : "Aucune consultation disponible pour le moment."}
+          </p>
+          <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
+            {filtersActive
+              ? "Élargissez ou réinitialisez vos filtres pour voir plus de résultats."
+              : "De nouvelles consultations sont ajoutées régulièrement. Revenez bientôt."}
+          </p>
+          {filtersActive && (
+            <button className="btn btn-sm btn-primary mt-4" onClick={resetFilters}>
+              Réinitialiser les filtres
+            </button>
+          )}
+        </div>
       ) : result ? (
         <>
           {viewMode === "guided" ? (
@@ -220,18 +260,18 @@ export default function Tenders() {
               onSort={handleSort}
             />
           )}
-          <Pagination
-            page={result.page}
-            pages={result.pages}
-            total={result.total}
-            onPageChange={(p) => updateFilters({ ...filters, page: p })}
-          />
+          {/* La segmentation « Urgentes » filtre la page courante côté client :
+              paginer n'aurait pas de sens, on la masque dans ce mode. */}
+          {!urgentSegmentActive && (
+            <Pagination
+              page={result.page}
+              pages={result.pages}
+              total={result.total}
+              onPageChange={(p) => updateFilters({ ...filters, page: p })}
+            />
+          )}
         </>
-      ) : (
-        <div className="alert alert-warning">
-          Aucune donnée. Lancez d'abord un import depuis la page d'accueil.
-        </div>
-      )}
+      ) : null}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>

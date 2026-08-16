@@ -23,7 +23,7 @@ export default function LegalTooltip({ field }: { field: string }) {
         tabIndex={0}
         className="dropdown-content z-50 w-72 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] shadow-md p-3 text-left normal-case tracking-normal"
       >
-        <span className="inline-block px-1.5 py-0.5 mb-2 text-[11px] font-semibold font-sans rounded bg-[var(--color-crimson)] text-white">
+        <span className="inline-block px-1.5 py-0.5 mb-2 text-[11px] font-semibold font-sans rounded bg-[var(--color-crimson)] text-[var(--color-ivory)]">
           {annotation.legalRef}
         </span>
         <p className="font-sans text-xs leading-relaxed text-[var(--color-charcoal)]">

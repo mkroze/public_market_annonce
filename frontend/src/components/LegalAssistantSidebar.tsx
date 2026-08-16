@@ -48,7 +48,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-[var(--color-crimson)] text-white font-sans text-sm font-semibold shadow-lg hover:opacity-90 transition-opacity"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-[var(--color-crimson)] text-[var(--color-ivory)] font-sans text-sm font-semibold shadow-lg hover:opacity-90 transition-opacity"
       >
         <Scale size={16} />
         Assistant juridique
@@ -101,7 +101,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
             key={i}
             className={`font-sans text-sm leading-relaxed whitespace-pre-wrap rounded px-3 py-2 ${
               m.role === "user"
-                ? "bg-[var(--color-crimson)] text-white ml-8"
+                ? "bg-[var(--color-crimson)] text-[var(--color-ivory)] ml-8"
                 : "bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)] mr-4 border border-[var(--color-border-subtle)]"
             }`}
           >

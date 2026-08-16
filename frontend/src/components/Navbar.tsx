@@ -1,11 +1,19 @@
-import { Link, useLocation } from "react-router-dom";
-import { Search, Menu, Sun, Moon } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Building2, CircleHelp, Mail, Search, Menu, Sun, Moon, LogIn, LogOut, UserRound } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "../lib/auth";
 import logoFull from "../assets/logo-full.svg";
 import logoFullReversed from "../assets/logo-full-reversed.svg";
 
 export default function Navbar() {
   const { pathname } = useLocation();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
 
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -21,6 +29,9 @@ export default function Navbar() {
 
   const navLinks = [
     { to: "/tenders", label: "Toutes les consultations", icon: Search },
+    { to: "/about", label: "À propos", icon: Building2 },
+    { to: "/faq", label: "FAQ", icon: CircleHelp },
+    { to: "/contact", label: "Contact", icon: Mail },
   ];
 
   const isActive = (path: string) =>
@@ -48,6 +59,40 @@ export default function Navbar() {
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
+          {/* Auth — desktop */}
+          {user ? (
+            <div className="dropdown dropdown-end hidden md:block">
+              <div
+                tabIndex={0}
+                role="button"
+                className="btn btn-ghost btn-sm gap-1.5 normal-case font-sans"
+                aria-label="Mon compte"
+              >
+                <UserRound size={16} />
+                <span className="max-w-[10rem] truncate">{user.name || user.email}</span>
+              </div>
+              <ul
+                tabIndex={0}
+                className="dropdown-content menu bg-[var(--color-ivory)] border border-[var(--color-border-subtle)] rounded w-56 p-1.5 mt-2 shadow-sm z-50"
+              >
+                <li className="px-2 py-1.5 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
+                  {user.email}
+                </li>
+                <li>
+                  <button type="button" onClick={handleLogout} className="text-sm">
+                    <LogOut size={14} />
+                    Se déconnecter
+                  </button>
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <Link to="/login" className="hidden md:inline-flex btn btn-primary btn-sm gap-1.5 normal-case font-sans">
+              <LogIn size={15} />
+              Se connecter
+            </Link>
+          )}
+
           {/* Mobile menu */}
           <div className="dropdown dropdown-end md:hidden">
             <div tabIndex={0} role="button" className="btn btn-ghost btn-sm btn-square">
@@ -68,6 +113,30 @@ export default function Navbar() {
                   </Link>
                 </li>
               ))}
+              <li className="my-1 border-t border-[var(--color-border-subtle)]" aria-hidden="true"></li>
+              {user ? (
+                <>
+                  <li className="px-2 py-1 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
+                    {user.email}
+                  </li>
+                  <li>
+                    <button type="button" onClick={handleLogout} className="text-sm">
+                      <LogOut size={14} />
+                      Se déconnecter
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <li>
+                  <Link
+                    to="/login"
+                    className={`text-sm ${isActive("/login") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                  >
+                    <LogIn size={14} />
+                    Se connecter
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
         </div>
