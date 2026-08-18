@@ -76,11 +76,15 @@ app.include_router(admin_router)
 
 # ── V1 catalog surface guard ─────────────────────────────────────────────────
 
-# Public catalog surface, plus the gated admin surface the launch keeps:
-# session login/me and everything under /api/admin (each admin route enforces
-# its own auth). Public registration stays closed — admins bootstrap via
-# ADMIN_EMAILS — so /api/auth/register is intentionally left blocked.
-V1_ALLOWED_API_PATHS = {"/api/filters", "/api/auth/login", "/api/auth/me"}
+# Entry points reachable without a session: login and registration. Everything
+# else in the allowlist below requires a valid session — registration is what
+# unlocks the ability to consult the tender catalog.
+V1_PUBLIC_API_PATHS = {"/api/auth/login", "/api/auth/register"}
+
+# The full surface the launch exposes. Catalog (tenders/filters), a signed-in
+# user's alerts, and the admin export space are gated: reachable only with a
+# session. Admin routes also enforce role in their own handlers.
+V1_ALLOWED_API_PATHS = V1_PUBLIC_API_PATHS | {"/api/filters", "/api/auth/me"}
 
 
 def is_v1_catalog_api_path(path: str) -> bool:
@@ -88,6 +92,8 @@ def is_v1_catalog_api_path(path: str) -> bool:
         path in V1_ALLOWED_API_PATHS
         or path == "/api/tenders"
         or path.startswith("/api/tenders/")
+        or path == "/api/alerts"
+        or path.startswith("/api/alerts/")
         or path == "/api/admin"
         or path.startswith("/api/admin/")
     )
@@ -96,8 +102,15 @@ def is_v1_catalog_api_path(path: str) -> bool:
 @app.middleware("http")
 async def restrict_v1_api_surface(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/api/") and not is_v1_catalog_api_path(path):
-        return Response(status_code=404)
+    if path.startswith("/api/") and request.method != "OPTIONS":
+        if not is_v1_catalog_api_path(path):
+            return Response(status_code=404)
+        # Gate the catalog behind registration: only the login/register entry
+        # points are reachable without a valid session.
+        if path not in V1_PUBLIC_API_PATHS:
+            user = await get_current_user(request.headers.get("authorization"))
+            if not user:
+                return Response(status_code=401)
     return await call_next(request)
 
 
@@ -536,6 +549,7 @@ async def get_filters():
         "sectors": sector_list,
         "entities": entity_list,
         "locations": location_list,
+        "regions": sorted(REGIONS),
         "statuses": status_list,
         "procedure_types": procedure_list,
     }

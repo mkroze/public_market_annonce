@@ -58,6 +58,7 @@ export interface FiltersResponse {
   sectors: { code: string; name: string }[];
   entities: string[];
   locations: string[];
+  regions: string[];
   statuses: string[];
   procedure_types: string[];
 }

@@ -26,6 +26,7 @@ import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
 import { CATEGORY_COLORS, CATEGORY_FALLBACK, TONE_PANEL } from "../lib/tone";
 import type { DisplayValue, TenderWithDetails } from "../lib/types";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function rawOrMissing(value: string | undefined | null, missing = "Non détecté"): string {
   return value && value.trim() ? value : missing;
@@ -70,6 +71,7 @@ export default function TenderDetail() {
   if (error || !tender) {
     return (
       <div className="px-4 sm:px-6 py-8">
+        <Breadcrumbs items={[{ label: "Consultations", to: "/tenders" }, { label: "Détail" }]} className="mb-6" />
         <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
           {error || "Consultation introuvable"}
         </div>
@@ -100,13 +102,12 @@ export default function TenderDetail() {
 
   return (
     <div className="px-4 sm:px-6 py-8 space-y-8 max-w-4xl mx-auto">
-      {/* Back link */}
-      <Link
-        to="/tenders"
-        className="inline-flex items-center gap-1.5 text-sm font-sans text-[var(--color-crimson)] hover:underline"
-      >
-        <ArrowLeft size={14} /> Retour aux consultations
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Consultations", to: "/tenders" },
+          { label: displayText(display?.reference, tender.reference) || "Détail" },
+        ]}
+      />
 
       {/* Header */}
       <div className="border-b border-[var(--color-border-subtle)] pb-6">
@@ -162,7 +163,7 @@ export default function TenderDetail() {
         <SignalCard icon={Landmark} title="Prix marché" value={signals?.market_price} />
       </section>
 
-      <section className="rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
+      <section className="rounded-xl shadow-card border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <div className="rounded bg-[var(--color-crimson)] p-2 text-[var(--color-ivory)]">
             <HelpCircle size={18} />
@@ -297,7 +298,7 @@ export default function TenderDetail() {
 /* ─── Section ─── */
 function Section({ icon: Icon, title, children }: { icon: typeof Building2; title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-[var(--color-border-subtle)] rounded">
+    <div className="border border-[var(--color-border-subtle)] rounded-xl shadow-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
         <Icon size={16} className="text-[var(--color-crimson)]" />
         <h2 className="font-display text-base font-bold text-[var(--color-charcoal)]">{title}</h2>
@@ -314,7 +315,7 @@ function InfoCard({ icon: Icon, title, value, highlight = false }: {
   icon: typeof Building2; title: string; value: string; highlight?: boolean;
 }) {
   return (
-    <div className="border border-[var(--color-border-subtle)] rounded px-5 py-4 hover:border-[var(--color-border)] transition-colors">
+    <div className="border border-[var(--color-border-subtle)] rounded-xl shadow-card px-5 py-4 hover:border-[var(--color-border)] hover:shadow-card-hover transition-all">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded bg-[var(--color-ivory-dim)] flex items-center justify-center shrink-0">
           <Icon size={16} className="text-[var(--color-crimson)]" />
@@ -344,7 +345,7 @@ function SignalCard({ icon: Icon, title, value }: {
       : "border-[var(--color-border-subtle)] text-[var(--color-slate)]";
 
   return (
-    <div className={`rounded border bg-[var(--color-ivory)] px-4 py-3 ${toneClass}`}>
+    <div className={`rounded-xl shadow-card border bg-[var(--color-ivory)] px-4 py-3 ${toneClass}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Icon size={15} className={tone === "muted" ? "text-[var(--color-slate)]" : "text-[var(--color-crimson)]"} />

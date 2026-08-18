@@ -31,6 +31,7 @@ export default function Contact() {
   return (
     <PageShell
       title="Contact"
+      section="Aide"
       lead="Une question, une suggestion ou une anomalie à signaler ? Écrivez-nous, nous vous répondrons dans les meilleurs délais."
     >
       <div className="not-prose grid gap-8 md:grid-cols-[1fr_1.4fr]">
@@ -64,7 +65,7 @@ export default function Contact() {
         </aside>
 
         {/* Formulaire */}
-        <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-6">
+        <div className="border border-[var(--color-border-subtle)] rounded shadow-card bg-[var(--color-ivory)] p-6">
           {sent ? (
             <div className="flex flex-col items-center text-center py-8">
               <CheckCircle className="w-10 h-10 text-[var(--color-crimson)] mb-3" />

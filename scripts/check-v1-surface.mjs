@@ -3,21 +3,32 @@ import { join } from "node:path";
 
 // Public catalog routes plus the gated admin surface (/admin/*, /login) that the
 // launch intentionally keeps. The wrappers /* and /admin/* live in the top-level
-// <Routes>, the rest inside the public layout.
+// <Routes>, the rest inside the public layout. Static info/legal pages (about,
+// contact, faq, /legal/*) are generic boilerplate, not retired catalog features.
 const allowedRoutePaths = new Set([
   "/",
   "/tenders",
   "/tenders/:id",
+  "/alerts",
   "/login",
+  "/register",
+  "/about",
+  "/contact",
+  "/faq",
+  "/legal/mentions-legales",
+  "/legal/confidentialite",
+  "/legal/conditions",
+  "/legal/cookies",
   "/admin/*",
   "/*",
   "*",
 ]);
-const allowedNavTargets = new Set(["/", "/tenders"]);
-// Links to the retired public pages must not reappear. /admin and /login are
-// deliberately absent: they are gated entry points, not public catalog pages.
+const allowedNavTargets = new Set(["/", "/tenders", "/about", "/faq", "/contact"]);
+// Links to the retired public pages must not reappear. /admin, /login and
+// /register are deliberately absent: they are auth entry points, not retired
+// catalog pages. /alerts is likewise absent: the signed-in "Mes alertes"
+// (triggers) page ships with the launch.
 const forbiddenInternalPrefixes = [
-  "/alerts",
   "/assistant",
   "/blog",
   "/calculator",
@@ -30,7 +41,6 @@ const forbiddenInternalPrefixes = [
   "/procedures",
   "/recours",
   "/regions",
-  "/register",
   "/sectors",
   "/stats",
 ];

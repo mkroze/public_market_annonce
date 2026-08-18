@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Maroc Tenders - Member Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed": "#191c1e",
+                        "tertiary-fixed": "#ffddb8",
+                        "primary-fixed": "#dce1ff",
+                        "on-primary-fixed": "#00164e",
+                        "inverse-surface": "#2a313d",
+                        "inverse-primary": "#b6c4ff",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#e1e2e4",
+                        "on-secondary-fixed-variant": "#444749",
+                        "on-error-container": "#93000a",
+                        "on-background": "#151c27",
+                        "primary": "#00236f",
+                        "tertiary-container": "#5c3800",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f0f3ff",
+                        "primary-container": "#1e3a8a",
+                        "on-surface-variant": "#444651",
+                        "surface-container-high": "#e2e8f8",
+                        "primary-fixed-dim": "#b6c4ff",
+                        "surface-container-highest": "#dce2f3",
+                        "tertiary": "#3e2400",
+                        "surface-bright": "#f9f9ff",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#ebf1ff",
+                        "on-surface": "#151c27",
+                        "on-secondary": "#ffffff",
+                        "outline": "#757682",
+                        "on-primary-container": "#90a8ff",
+                        "outline-variant": "#c5c5d3",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "surface-dim": "#d3daea",
+                        "background": "#f9f9ff",
+                        "surface-container": "#e7eefe",
+                        "surface-tint": "#4059aa",
+                        "surface": "#f9f9ff",
+                        "secondary": "#5c5f60",
+                        "on-tertiary-container": "#ef9900",
+                        "surface-variant": "#dce2f3",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "on-secondary-container": "#606365",
+                        "error": "#ba1a1a",
+                        "secondary-container": "#dee0e2",
+                        "on-tertiary-fixed": "#2a1700",
+                        "on-primary-fixed-variant": "#264191",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container-padding": "24px",
+                        "section-margin": "32px",
+                        "gutter": "16px",
+                        "element-gap-sm": "8px",
+                        "unit": "4px",
+                        "element-gap-md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { background-color: #F3F4F6; } /* Level 0 Secondary Light Grey */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #E5E7EB;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md text-on-surface antialiased h-screen flex overflow-hidden">
+<!-- NavigationDrawer -->
+<nav class="fixed left-0 top-0 h-full flex flex-col p-4 w-72 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant dark:border-outline z-40 hidden md:flex">
+<div class="mb-8 px-4 py-2 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed" style="font-size: 32px;">account_balance</span>
+<div class="font-headline-sm text-headline-sm font-bold text-primary">MAROC TENDERS</div>
+</div>
+<div class="flex items-center gap-3 mb-8 px-4 py-3 bg-surface-container-low rounded-xl">
+<img alt="Business User Avatar" class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a business executive in a modern office setting. The lighting is bright and clear, emphasizing a trustworthy and competent demeanor. The background is slightly out of focus, showing contemporary office decor with subtle blue and white tones to match the corporate identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhbj3Q16pTv_pQMueUgWxmdUhTqO74luQ56lrQD0djV-97WozoLEQuN-2YTq90hVNYb1SQweB3jehp88ASM80ewyHsE38297hKVoSJ1IwVVtHB_Q_vQSB1vtp6XtlPIsunGpjoitNHwt2k9-M8La2PUQfqx7vGholVpICZka54768iwG7B799EJJDq2N5Zj2sd3xzepgI5iTXVmAYnoUaEEHPxcfF7aXJlEpYD3J7i3AzdXb7JHG_W"/>
+<div>
+<div class="font-label-md text-label-md font-bold text-primary dark:text-primary-fixed">Admin User</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Verified Contractor</div>
+</div>
+</div>
+<ul class="flex flex-col gap-2">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full bg-primary-container text-on-primary-container font-bold transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">gavel</span>
+                    All Tenders
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">description</span>
+                    My Bids
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">bookmark</span>
+                    Saved
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200 ease-in-out font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<div class="mt-auto px-4 py-4 text-center">
+<div class="font-label-sm text-label-sm text-secondary">Morocco Procurement Portal</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-72 flex flex-col h-full overflow-hidden">
+<!-- TopAppBar (Mobile Only - replacing Sidebar on small screens) -->
+<header class="sticky top-0 z-50 flex justify-between items-center px-gutter w-full bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline md:hidden h-16">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">account_balance</span>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">MAROC TENDERS</span>
+</div>
+<img alt="Official Government Logo" class="w-8 h-8 rounded-full object-cover" data-alt="Official Government Logo icon representing the Moroccan government, featuring a star in a minimalist corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmO8lEZJsj_hFZI6NxRh6LgfZF3tZCYxQ8kSJgETsYKEkrUumTgUjT_xKNGPp1U83zIpPGiM64q2WATm7m0JzfvPLmRbm0P0TyMv-R_q_yMsvrXI_ERQfFTlAeXUG4UJQ2g4IyzwpgrdAAHoW_ny8ipaKpJIIe7HJtBiK9tU2Ny3fnJ5OkxsBG84JgF8NBC_3zeurIDNFd1vNDJTqJ-FytsFXH3TktxbFHSgAizMAfHpi0IF4IF5zN"/>
+</header>
+<!-- Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto p-container-padding">
+<div class="max-w-[1440px] mx-auto space-y-section-margin">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Dashboard Overview</h1>
+<p class="font-body-lg text-body-lg text-secondary mt-1">Welcome back. Here is the status of your active procurements.</p>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity hidden md:flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                        New Bid
+                    </button>
+</div>
+<!-- Bento Grid: Key Metrics & Chart -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter">
+<!-- My Bids Status (Bento Item 1) -->
+<div class="glass-card rounded-xl p-6 md:col-span-1 flex flex-col justify-between border-l-4 border-l-primary">
+<div>
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">My Bids</h3>
+<span class="material-symbols-outlined text-outline">description</span>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-secondary">Pending</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">12</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-2">
+<div class="bg-primary-container h-2 rounded-full" style="width: 60%"></div>
+</div>
+<div class="flex justify-between items-center pt-2">
+<span class="font-body-md text-body-md text-secondary">Won</span>
+<span class="font-headline-md text-headline-md font-bold text-[#16a34a]">4</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-secondary">Lost</span>
+<span class="font-headline-md text-headline-md font-bold text-outline">2</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Upcoming Deadlines Calendar (Bento Item 2) -->
+<div class="glass-card rounded-xl p-6 md:col-span-1 border-l-4 border-l-[#F59E0B]">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Deadlines</h3>
+<span class="material-symbols-outlined text-outline">calendar_today</span>
+</div>
+<div class="space-y-3">
+<div class="flex items-start gap-3 p-3 bg-surface-bright rounded-lg border border-outline-variant">
+<div class="flex flex-col items-center justify-center bg-surface-container-low w-10 h-10 rounded">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Oct</span>
+<span class="font-label-md text-label-md font-bold text-on-surface">24</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface truncate w-32">Ministry of Health IT Infrastructure</div>
+<div class="font-body-sm text-body-sm text-[#F59E0B] font-medium mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">warning</span> 2 Days Left
+                                    </div>
+</div>
+</div>
+<div class="flex items-start gap-3 p-3 bg-surface-bright rounded-lg border border-outline-variant">
+<div class="flex flex-col items-center justify-center bg-surface-container-low w-10 h-10 rounded">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Nov</span>
+<span class="font-label-md text-label-md font-bold text-on-surface">05</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface truncate w-32">Rabat Highway Extension</div>
+<div class="font-body-sm text-body-sm text-secondary mt-1">Technical Proposal</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Area / Map Placeholder (Bento Item 3) -->
+<div class="glass-card rounded-xl overflow-hidden md:col-span-2 relative min-h-[250px]">
+<div class="absolute top-4 left-4 z-10 bg-surface-container-lowest px-3 py-1 rounded shadow-sm border border-outline-variant">
+<span class="font-label-md text-label-md font-bold">Regional Distribution</span>
+</div>
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist geographical data visualization map of Morocco. The map uses a light gray base with primary blue data points and soft heat-map gradients indicating regions with high tender activity. It maintains a highly professional, corporate UI aesthetic suitable for a government dashboard." data-location="Morocco" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0igUVVyIBTlMkqmvVd9vYyqr9rNv1d3z4x3jZcPz5wda0RXWU03zPikCyRMsFGjtbGeb6RhzQL-ZWV6r_6x-kyOhNHBVUt2gRtleHzpCd7i54ZDbjf6ecQvbW1kAuogV_qH4PB9o4d0IyLLJvWIaGIoJsslKyw9xrPj2TUWWc_5nLEtOfbUjE996bQ6S4iDwbVs6hRNdHfU8ilFsC7yANYD32Nfn45IPtXzV8K7GZga6UQhEmTpbx"/>
+</div>
+</div>
+<!-- Data Table: Recently Tracked Tenders -->
+<div class="glass-card rounded-xl overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recently Tracked Tenders</h3>
+<button class="font-label-md text-label-md text-primary flex items-center gap-1 hover:underline">
+                            View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="p-4 font-label-md text-label-md text-secondary uppercase tracking-wider">Reference ID</th>
+<th class="p-4 font-label-md text-label-md text-secondary uppercase tracking-wider">Entity</th>
+<th class="p-4 font-label-md text-label-md text-secondary uppercase tracking-wider">Title</th>
+<th class="p-4 font-label-md text-label-md text-secondary uppercase tracking-wider">Status</th>
+<th class="p-4 font-label-md text-label-md text-secondary uppercase tracking-wider text-right">Deadline</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="bg-surface-container-lowest hover:bg-surface-bright transition-colors">
+<td class="p-4 font-body-md text-body-md font-medium text-primary">#TR-2023-089</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">Ministry of Education</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">Supply of 50,000 Laptops for Rural Schools</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-surface-container-highest text-on-surface-variant">
+                                            Evaluation
+                                        </span>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface text-right">Oct 30, 2023</td>
+</tr>
+<tr class="bg-[#F9FAFB] hover:bg-surface-bright transition-colors">
+<td class="p-4 font-body-md text-body-md font-medium text-primary">#TR-2023-112</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">ONCF (Railways)</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">Maintenance of Signaling Equipment - Sector B</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-[#dcfce7] text-[#166534]">
+                                            Open
+                                        </span>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface text-right">Nov 15, 2023</td>
+</tr>
+<tr class="bg-surface-container-lowest hover:bg-surface-bright transition-colors">
+<td class="p-4 font-body-md text-body-md font-medium text-primary">#TR-2023-045</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">Casablanca Municipality</td>
+<td class="p-4 font-body-md text-body-md text-on-surface">Urban Waste Management Services 2024-2026</td>
+<td class="p-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-[#fef3c7] text-[#92400e]">
+                                            Urgent
+                                        </span>
+</td>
+<td class="p-4 font-body-md text-body-md text-on-surface text-right">Oct 24, 2023</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface dark:bg-inverse-surface border-t border-outline-variant dark:border-outline shadow-lg rounded-t-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-surface-variant scale-95 active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">search</span>
+<span class="font-label-sm-mobile text-label-sm-mobile mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-surface-variant scale-95 active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">visibility</span>
+<span class="font-label-sm-mobile text-label-sm-mobile mt-1">Tracked</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 hover:bg-surface-container dark:hover:bg-surface-variant scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+<span class="font-label-sm-mobile text-label-sm-mobile mt-1">Bidding</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-surface-variant scale-95 active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm-mobile text-label-sm-mobile mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

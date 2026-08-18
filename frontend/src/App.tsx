@@ -6,6 +6,7 @@ import Tenders from "./pages/Tenders";
 import TenderDetail from "./pages/TenderDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Alerts from "./pages/Alerts";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Faq from "./pages/Faq";
@@ -65,6 +66,14 @@ function PublicLayout() {
             element={
               <RequireAuth>
                 <TenderDetail />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/alerts"
+            element={
+              <RequireAuth>
+                <Alerts />
               </RequireAuth>
             }
           />

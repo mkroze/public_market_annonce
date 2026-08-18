@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MAROC TENDERS - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-container": "#90a8ff",
+                      "inverse-primary": "#b6c4ff",
+                      "on-primary-fixed-variant": "#264191",
+                      "surface-container-high": "#e2e8f8",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#dce1ff",
+                      "surface-variant": "#dce2f3",
+                      "on-surface-variant": "#444651",
+                      "surface-container": "#e7eefe",
+                      "inverse-surface": "#2a313d",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-container": "#ef9900",
+                      "tertiary-fixed": "#ffddb8",
+                      "error-container": "#ffdad6",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "outline-variant": "#c5c5d3",
+                      "error": "#ba1a1a",
+                      "surface-container-highest": "#dce2f3",
+                      "tertiary": "#3e2400",
+                      "secondary-container": "#dee0e2",
+                      "surface-bright": "#f9f9ff",
+                      "on-secondary-fixed-variant": "#444749",
+                      "secondary": "#5c5f60",
+                      "surface-tint": "#4059aa",
+                      "surface-dim": "#d3daea",
+                      "secondary-fixed": "#e1e2e4",
+                      "tertiary-container": "#5c3800",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-background": "#151c27",
+                      "primary-container": "#1e3a8a",
+                      "on-error": "#ffffff",
+                      "inverse-on-surface": "#ebf1ff",
+                      "outline": "#757682",
+                      "surface-container-low": "#f0f3ff",
+                      "primary-fixed-dim": "#b6c4ff",
+                      "surface": "#f9f9ff",
+                      "on-secondary-container": "#606365",
+                      "on-secondary": "#ffffff",
+                      "primary": "#00236f",
+                      "on-secondary-fixed": "#191c1e",
+                      "on-tertiary-fixed": "#2a1700",
+                      "on-surface": "#151c27",
+                      "on-primary-fixed": "#00164e",
+                      "background": "#f9f9ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "unit": "4px",
+                      "container-padding": "24px",
+                      "section-margin": "32px",
+                      "element-gap-sm": "8px",
+                      "element-gap-md": "16px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "30px",
+                              {
+                                      "lineHeight": "38px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md text-body-md min-h-screen pb-20 md:pb-0 md:flex">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 flex justify-between items-center px-gutter w-full bg-surface border-b border-outline-variant h-16 md:hidden">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary" data-icon="account_balance">account_balance</span>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">MAROC TENDERS</h1>
+</div>
+<img class="w-8 h-8 rounded-full border border-outline-variant object-cover" data-alt="Official Government Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHjARYmRyk-sbc093RmSyEb3WhUaHNhL9DefgorhesgctmLrD7SrUQYimZHBHCV30VF70-nUJb_tzL-WpKiVPo7wRAFoR7ucDVc94wX7a1Qil9Yzbt4tpKL_GQ_Y-acbgNqoHelgQgfCPaiPHjxrCU3ToZyRmNS4er-cxJ80Mg1Ry8e6BEMTJmNmEeuiHDMVL_ujbiT3d8GVpaDJ7vuphHU58HA7Oe3M-thMXcSsFu8t5OgT8TarLv"/>
+</header>
+<!-- SideNav (Desktop) -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full flex-col p-4 w-72 bg-surface-container-lowest border-r border-outline-variant z-40 transition-all duration-200 ease-in-out">
+<div class="flex items-center gap-3 mb-8 px-2">
+<span class="material-symbols-outlined text-primary text-2xl" data-icon="account_balance">account_balance</span>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">MAROC TENDERS</h1>
+</div>
+<div class="flex items-center gap-3 mb-8 px-2 border-b border-outline-variant pb-4">
+<img class="w-10 h-10 rounded-full border border-outline-variant object-cover" data-alt="A professional headshot of a business administrator working in procurement, neutral background, sharp focus, modern corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCR019cnNYXJSxEPYeqqgmvYsvN_JCEjwBemPgfoePNESDtIEMbh10m4AmuenYpmYXpjPXSJlUBybPOL22Kwn-7tOjTp6BzF8K1hnlbb9k3-mRbNVHqyNuC8CTrxkuJvljFMvs4krzsepiWCPSQSCCzC6zAPR7FYElgSi5cdp0PUVAnL77eAlpztfuO_xzHIk7RG2r5bjEEjO5eJF4mdk3sr9N8-XvYfKKi8OCY5qvno9RvZE4vq346"/>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Admin User</p>
+<p class="font-label-sm text-label-sm text-secondary">Verified Contractor</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 flex-grow">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container font-bold rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-label-md text-label-md">All Tenders</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="font-label-md text-label-md">My Bids</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+<span class="font-label-md text-label-md">Saved</span>
+</a>
+</li>
+<li class="mt-auto">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-72 flex flex-col min-h-screen bg-background relative">
+<!-- Desktop Header & Search -->
+<div class="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-outline-variant hidden md:block pt-6 pb-4 px-container-padding">
+<div class="flex justify-between items-center max-w-[1440px] mx-auto">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary" data-icon="search">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-body-md font-body-md text-on-surface placeholder:text-outline transition-all" placeholder="Search tenders, buyers, reference numbers..." type="text"/>
+</div>
+<div class="flex gap-4">
+<button class="bg-surface border border-outline-variant px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-surface-container transition-colors text-on-surface font-label-md text-label-md">
+<span class="material-symbols-outlined text-sm" data-icon="tune">tune</span> Filters
+                    </button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-md text-label-md font-bold">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span> New Bid
+                    </button>
+</div>
+</div>
+</div>
+<div class="flex-1 p-container-padding max-w-[1440px] mx-auto w-full">
+<!-- Filters Bar -->
+<div class="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface border border-outline-variant rounded-full text-label-md font-label-md text-on-surface hover:bg-surface-container transition-colors flex items-center gap-1">
+                    Status <span class="material-symbols-outlined text-xs" data-icon="arrow_drop_down">arrow_drop_down</span>
+</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface border border-outline-variant rounded-full text-label-md font-label-md text-on-surface hover:bg-surface-container transition-colors flex items-center gap-1">
+                    Buyer <span class="material-symbols-outlined text-xs" data-icon="arrow_drop_down">arrow_drop_down</span>
+</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface border border-outline-variant rounded-full text-label-md font-label-md text-on-surface hover:bg-surface-container transition-colors flex items-center gap-1">
+                    Category <span class="material-symbols-outlined text-xs" data-icon="arrow_drop_down">arrow_drop_down</span>
+</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface border border-outline-variant rounded-full text-label-md font-label-md text-on-surface hover:bg-surface-container transition-colors flex items-center gap-1">
+                    Location <span class="material-symbols-outlined text-xs" data-icon="arrow_drop_down">arrow_drop_down</span>
+</button>
+</div>
+<!-- Dashboard Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-section-margin">
+<div class="bg-surface border border-outline-variant p-4 rounded-xl border-l-4 border-l-primary flex flex-col gap-1">
+<span class="text-secondary font-label-sm text-label-sm uppercase">Active Tenders</span>
+<span class="text-on-surface font-headline-lg text-headline-lg">1,204</span>
+</div>
+<div class="bg-surface border border-outline-variant p-4 rounded-xl border-l-4 border-l-on-tertiary-container flex flex-col gap-1">
+<span class="text-secondary font-label-sm text-label-sm uppercase">Closing Soon</span>
+<span class="text-on-surface font-headline-lg text-headline-lg">45</span>
+</div>
+<div class="bg-surface border border-outline-variant p-4 rounded-xl flex flex-col gap-1 hidden md:flex">
+<span class="text-secondary font-label-sm text-label-sm uppercase">My Tracked</span>
+<span class="text-on-surface font-headline-lg text-headline-lg">12</span>
+</div>
+<div class="bg-surface border border-outline-variant p-4 rounded-xl flex flex-col gap-1 hidden md:flex">
+<span class="text-secondary font-label-sm text-label-sm uppercase">Value (MAD)</span>
+<span class="text-on-surface font-headline-lg text-headline-lg">2.4B</span>
+</div>
+</div>
+<!-- Tenders Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<!-- Card 1 -->
+<div class="bg-surface border border-outline-variant rounded-xl p-5 hover:shadow-lg transition-shadow cursor-pointer flex flex-col gap-4 relative overflow-hidden" onclick="document.getElementById('side-drawer').classList.remove('translate-x-full'); document.getElementById('drawer-overlay').classList.remove('hidden');">
+<div class="flex justify-between items-start gap-4">
+<div>
+<span class="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-semibold mb-2">OPEN</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface leading-tight">Construction of a new hospital in Rabat</h3>
+</div>
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="bookmark_border">bookmark_border</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-y-3 gap-x-4">
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="corporate_fare">corporate_fare</span>
+<span class="font-body-sm text-body-sm truncate">Ministère de la Santé</span>
+</div>
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="font-body-sm text-body-sm truncate">Rabat-Salé-Kénitra</span>
+</div>
+<div class="flex items-center gap-2 text-on-tertiary-container bg-tertiary-fixed px-2 py-1 rounded w-fit col-span-2">
+<span class="material-symbols-outlined text-sm" data-icon="event_busy">event_busy</span>
+<span class="font-label-md text-label-md font-bold">15 Oct 2023</span>
+</div>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant flex justify-between items-center">
+<span class="font-headline-sm text-headline-sm text-on-surface">5,000,000 MAD</span>
+<button class="text-primary hover:underline font-label-md text-label-md flex items-center gap-1" onclick="event.stopPropagation()">
+                            View Source <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface border border-outline-variant rounded-xl p-5 hover:shadow-lg transition-shadow cursor-pointer flex flex-col gap-4">
+<div class="flex justify-between items-start gap-4">
+<div>
+<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-semibold mb-2">UNDER EVALUATION</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface leading-tight">IT Infrastructure Upgrade for Ministry Offices</h3>
+</div>
+<button class="text-primary hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined" data-icon="bookmark" style="font-variation-settings: 'FILL' 1;">bookmark</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-y-3 gap-x-4">
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="corporate_fare">corporate_fare</span>
+<span class="font-body-sm text-body-sm truncate">Ministère de la Transition Numérique</span>
+</div>
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="font-body-sm text-body-sm truncate">Casablanca-Settat</span>
+</div>
+<div class="flex items-center gap-2 text-secondary px-2 py-1 rounded w-fit col-span-2">
+<span class="material-symbols-outlined text-sm" data-icon="event">event</span>
+<span class="font-label-md text-label-md">01 Sep 2023</span>
+</div>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant flex justify-between items-center">
+<span class="font-headline-sm text-headline-sm text-on-surface">1,200,000 MAD</span>
+<button class="text-primary hover:underline font-label-md text-label-md flex items-center gap-1" onclick="event.stopPropagation()">
+                            View Source <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Side Drawer Overlay -->
+<div class="fixed inset-0 bg-on-background/20 backdrop-blur-sm z-50 hidden transition-opacity" id="drawer-overlay" onclick="document.getElementById('side-drawer').classList.add('translate-x-full'); this.classList.add('hidden');"></div>
+<!-- Side Drawer (Details) -->
+<div class="fixed right-0 top-0 h-full w-full max-w-md bg-surface border-l border-outline-variant z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col shadow-2xl overflow-y-auto" id="side-drawer">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center sticky top-0 bg-surface">
+<h2 class="font-headline-sm text-headline-sm font-bold">Tender Details</h2>
+<button class="text-secondary hover:text-on-surface" onclick="document.getElementById('side-drawer').classList.add('translate-x-full'); document.getElementById('drawer-overlay').classList.add('hidden');">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="p-6 flex flex-col gap-6">
+<div>
+<span class="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-semibold mb-3">OPEN</span>
+<h3 class="font-headline-md text-headline-md font-bold mb-2">Construction of a new hospital in Rabat</h3>
+<p class="text-secondary text-sm">Ref: MT-2023-08-451</p>
+</div>
+<div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+<div class="flex items-center gap-3 mb-2">
+<span class="material-symbols-outlined text-on-tertiary-container" data-icon="warning">warning</span>
+<span class="font-label-md text-label-md text-on-tertiary-container font-bold uppercase">Urgent Deadline</span>
+</div>
+<p class="text-on-surface font-body-sm text-body-sm">Bids must be submitted physically to the Ministry office before 12:00 PM on October 15, 2023.</p>
+</div>
+<div class="flex flex-col gap-3 border-t border-outline-variant pt-4">
+<h4 class="font-label-md text-label-md text-secondary uppercase tracking-wider">Specifications</h4>
+<p class="font-body-md text-body-md text-on-surface">Turnkey construction project including civil works, MEP installations, and specialized medical gas piping for a 200-bed regional facility.</p>
+</div>
+<div class="grid grid-cols-2 gap-4 border-t border-outline-variant pt-4">
+<div>
+<span class="block text-xs text-secondary mb-1">Buyer</span>
+<span class="font-body-sm text-body-sm text-on-surface">Ministère de la Santé</span>
+</div>
+<div>
+<span class="block text-xs text-secondary mb-1">Location</span>
+<span class="font-body-sm text-body-sm text-on-surface">Rabat-Salé-Kénitra</span>
+</div>
+<div>
+<span class="block text-xs text-secondary mb-1">Estimated Budget</span>
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">5,000,000 MAD</span>
+</div>
+<div>
+<span class="block text-xs text-secondary mb-1">Guarantee Required</span>
+<span class="font-body-sm text-body-sm text-on-surface">150,000 MAD</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold hover:bg-primary-container transition-colors mt-4">
+                Download Tender Documents (PDF)
+            </button>
+</div>
+</div>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 md:hidden bg-surface border-t border-outline-variant rounded-t-xl shadow-lg">
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="search" style="font-variation-settings: 'FILL' 1;">search</span>
+<span class="font-label-sm-mobile text-label-sm-mobile">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container transition-colors scale-95 active:scale-90 px-4 py-1 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+<span class="font-label-sm-mobile text-label-sm-mobile">Tracked</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container transition-colors scale-95 active:scale-90 px-4 py-1 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span class="font-label-sm-mobile text-label-sm-mobile">Bidding</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container transition-colors scale-95 active:scale-90 px-4 py-1 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm-mobile text-label-sm-mobile">Profile</span>
+</a>
+</nav>
+</body></html>

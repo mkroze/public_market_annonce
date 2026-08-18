@@ -93,19 +93,11 @@ export default function Faq() {
   return (
     <PageShell
       title="Foire aux questions"
+      section="Aide"
       lead="Les réponses aux questions les plus fréquentes sur la plateforme et son utilisation."
     >
-      <section className="not-prose mx-auto -mt-2 w-full max-w-2xl text-center">
-        <p className="editorial-label text-[var(--color-slate)]">Assistance</p>
-        <h2 className="mt-3 font-display text-2xl font-semibold leading-tight text-[var(--color-charcoal)] sm:text-3xl">
-          Questions fréquentes
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[var(--color-slate)] sm:text-base">
-          Retrouvez les réponses essentielles pour consulter, filtrer et vérifier les avis de
-          marchés publics.
-        </p>
-
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+      <section className="not-prose w-full max-w-2xl">
+        <div className="flex flex-wrap items-center gap-2">
           {CATEGORIES.map((category) => {
             const active = activeCat === category.key;
             const count = FAQS.filter((f) => f.category === category.key).length;
@@ -135,7 +127,7 @@ export default function Faq() {
           })}
         </div>
 
-        <div className="mt-8 space-y-2 text-left">
+        <div className="mt-8 space-y-2">
           {visibleFaqs.map((item, i) => {
             const isOpen = open === i;
             const answerId = `faq-answer-${i}`;
@@ -145,7 +137,7 @@ export default function Faq() {
             return (
               <article
                 key={item.q}
-                className={`rounded-lg border bg-[var(--color-ivory)] transition-colors ${
+                className={`rounded-xl border bg-[var(--color-ivory)] shadow-card transition-all ${
                   isOpen ? "border-[var(--color-border)]" : "border-[var(--color-border-subtle)]"
                 }`}
               >
@@ -187,7 +179,7 @@ export default function Faq() {
           })}
         </div>
 
-        <div className="mt-6 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-4 py-4 text-center">
+        <div className="mt-6 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-4 py-4">
           <p className="mb-0 text-sm text-[var(--color-slate)]">
             Vous ne trouvez pas votre réponse ?{" "}
             <a

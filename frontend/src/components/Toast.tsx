@@ -46,7 +46,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
       className={`
         flex items-center gap-3 px-4 py-3
         bg-base-100 border border-[var(--color-border-subtle)] border-l-4 ${BORDER_COLORS[toast.type]}
-        rounded shadow-sm
+        rounded-xl shadow-pop
         transition-all duration-300 ease-out
         ${exiting ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"}
       `}

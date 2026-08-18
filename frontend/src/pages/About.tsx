@@ -4,6 +4,7 @@ export default function About() {
   return (
     <PageShell
       title="À propos"
+      section="Plateforme"
       lead="Marchés Publics Maroc rassemble en un seul endroit les avis de consultation des acheteurs publics, pour en faciliter le suivi."
     >
       <h2>Notre mission</h2>
