@@ -192,6 +192,72 @@
   }
 }
 
+/* Keep public pages on the institutional palette when the document is dark. */
+.institutional-page {
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+
+  --color-app-bg: #f9f9ff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f3ff;
+  --color-surface-raised: #e7eefe;
+  --color-surface-strong: #dce2f3;
+  --color-surface-elevated: var(--color-surface-raised);
+  --color-primary-strong: #1e3a8a;
+  --color-primary-soft: #dce1ff;
+  --color-on-primary: #ffffff;
+  --color-ink: #151c27;
+  --color-muted: #444651;
+  --color-muted-light: #757682;
+  --color-border: #c5c5d3;
+  --color-border-strong: var(--color-border);
+  --color-border-subtle: #dce2f3;
+  --color-warning-soft: #fff2d8;
+  --color-success-soft: #dff7e8;
+  --color-danger: #ba1a1a;
+  --color-danger-soft: #ffdad6;
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.05);
+  --shadow-card-hover: 0 6px 18px rgba(21, 28, 39, 0.09);
+  --shadow-pop: 0 10px 30px rgba(21, 28, 39, 0.12);
+
+  --color-ivory: var(--color-surface);
+  --color-ivory-dim: var(--color-surface-muted);
+  --color-ivory-deep: var(--color-surface-strong);
+  --color-crimson: var(--color-primary);
+  --color-crimson-dark: var(--color-primary-strong);
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: var(--color-primary-soft);
+  --color-accent-soft: var(--color-warning-soft);
+  --color-charcoal: var(--color-ink);
+  --color-slate: var(--color-muted);
+  --color-gold: var(--color-warning);
+  --color-gold-light: #ffb95f;
+  --color-tone-positive: var(--color-success);
+  --color-tone-positive-soft: var(--color-success-soft);
+  --color-tone-warning: var(--color-warning);
+  --color-tone-warning-soft: var(--color-warning-soft);
+  --color-tone-critical: var(--color-danger);
+  --color-tone-critical-soft: var(--color-danger-soft);
+}
+
 /* ── Base Typography ─────────────────────────────────────────────── */
 body {
   margin: 0;
@@ -204,13 +270,16 @@ body {
   font-family: var(--font-display);
 }
 
-h1, h2, h3, .heading {
+.institutional-page h1,
+.institutional-page h2,
+.institutional-page h3,
+.institutional-page .heading {
   font-family: var(--font-display);
   letter-spacing: 0;
 }
 
 /* Oversized page title — sentence case and heavy. */
-.display-editorial {
+.institutional-page .display-editorial {
   font-family: var(--font-display);
   font-weight: 800;
   letter-spacing: 0;
@@ -218,7 +287,7 @@ h1, h2, h3, .heading {
 }
 
 /* Small eyebrow control label — nav, filters, sort, meta captions */
-.editorial-label {
+.institutional-page .editorial-label {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
@@ -227,7 +296,7 @@ h1, h2, h3, .heading {
 }
 
 /* Field / meta label — sentence case, calm gray (modern SaaS form label) */
-.label-academic {
+.institutional-page .label-academic {
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
