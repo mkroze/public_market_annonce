@@ -40,7 +40,7 @@ function PublicLayout() {
   // NB : pas de data-theme figé ici — le thème (clair/sombre) est piloté sur
   // <html>. Le forcer localement casserait le mode sombre des composants daisyUI.
   return (
-    <div className="min-h-screen flex flex-col bg-base-100">
+    <div className="min-h-screen flex flex-col institutional-page">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:top-2 focus:left-2 focus:rounded focus:bg-[var(--color-crimson)] focus:px-3 focus:py-2 focus:text-[var(--color-ivory)] focus:font-sans focus:text-sm"
@@ -48,7 +48,7 @@ function PublicLayout() {
         Aller au contenu
       </a>
       <Navbar />
-      <main id="main-content" className="flex-1 w-full max-w-7xl mx-auto">
+      <main id="main-content" className="flex-1 w-full max-w-[1440px] mx-auto">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

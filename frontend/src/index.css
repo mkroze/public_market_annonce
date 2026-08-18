@@ -1,39 +1,33 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* ── daisyUI v5 themes ────────────────────────────────────────────────
-   Semantic tokens (primary / base / accent / …) MUST live here: daisyUI 5
-   reads --color-primary, --color-base-100, etc. (the old v4 --p/--b1/--bc
-   names are ignored). This is what gives .btn-primary, .dropdown, .alert,
-   bg-base-100 their editorial colours instead of falling back to unstyled.
-   The custom --color-ivory / --color-crimson tokens stay in @theme below. */
 @plugin "daisyui/theme" {
   name: "academic";
   default: true;
   color-scheme: light;
-  --color-base-100: #f4f1ea;
-  --color-base-200: #eae5db;
-  --color-base-300: #e0dacd;
-  --color-base-content: #17150f;
-  --color-primary: #17150f;
-  --color-primary-content: #f4f1ea;
-  --color-secondary: #6f6a5e;
-  --color-secondary-content: #f4f1ea;
-  --color-accent: #b4462f;
-  --color-accent-content: #f4f1ea;
-  --color-neutral: #17150f;
-  --color-neutral-content: #f4f1ea;
-  --color-info: #17150f;
-  --color-info-content: #f4f1ea;
-  --color-success: #375237;
-  --color-success-content: #f4f1ea;
-  --color-warning: #8a6d1f;
-  --color-warning-content: #f4f1ea;
-  --color-error: #b4462f;
-  --color-error-content: #f4f1ea;
-  --radius-selector: 0.25rem;
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
   --radius-field: 0.25rem;
-  --radius-box: 0.25rem;
+  --radius-box: 0.5rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -41,162 +35,146 @@
   --noise: 0;
 }
 
-@plugin "daisyui/theme" {
-  name: "academic-dark";
-  color-scheme: dark;
-  --color-base-100: #16150f;
-  --color-base-200: #1e1d16;
-  --color-base-300: #26251d;
-  --color-base-content: #f0ece2;
-  --color-primary: #f0ece2;
-  --color-primary-content: #17150f;
-  --color-secondary: #9b968a;
-  --color-secondary-content: #17150f;
-  --color-accent: #d1663f;
-  --color-accent-content: #17150f;
-  --color-neutral: #dcd8ce;
-  --color-neutral-content: #17150f;
-  --color-info: #f0ece2;
-  --color-info-content: #17150f;
-  --color-success: #7aa07a;
-  --color-success-content: #17150f;
-  --color-warning: #c2a95f;
-  --color-warning-content: #17150f;
-  --color-error: #d1663f;
-  --color-error-content: #17150f;
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.25rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
-/* ── Editorial Catalog Theme ─────────────────────────────────────────
-   Minimalist black-on-cream. "crimson" is kept as the token name for the
-   interactive/emphasis colour (now near-black); a single terracotta accent
-   is reserved for urgency. --font-serif now maps to a grotesque display. */
 @theme {
-  --color-ivory: #f4f1ea;
-  --color-ivory-dim: #eae5db;
-  --color-ivory-deep: #e0dacd;
-  --color-crimson: #17150f;
-  --color-crimson-dark: #000000;
-  --color-crimson-light: #3a352b;
-  --color-crimson-muted: #d9d4c8;
-  --color-accent: #b4462f;
-  --color-accent-soft: #e7d9d1;
-  --color-charcoal: #17150f;
-  --color-slate: #6f6a5e;
-  --color-gold: #8a6d1f;
-  --color-gold-light: #c2a95f;
-  --color-border: #c9c3b4;
-  --color-border-subtle: #ddd8cb;
-  /* Tone tokens for guidance badges/panels — theme-aware (dark values below),
-     so no more hard-coded emerald/amber/red pastels that break in dark mode. */
-  --color-tone-positive: #375237;
-  --color-tone-positive-soft: #e4ebe0;
-  --color-tone-warning: #8a6d1f;
-  --color-tone-warning-soft: #efe7cf;
-  --color-tone-critical: #b4462f;
-  --color-tone-critical-soft: #f1ddd5;
-  --font-serif: "Archivo", "Inter", system-ui, sans-serif;
-  --font-display: "Archivo", "Inter", system-ui, sans-serif;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-}
+  --color-app-bg: #f9f9ff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f3ff;
+  --color-surface-raised: #e7eefe;
+  --color-surface-strong: #dce2f3;
+  --color-surface-elevated: var(--color-surface-raised);
+  --color-primary: #00236f;
+  --color-primary-strong: #1e3a8a;
+  --color-primary-soft: #dce1ff;
+  --color-on-primary: #ffffff;
+  --color-ink: #151c27;
+  --color-muted: #444651;
+  --color-muted-light: #757682;
+  --color-border: #c5c5d3;
+  --color-border-strong: var(--color-border);
+  --color-border-subtle: #dce2f3;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fff2d8;
+  --color-success: #16803a;
+  --color-success-soft: #dff7e8;
+  --color-danger: #ba1a1a;
+  --color-danger-soft: #ffdad6;
+  --font-display: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: var(--font-display);
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.05);
+  --shadow-card-hover: 0 6px 18px rgba(21, 28, 39, 0.09);
+  --shadow-pop: 0 10px 30px rgba(21, 28, 39, 0.12);
 
-@layer base {
-  [data-theme="academic-dark"] {
-    --color-ivory: #16150f;
-    --color-ivory-dim: #1e1d16;
-    --color-ivory-deep: #26251d;
-    --color-charcoal: #f0ece2;
-    --color-slate: #9b968a;
-    --color-crimson: #f0ece2;
-    --color-crimson-dark: #ffffff;
-    --color-crimson-light: #cfcabc;
-    --color-crimson-muted: #33322a;
-    --color-accent: #d1663f;
-    --color-accent-soft: #3a2a22;
-    --color-gold: #c2a95f;
-    --color-gold-light: #d4bc78;
-    --color-border: #3e3d33;
-    --color-border-subtle: #2c2b23;
-    --color-tone-positive: #7aa07a;
-    --color-tone-positive-soft: #212a1f;
-    --color-tone-warning: #c2a95f;
-    --color-tone-warning-soft: #2b2717;
-    --color-tone-critical: #d1663f;
-    --color-tone-critical-soft: #2f211b;
-  }
+  /* Compatibility aliases for existing files during this redesign. */
+  --color-ivory: var(--color-surface);
+  --color-ivory-dim: var(--color-surface-muted);
+  --color-ivory-deep: var(--color-surface-strong);
+  --color-crimson: var(--color-primary);
+  --color-crimson-dark: var(--color-primary-strong);
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: var(--color-primary-soft);
+  --color-accent: var(--color-warning);
+  --color-accent-soft: var(--color-warning-soft);
+  --color-charcoal: var(--color-ink);
+  --color-slate: var(--color-muted);
+  --color-gold: var(--color-warning);
+  --color-gold-light: #ffb95f;
+  --color-tone-positive: var(--color-success);
+  --color-tone-positive-soft: var(--color-success-soft);
+  --color-tone-warning: var(--color-warning);
+  --color-tone-warning-soft: var(--color-warning-soft);
+  --color-tone-critical: var(--color-danger);
+  --color-tone-critical-soft: var(--color-danger-soft);
 }
 
 /* ── Base Typography ─────────────────────────────────────────────── */
 body {
   margin: 0;
   font-family: var(--font-sans);
-  color: var(--color-charcoal);
-  background-color: var(--color-ivory);
+  color: var(--color-ink);
+  background-color: var(--color-app-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Grotesque display headings */
 .font-display {
   font-family: var(--font-display);
 }
 
 h1, h2, h3, .heading {
   font-family: var(--font-display);
+  letter-spacing: -0.011em;
 }
 
-/* Oversized editorial page title — uppercase, heavy, tightly tracked */
+/* Oversized page title — sentence case, heavy, tightly tracked (no longer uppercase) */
 .display-editorial {
   font-family: var(--font-display);
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: -0.015em;
-  line-height: 0.92;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 
-/* Editorial control label — used for nav, filters, sort, meta captions */
+/* Small eyebrow control label — nav, filters, sort, meta captions */
 .editorial-label {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-/* Academic label style — small caps, tracked */
+/* Field / meta label — sentence case, calm gray (modern SaaS form label) */
 .label-academic {
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
   color: var(--color-slate);
 }
 
-/* ── Card overrides — borders instead of shadows ─────────────────── */
+.institutional-page {
+  background: var(--color-app-bg);
+  color: var(--color-ink);
+}
+
+.institutional-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-card);
+}
+
+.institutional-control {
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.institutional-control:focus,
+.institutional-control:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  outline-offset: 1px;
+}
+
+/* ── Card — white surface, soft shadow, rounded ─────────────────────── */
 .card {
   border: 1px solid var(--color-border-subtle);
-  box-shadow: none;
-  border-radius: 0.25rem;
+  box-shadow: var(--shadow-card);
+  border-radius: 0.75rem;
 }
 
 .card:hover {
   border-color: var(--color-border);
+  box-shadow: var(--shadow-card-hover);
 }
 
-/* ── Stat overrides ──────────────────────────────────────────────── */
+/* ── Stat ─────────────────────────────────────────────────────────── */
 .stats {
   border: 1px solid var(--color-border-subtle);
-  box-shadow: none;
-  border-radius: 0.25rem;
+  box-shadow: var(--shadow-card);
+  border-radius: 0.75rem;
 }
 
 /* ── Table — structured list with thin dividers ──────────────────── */
@@ -204,7 +182,7 @@ h1, h2, h3, .heading {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--color-slate);
   border-bottom: 1px solid var(--color-border-subtle);
@@ -214,24 +192,25 @@ h1, h2, h3, .heading {
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-/* ── Badge — conservative ────────────────────────────────────────── */
+/* ── Badge ───────────────────────────────────────────────────────── */
 .badge {
-  border-radius: 0.25rem;
+  border-radius: 0.5rem;
   font-weight: 600;
 }
 
-/* ── Button focus — crimson border, no glow ──────────────────────── */
+/* ── Button focus — blue ring ────────────────────────────────────── */
 .btn:focus-visible {
   outline: 2px solid var(--color-crimson);
   outline-offset: 2px;
   box-shadow: none;
 }
 
-/* ── Input focus — crimson bottom border ─────────────────────────── */
+/* ── Input focus — blue border + soft ring ───────────────────────── */
 .input:focus,
-.select:focus {
+.select:focus,
+.textarea:focus {
   border-color: var(--color-crimson);
-  box-shadow: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   outline: none;
 }
 
@@ -241,22 +220,22 @@ select option {
   color: var(--color-charcoal);
 }
 
-/* ── Navbar — thin bottom border ─────────────────────────────────── */
+/* ── Navbar — hairline + faint shadow ────────────────────────────── */
 .navbar {
   border-bottom: 1px solid var(--color-border-subtle);
-  box-shadow: none;
+  box-shadow: var(--shadow-card);
 }
 
-/* ── Alert — bordered style ──────────────────────────────────────── */
+/* ── Alert ───────────────────────────────────────────────────────── */
 .alert {
-  border-radius: 0.25rem;
+  border-radius: 0.5rem;
 }
 
-/* ── Dropdown — bordered, no heavy shadow ────────────────────────── */
+/* ── Dropdown — soft popover shadow ──────────────────────────────── */
 .dropdown-content {
   border: 1px solid var(--color-border-subtle);
-  box-shadow: 0 4px 12px rgba(27, 28, 20, 0.08);
-  border-radius: 0.25rem;
+  box-shadow: var(--shadow-pop);
+  border-radius: 0.75rem;
 }
 
 /* ── Thin horizontal rule ────────────────────────────────────────── */
@@ -295,7 +274,7 @@ select option {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Export dropdown animation ───────────────────────────────────── */
+/* ── Popover / dropdown enter animation ──────────────────────────── */
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
@@ -323,7 +302,7 @@ select option {
   }
 }
 
-/* ── Prose for blog posts ────────────────────────────────────────── */
+/* ── Prose for content pages ─────────────────────────────────────── */
 .prose-academic h2 {
   font-family: var(--font-serif);
   font-size: 24px;
