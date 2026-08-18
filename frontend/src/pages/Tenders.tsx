@@ -289,11 +289,12 @@ export default function Tenders() {
       ) : result ? (
         <>
           {viewMode === "guided" ? (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {displayedTenders.map((tender) => (
                 <TenderCard
                   key={tender.id}
                   tender={tender}
+                  compact
                 />
               ))}
             </div>
