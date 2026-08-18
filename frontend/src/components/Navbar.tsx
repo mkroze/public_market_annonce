@@ -41,15 +41,15 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
       {/* Top bar — brand + auth */}
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
-        <Link to="/tenders" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+        <Link to="/tenders" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:gap-2.5">
           <img
             src={dark ? logoFullReversed : logoFull}
             alt="Marchés Publics Maroc"
-            className="h-10 w-auto max-w-[190px] shrink-0"
+            className="h-9 w-auto max-w-[150px] min-w-0 shrink sm:h-10 sm:max-w-[190px]"
           />
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setDark((d) => !d)}
             className="btn btn-ghost btn-sm btn-square"
