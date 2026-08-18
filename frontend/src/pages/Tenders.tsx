@@ -223,13 +223,13 @@ export default function Tenders() {
             <p className="text-xs text-[var(--color-muted)]">La vue guidée met en avant le délai, le lieu, le budget et les points à vérifier.</p>
           </div>
           <div className="join">
-            <button type="button" className={`btn join-item btn-sm rounded ${viewMode === "guided" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("guided")}>Guidée</button>
-            <button type="button" className={`btn join-item btn-sm rounded ${viewMode === "expert" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("expert")}>Tableau</button>
+            <button type="button" aria-pressed={viewMode === "guided"} className={`btn join-item btn-sm rounded ${viewMode === "guided" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("guided")}>Guidée</button>
+            <button type="button" aria-pressed={viewMode === "expert"} className={`btn join-item btn-sm rounded ${viewMode === "expert" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("expert")}>Tableau</button>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[var(--color-border-subtle)]" role="tablist" aria-label="Statut des consultations">
+      <div className="flex flex-wrap gap-2 border-b border-[var(--color-border-subtle)]" aria-label="Statut des consultations">
         {STATUS_SEGMENTS.map((segment) => {
           const active =
             segment.key === "urgent"
@@ -241,12 +241,11 @@ export default function Tenders() {
             <button
               key={segment.key}
               type="button"
-              role="tab"
-              aria-selected={active}
-              className={`border-b-2 px-3 py-2 font-sans text-sm font-medium transition-colors ${
+              aria-pressed={active}
+              className={`border-b-2 px-3 py-2 font-sans text-sm font-medium transition-colors motion-reduce:transition-none ${
                 active
-                  ? "border-[var(--color-crimson)] text-[var(--color-crimson)]"
-                  : "border-transparent text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+                  ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                  : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-ink)]"
               }`}
               onClick={() => selectStatusSegment(segment)}
             >
@@ -263,8 +262,8 @@ export default function Tenders() {
           <span className="loading loading-spinner loading-lg"></span>
         </div>
       ) : error ? (
-        <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3">
-          <p className="font-sans text-sm text-[var(--color-charcoal)]">{error}</p>
+        <div className="border border-[var(--color-danger)] border-l-4 rounded-lg px-4 py-3">
+          <p className="font-sans text-sm text-[var(--color-ink)]">{error}</p>
           <button className="btn btn-sm btn-primary mt-3" onClick={() => updateFilters({ ...filters })}>
             Réessayer
           </button>
