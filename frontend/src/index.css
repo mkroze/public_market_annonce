@@ -103,14 +103,14 @@ body {
 
 h1, h2, h3, .heading {
   font-family: var(--font-display);
-  letter-spacing: -0.011em;
+  letter-spacing: 0;
 }
 
 /* Oversized page title — sentence case, heavy, tightly tracked (no longer uppercase) */
 .display-editorial {
   font-family: var(--font-display);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.05;
 }
 
@@ -158,23 +158,23 @@ h1, h2, h3, .heading {
   outline-offset: 1px;
 }
 
-/* ── Card — white surface, soft shadow, rounded ─────────────────────── */
-.card {
+/* ── Institutional card — white surface, soft shadow, rounded ──────── */
+.institutional-page .card {
   border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-card);
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
 }
 
-.card:hover {
+.institutional-page .card:hover {
   border-color: var(--color-border);
   box-shadow: var(--shadow-card-hover);
 }
 
 /* ── Stat ─────────────────────────────────────────────────────────── */
-.stats {
+.institutional-page .stats {
   border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-card);
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
 }
 
 /* ── Table — structured list with thin dividers ──────────────────── */
@@ -221,7 +221,7 @@ select option {
 }
 
 /* ── Navbar — hairline + faint shadow ────────────────────────────── */
-.navbar {
+.institutional-page .navbar {
   border-bottom: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-card);
 }
@@ -235,7 +235,7 @@ select option {
 .dropdown-content {
   border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-pop);
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
 }
 
 /* ── Thin horizontal rule ────────────────────────────────────────── */
