@@ -9,7 +9,7 @@ interface Props {
 }
 
 const CONTROL_CLASS =
-  "w-full border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-3 py-2 font-sans text-sm text-[var(--color-charcoal)] focus:border-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-crimson)] transition-colors";
+  "institutional-control w-full px-3 py-2 font-sans text-sm transition-colors";
 
 const KEY_LABELS: Record<string, string> = {
   q: "Recherche",
@@ -183,9 +183,9 @@ export default function FilterBar({ filters, onChange }: Props) {
     ];
 
   return (
-    <section className="border-y border-[var(--color-charcoal)]">
+    <section className="institutional-panel overflow-hidden">
       {/* Always-visible search */}
-      <form onSubmit={applySearch} className="flex items-center gap-2 py-3">
+      <form onSubmit={applySearch} className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] p-3">
         <div className="relative flex-1">
           <Search
             size={16}
@@ -195,7 +195,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             type="search"
             aria-label="Rechercher une consultation"
             placeholder="Activité, mot-clé, acheteur…"
-            className="w-full rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] py-2 pl-10 pr-3 font-sans text-sm text-[var(--color-charcoal)] focus:border-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-[var(--color-crimson)]"
+            className="institutional-control w-full py-2 pl-10 pr-3 font-sans text-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -404,7 +404,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             <button
               type="submit"
               disabled={!hasDraftChanges}
-              className="inline-flex items-center gap-1.5 border border-[var(--color-charcoal)] bg-[var(--color-charcoal)] px-4 py-2 editorial-label text-[var(--color-ivory)] transition-colors hover:bg-transparent hover:text-[var(--color-charcoal)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-crimson)] px-4 py-2 text-sm font-semibold text-[var(--color-ivory)] transition-colors hover:bg-[var(--color-crimson-dark)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {hasDraftChanges ? "Appliquer" : "Filtres appliqués"}
             </button>

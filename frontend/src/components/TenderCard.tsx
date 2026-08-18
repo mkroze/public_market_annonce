@@ -15,9 +15,9 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
   const urgency = getTenderUrgency(tender.deadline);
 
   return (
-    <article className="relative rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] transition-colors hover:border-[var(--color-border)]">
+    <article className="relative overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-card transition-all hover:border-[var(--color-primary)] hover:shadow-card-hover">
       {/* Un seul lien couvre toute la carte : cible unique, clavier + lecteur d'écran. */}
-      <Link to={toTenderPath(tender.id)} className="block p-4">
+      <Link to={toTenderPath(tender.id)} className="block p-5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className={`rounded border px-2 py-0.5 font-sans text-xs font-semibold ${TONE_BADGE[guidance.tone]}`}>
             {guidance.label}
@@ -61,6 +61,13 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
             {guidance.reasons[0]}
           </p>
         )}
+
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--color-border-subtle)] pt-4">
+          <span className="text-lg font-bold tabular-nums text-[var(--color-ink)]">
+            {tender.estimation || "Budget à vérifier"}
+          </span>
+          <span className="text-sm font-semibold text-[var(--color-primary)]">Voir le détail</span>
+        </div>
       </Link>
     </article>
   );

@@ -52,8 +52,8 @@ export default function ExportDropdown({ total, onExport }: Props) {
           flex items-center gap-2 px-3.5 py-2 text-sm font-sans font-medium rounded
           border transition-all duration-150
           ${isExporting
-            ? "border-[var(--color-border-subtle)] text-[var(--color-slate)] cursor-wait"
-            : "border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] cursor-pointer"
+            ? "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] cursor-wait"
+            : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] cursor-pointer"
           }
         `}
         onClick={() => setOpen(!open)}
@@ -77,7 +77,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
 
       {open && (
         <div
-          className="absolute right-0 mt-1.5 w-56 bg-base-100 border border-[var(--color-border-subtle)] rounded shadow-sm z-50 animate-in"
+          className="absolute right-0 mt-1.5 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-pop z-50 animate-in"
           role="menu"
         >
           <div className="px-3 py-2 border-b border-[var(--color-border-subtle)]">
@@ -88,7 +88,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
           {FORMATS.map((f) => (
             <button
               key={f.key}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-ivory-dim)] transition-colors duration-100 cursor-pointer focus:bg-[var(--color-ivory-dim)] focus:outline-none"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-surface-muted)] transition-colors duration-100 cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
               onClick={() => handleExport(f.key)}
               role="menuitem"
             >

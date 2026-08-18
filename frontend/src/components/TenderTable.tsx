@@ -48,14 +48,14 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
   }
 
   return (
-    <div className="border border-[var(--color-border-subtle)] rounded">
+    <div className="institutional-panel overflow-hidden">
       <p className="lg:hidden px-3 py-1.5 text-xs text-[var(--color-slate)] border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
         Faites défiler horizontalement pour voir toutes les colonnes →
       </p>
       <div className="overflow-x-auto">
       <table className="table table-sm">
         <thead>
-          <tr className="bg-[var(--color-ivory-dim)]">
+          <tr className="bg-[var(--color-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">
             <SortHeader field="title" label="Objet" />
             <SortHeader field="entity" label="Entité" />
             <th>Cat.</th>
@@ -74,7 +74,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
             return (
               <tr
                 key={t.id}
-                className="hover:bg-[var(--color-ivory-dim)] cursor-pointer transition-colors duration-100"
+                className="cursor-pointer odd:bg-[var(--color-surface)] even:bg-[var(--color-app-bg)] hover:bg-[var(--color-surface-muted)] transition-colors duration-100"
                 onClick={() => navigate(toTenderPath(t.id))}
               >
                 <td className="max-w-md">

@@ -20,7 +20,7 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
       </span>
       <div className="flex items-center gap-1">
         <button
-          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] disabled:opacity-40 transition-colors"
+          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-40 transition-colors"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
@@ -32,8 +32,8 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
             className={`
               w-9 h-9 text-sm font-sans font-medium rounded transition-colors
               ${p === page
-                ? "bg-[var(--color-crimson)] text-[var(--color-ivory)]"
-                : "hover:bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]"
+                ? "bg-[var(--color-primary)] text-[var(--color-primary-content)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
               }
             `}
             onClick={() => onPageChange(p)}
@@ -42,7 +42,7 @@ export default function Pagination({ page, pages, total, onPageChange }: Props) 
           </button>
         ))}
         <button
-          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] disabled:opacity-40 transition-colors"
+          className="px-2.5 py-1.5 text-sm font-sans rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-40 transition-colors"
           disabled={page >= pages}
           onClick={() => onPageChange(page + 1)}
         >
