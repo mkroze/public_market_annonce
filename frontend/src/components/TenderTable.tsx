@@ -13,9 +13,9 @@ interface Props {
 
 const URGENCY_STYLES = {
   expired: { dotClass: "status-dot-expired", textClass: "text-[var(--color-border)]" },
-  critical: { dotClass: "status-dot-active", textClass: "text-[var(--color-crimson)] font-semibold" },
+  critical: { dotClass: "status-dot-pending", textClass: "text-[var(--color-warning)] font-semibold" },
   warning: { dotClass: "status-dot-pending", textClass: "text-[var(--color-gold)]" },
-  normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-slate)]" },
+  normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-muted)]" },
 };
 
 export default function TenderTable({ tenders, sort, order, onSort }: Props) {
@@ -25,13 +25,13 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
     const active = sort === field;
     return (
       <th
-        className={`cursor-pointer select-none hover:bg-[var(--color-ivory-dim)] transition-colors duration-150 ${active && highlight ? "bg-[var(--color-ivory-dim)]" : ""}`}
+        className={`cursor-pointer select-none hover:bg-[var(--color-surface-muted)] transition-colors duration-150 motion-reduce:transition-none ${active && highlight ? "bg-[var(--color-surface-muted)]" : ""}`}
         onClick={() => onSort(field)}
       >
-        <span className={`flex items-center gap-1 ${active && highlight ? "text-[var(--color-crimson)]" : ""}`}>
+        <span className={`flex items-center gap-1 ${active && highlight ? "text-[var(--color-primary)]" : ""}`}>
           {label}
           {active && (
-            <ArrowUpDown size={11} className={`text-[var(--color-crimson)] ${order === "desc" ? "rotate-180" : ""}`} />
+            <ArrowUpDown size={11} className={`text-[var(--color-primary)] ${order === "desc" ? "rotate-180" : ""}`} />
           )}
         </span>
       </th>
@@ -40,7 +40,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
 
   if (tenders.length === 0) {
     return (
-      <div className="text-center py-16 text-[var(--color-slate)]">
+      <div className="text-center py-16 text-[var(--color-muted)]">
         <p className="font-display text-lg">Aucune consultation trouvée</p>
         <p className="text-sm mt-1">Modifiez ou réinitialisez vos filtres pour voir plus de résultats.</p>
       </div>
@@ -49,7 +49,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
 
   return (
     <div className="institutional-panel overflow-hidden">
-      <p className="lg:hidden px-3 py-1.5 text-xs text-[var(--color-slate)] border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
+      <p className="lg:hidden px-3 py-1.5 text-xs text-[var(--color-muted)] border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)]">
         Faites défiler horizontalement pour voir toutes les colonnes →
       </p>
       <div className="overflow-x-auto">
@@ -74,24 +74,24 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
             return (
               <tr
                 key={t.id}
-                className="cursor-pointer odd:bg-[var(--color-surface)] even:bg-[var(--color-app-bg)] hover:bg-[var(--color-surface-muted)] transition-colors duration-100"
+                className="cursor-pointer odd:bg-[var(--color-surface)] even:bg-[var(--color-app-bg)] hover:bg-[var(--color-surface-muted)] transition-colors duration-100 motion-reduce:transition-none"
                 onClick={() => navigate(toTenderPath(t.id))}
               >
                 <td className="max-w-md">
                   <Link
                     to={toTenderPath(t.id)}
-                    className="font-medium text-sm leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-crimson)] hover:underline"
+                    className="font-medium text-sm leading-tight text-[var(--color-ink)] hover:text-[var(--color-primary)] hover:underline"
                     onClick={(event) => event.stopPropagation()}
                   >
                     {t.title || t.reference}
                   </Link>
                   {t.reference && t.title && (
-                    <div className="text-xs text-[var(--color-slate)] mt-0.5 font-sans">
+                    <div className="text-xs text-[var(--color-muted)] mt-0.5 font-sans">
                       {t.reference}
                     </div>
                   )}
                 </td>
-                <td className="text-sm max-w-48 truncate text-[var(--color-charcoal)]">{t.entity}</td>
+                <td className="text-sm max-w-48 truncate text-[var(--color-ink)]">{t.entity}</td>
                 <td>
                   {t.category && (
                     <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded ${CATEGORY_COLORS[t.category] || CATEGORY_FALLBACK}`}>
@@ -99,16 +99,16 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
                     </span>
                   )}
                 </td>
-                <td className="text-xs max-w-40 truncate text-[var(--color-slate)]">{t.sector_name}</td>
+                <td className="text-xs max-w-40 truncate text-[var(--color-muted)]">{t.sector_name}</td>
                 <td className="text-sm max-w-32 truncate">
                   {t.location && (
-                    <span className="flex items-center gap-1 text-[var(--color-slate)]">
+                    <span className="flex items-center gap-1 text-[var(--color-muted)]">
                       <MapPin size={12} className="shrink-0" />
                       {t.location}
                     </span>
                   )}
                 </td>
-                <td className={`text-sm whitespace-nowrap tabular-nums ${t.estimation ? "font-semibold text-[var(--color-charcoal)]" : "text-[var(--color-border)]"}`}>
+                <td className={`text-sm whitespace-nowrap tabular-nums ${t.estimation ? "font-semibold text-[var(--color-ink)]" : "text-[var(--color-border)]"}`}>
                   {t.estimation ? (
                     <span className="flex items-center gap-1">
                       <Banknote size={13} className="text-[var(--color-gold)] shrink-0" />
@@ -118,7 +118,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
                     <span className="text-xs">—</span>
                   )}
                 </td>
-                <td className="text-sm whitespace-nowrap tabular-nums text-[var(--color-charcoal)]">
+                <td className="text-sm whitespace-nowrap tabular-nums text-[var(--color-ink)]">
                   {t.deadline}
                 </td>
                 <td>
@@ -136,7 +136,7 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
                         href={t.detail_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn btn-ghost btn-xs btn-square text-[var(--color-slate)]"
+                        className="btn btn-ghost btn-xs btn-square text-[var(--color-muted)]"
                         onClick={(e) => e.stopPropagation()}
                         aria-label="Voir sur le portail"
                       >

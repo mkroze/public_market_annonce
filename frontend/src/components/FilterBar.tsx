@@ -9,7 +9,7 @@ interface Props {
 }
 
 const CONTROL_CLASS =
-  "institutional-control w-full px-3 py-2 font-sans text-sm transition-colors";
+  "institutional-control w-full px-3 py-2 font-sans text-sm transition-colors motion-reduce:transition-none";
 
 const KEY_LABELS: Record<string, string> = {
   q: "Recherche",
@@ -189,7 +189,7 @@ export default function FilterBar({ filters, onChange }: Props) {
         <div className="relative flex-1">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-slate)]"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]"
           />
           <input
             type="search"
@@ -211,24 +211,24 @@ export default function FilterBar({ filters, onChange }: Props) {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1.5 editorial-label text-[var(--color-charcoal)] hover:text-[var(--color-accent)] transition-colors"
+          className="inline-flex items-center gap-1.5 editorial-label text-[var(--color-ink)] hover:text-[var(--color-primary)] transition-colors motion-reduce:transition-none"
         >
           Filtres
           <Plus
             size={14}
-            className={`transition-transform duration-200 ${open ? "rotate-45" : ""}`}
+            className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-45" : ""}`}
           />
           {hasActiveFilters && (
-            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] font-bold text-[var(--color-ivory)]">
+            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-warning)] px-1 text-[10px] font-bold text-[var(--color-ink)]">
               {activeFilters.length}
             </span>
           )}
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline editorial-label text-[var(--color-slate)]">Trier</span>
+          <span className="hidden sm:inline editorial-label text-[var(--color-muted)]">Trier</span>
           <select
-            className="border-0 bg-transparent font-sans text-sm font-medium text-[var(--color-charcoal)] rounded focus-visible:outline-2 focus-visible:outline-[var(--color-crimson)] cursor-pointer"
+            className="border-0 bg-transparent font-sans text-sm font-medium text-[var(--color-ink)] rounded focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] cursor-pointer"
             value={filters.sort || "deadline"}
             onChange={(e) => changeSort(e.target.value)}
             aria-label="Trier par"
@@ -258,7 +258,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             <button
               key={key}
               type="button"
-              className="inline-flex items-center gap-1.5 border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-2 py-1 font-sans text-xs text-[var(--color-charcoal)] hover:border-[var(--color-charcoal)] transition-colors"
+              className="inline-flex items-center gap-1.5 border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-2 py-1 font-sans text-xs text-[var(--color-ink)] hover:border-[var(--color-primary)] transition-colors motion-reduce:transition-none"
               onClick={() => removeFilter(key)}
               title="Retirer ce filtre"
             >
@@ -284,7 +284,7 @@ export default function FilterBar({ filters, onChange }: Props) {
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Type d'achat</span>
+              <span className="editorial-label text-[var(--color-muted)]">Type d'achat</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.category || ""}
@@ -300,7 +300,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Domaine d'activité</span>
+              <span className="editorial-label text-[var(--color-muted)]">Domaine d'activité</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.sector || ""}
@@ -316,7 +316,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Localisation</span>
+              <span className="editorial-label text-[var(--color-muted)]">Localisation</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.location || ""}
@@ -332,7 +332,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Acheteur</span>
+              <span className="editorial-label text-[var(--color-muted)]">Acheteur</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.entity || ""}
@@ -348,7 +348,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Statut</span>
+              <span className="editorial-label text-[var(--color-muted)]">Statut</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.status || ""}
@@ -364,7 +364,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Procédure</span>
+              <span className="editorial-label text-[var(--color-muted)]">Procédure</span>
               <select
                 className={CONTROL_CLASS}
                 value={draft.procedure_type || ""}
@@ -380,7 +380,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             </label>
 
             <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-slate)]">Par page</span>
+              <span className="editorial-label text-[var(--color-muted)]">Par page</span>
               <select
                 className={CONTROL_CLASS}
                 value={String(draft.per_page || 20)}
@@ -397,14 +397,14 @@ export default function FilterBar({ filters, onChange }: Props) {
             <button
               type="button"
               onClick={clearAll}
-              className="editorial-label text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+              className="editorial-label text-[var(--color-muted)] hover:text-[var(--color-ink)]"
             >
               Réinitialiser
             </button>
             <button
               type="submit"
               disabled={!hasDraftChanges}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-crimson)] px-4 py-2 text-sm font-semibold text-[var(--color-ivory)] transition-colors hover:bg-[var(--color-crimson-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
             >
               {hasDraftChanges ? "Appliquer" : "Filtres appliqués"}
             </button>

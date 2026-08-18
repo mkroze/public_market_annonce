@@ -50,7 +50,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
       <button
         className={`
           flex items-center gap-2 px-3.5 py-2 text-sm font-sans font-medium rounded
-          border transition-all duration-150
+          border transition-colors duration-150 motion-reduce:transition-none
           ${isExporting
             ? "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] cursor-wait"
             : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] cursor-pointer"
@@ -70,7 +70,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
           <>
             <Download size={15} />
             <span>Exporter</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+            <ChevronDown size={14} className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
           </>
         )}
       </button>
@@ -88,14 +88,14 @@ export default function ExportDropdown({ total, onExport }: Props) {
           {FORMATS.map((f) => (
             <button
               key={f.key}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-surface-muted)] transition-colors duration-100 cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-surface-muted)] transition-colors duration-100 cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] motion-reduce:transition-none"
               onClick={() => handleExport(f.key)}
               role="menuitem"
             >
-              <f.icon size={16} className="text-[var(--color-crimson)] shrink-0" />
+              <f.icon size={16} className="text-[var(--color-primary)] shrink-0" />
               <div>
-                <div className="text-sm font-medium font-sans text-[var(--color-charcoal)]">{f.label}</div>
-                <div className="text-xs text-[var(--color-slate)]">{f.sublabel}</div>
+                <div className="text-sm font-medium font-sans text-[var(--color-ink)]">{f.label}</div>
+                <div className="text-xs text-[var(--color-muted)]">{f.sublabel}</div>
               </div>
             </button>
           ))}
