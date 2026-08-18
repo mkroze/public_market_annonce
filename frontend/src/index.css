@@ -164,6 +164,9 @@
   --color-tone-warning-soft: #efe7cf;
   --color-tone-critical: #b4462f;
   --color-tone-critical-soft: #f1ddd5;
+  --font-serif: "Archivo", "Inter", system-ui, sans-serif;
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
