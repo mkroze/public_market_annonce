@@ -270,13 +270,13 @@ export default function Tenders() {
           </button>
         </div>
       ) : result && displayedTenders.length === 0 ? (
-        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-6 py-14 text-center">
-          <p className="font-display text-lg text-[var(--color-charcoal)]">
+        <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-6 py-14 text-center">
+          <p className="font-display text-lg text-[var(--color-ink)]">
             {filtersActive
               ? "Aucune consultation ne correspond à vos critères."
               : "Aucune consultation disponible pour le moment."}
           </p>
-          <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
+          <p className="mt-1 font-sans text-sm text-[var(--color-muted)]">
             {filtersActive
               ? "Élargissez ou réinitialisez vos filtres pour voir plus de résultats."
               : "De nouvelles consultations sont ajoutées régulièrement. Revenez bientôt."}

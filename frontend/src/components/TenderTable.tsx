@@ -24,16 +24,18 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
   function SortHeader({ field, label, highlight }: { field: string; label: string; highlight?: boolean }) {
     const active = sort === field;
     return (
-      <th
-        className={`cursor-pointer select-none hover:bg-[var(--color-surface-muted)] transition-colors duration-150 motion-reduce:transition-none ${active && highlight ? "bg-[var(--color-surface-muted)]" : ""}`}
-        onClick={() => onSort(field)}
-      >
-        <span className={`flex items-center gap-1 ${active && highlight ? "text-[var(--color-primary)]" : ""}`}>
+      <th className={`${active && highlight ? "bg-[var(--color-surface-muted)]" : ""}`}>
+        <button
+          type="button"
+          className={`flex w-full items-center gap-1 rounded px-1 py-1 text-left transition-colors duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] motion-reduce:transition-none ${active && highlight ? "text-[var(--color-primary)]" : ""}`}
+          onClick={() => onSort(field)}
+          aria-sort={active ? (order === "desc" ? "descending" : "ascending") : "none"}
+        >
           {label}
           {active && (
             <ArrowUpDown size={11} className={`text-[var(--color-primary)] ${order === "desc" ? "rotate-180" : ""}`} />
           )}
-        </span>
+        </button>
       </th>
     );
   }

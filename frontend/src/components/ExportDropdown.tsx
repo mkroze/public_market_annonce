@@ -77,7 +77,7 @@ export default function ExportDropdown({ total, onExport }: Props) {
 
       {open && (
         <div
-          className="absolute right-0 mt-1.5 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-pop z-50 animate-in"
+          className="absolute right-0 mt-1.5 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-pop z-50 animate-in motion-reduce:animate-none"
           role="menu"
         >
           <div className="px-3 py-2 border-b border-[var(--color-border-subtle)]">
