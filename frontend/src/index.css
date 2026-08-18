@@ -87,12 +87,56 @@
   --color-tone-critical-soft: var(--color-danger-soft);
 }
 
+/* Preserve the pre-redesign editorial palette inside the admin root. */
+[data-theme="academic"]:not(.institutional-page) {
+  --color-base-100: #f4f1ea;
+  --color-base-200: #eae5db;
+  --color-base-300: #e0dacd;
+  --color-base-content: #17150f;
+  --color-primary: #17150f;
+  --color-primary-content: #f4f1ea;
+  --color-secondary: #6f6a5e;
+  --color-secondary-content: #f4f1ea;
+  --color-accent: #b4462f;
+  --color-accent-content: #f4f1ea;
+  --color-neutral: #17150f;
+  --color-neutral-content: #f4f1ea;
+  --color-info: #17150f;
+  --color-info-content: #f4f1ea;
+  --color-success: #375237;
+  --color-success-content: #f4f1ea;
+  --color-warning: #8a6d1f;
+  --color-warning-content: #f4f1ea;
+  --color-error: #b4462f;
+  --color-error-content: #f4f1ea;
+  --radius-selector: 0.25rem;
+  --radius-box: 0.25rem;
+
+  --color-ivory: #f4f1ea;
+  --color-ivory-dim: #eae5db;
+  --color-ivory-deep: #e0dacd;
+  --color-crimson: #17150f;
+  --color-crimson-dark: #000000;
+  --color-crimson-light: #3a352b;
+  --color-crimson-muted: #d9d4c8;
+  --color-charcoal: #17150f;
+  --color-slate: #6f6a5e;
+  --color-gold: #8a6d1f;
+  --color-gold-light: #c2a95f;
+  --color-border: #c9c3b4;
+  --color-border-subtle: #ddd8cb;
+  --color-tone-positive: #375237;
+  --color-tone-positive-soft: #e4ebe0;
+  --color-tone-warning: #8a6d1f;
+  --color-tone-warning-soft: #efe7cf;
+  --color-tone-critical: #b4462f;
+  --color-tone-critical-soft: #f1ddd5;
+}
+
 /* ── Base Typography ─────────────────────────────────────────────── */
 body {
   margin: 0;
   font-family: var(--font-sans);
-  color: var(--color-ink);
-  background-color: var(--color-app-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -106,7 +150,7 @@ h1, h2, h3, .heading {
   letter-spacing: 0;
 }
 
-/* Oversized page title — sentence case, heavy, tightly tracked (no longer uppercase) */
+/* Oversized page title — sentence case and heavy. */
 .display-editorial {
   font-family: var(--font-display);
   font-weight: 800;
@@ -178,7 +222,7 @@ h1, h2, h3, .heading {
 }
 
 /* ── Table — structured list with thin dividers ──────────────────── */
-.table th {
+.institutional-page .table th {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
@@ -188,34 +232,34 @@ h1, h2, h3, .heading {
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-.table td {
+.institutional-page .table td {
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
 /* ── Badge ───────────────────────────────────────────────────────── */
-.badge {
+.institutional-page .badge {
   border-radius: 0.5rem;
   font-weight: 600;
 }
 
 /* ── Button focus — blue ring ────────────────────────────────────── */
-.btn:focus-visible {
+.institutional-page .btn:focus-visible {
   outline: 2px solid var(--color-crimson);
   outline-offset: 2px;
   box-shadow: none;
 }
 
 /* ── Input focus — blue border + soft ring ───────────────────────── */
-.input:focus,
-.select:focus,
-.textarea:focus {
+.institutional-page .input:focus,
+.institutional-page .select:focus,
+.institutional-page .textarea:focus {
   border-color: var(--color-crimson);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   outline: none;
 }
 
-select,
-select option {
+.institutional-page select,
+.institutional-page select option {
   background-color: var(--color-ivory);
   color: var(--color-charcoal);
 }
@@ -227,12 +271,12 @@ select option {
 }
 
 /* ── Alert ───────────────────────────────────────────────────────── */
-.alert {
+.institutional-page .alert {
   border-radius: 0.5rem;
 }
 
 /* ── Dropdown — soft popover shadow ──────────────────────────────── */
-.dropdown-content {
+.institutional-page .dropdown-content {
   border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-pop);
   border-radius: 0.5rem;
