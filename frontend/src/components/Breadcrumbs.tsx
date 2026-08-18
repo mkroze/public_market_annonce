@@ -31,7 +31,10 @@ export default function Breadcrumbs({ items, className = "" }: BreadcrumbsProps)
             <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
               <ChevronRight size={12} className="shrink-0 opacity-60" aria-hidden="true" />
               {item.to && !isLast ? (
-                <Link to={item.to} className="text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors motion-reduce:transition-none">
+                <Link
+                  to={item.to}
+                  className="min-w-0 truncate text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors motion-reduce:transition-none"
+                >
                   {item.label}
                 </Link>
               ) : (
