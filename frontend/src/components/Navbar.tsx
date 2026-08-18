@@ -97,7 +97,7 @@ export default function Navbar() {
                 <li>
                   <Link
                     to="/alerts"
-                    className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                    className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-primary)]" : ""}`}
                   >
                     <Bell size={14} />
                     Mes alertes
@@ -144,7 +144,7 @@ export default function Navbar() {
                 <li key={l.to}>
                   <Link
                     to={l.to}
-                    className={`text-sm ${isActive(l.to) ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                    className={`text-sm ${isActive(l.to) ? "font-semibold text-[var(--color-primary)]" : ""}`}
                   >
                     <l.icon size={14} />
                     {l.label}
@@ -160,7 +160,7 @@ export default function Navbar() {
                   <li>
                     <Link
                       to="/alerts"
-                      className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                      className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-primary)]" : ""}`}
                     >
                       <Bell size={14} />
                       Mes alertes
@@ -177,7 +177,7 @@ export default function Navbar() {
                 <li>
                   <Link
                     to="/login"
-                    className={`text-sm ${isActive("/login") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                    className={`text-sm ${isActive("/login") ? "font-semibold text-[var(--color-primary)]" : ""}`}
                   >
                     <LogIn size={14} />
                     Se connecter
@@ -199,7 +199,7 @@ export default function Navbar() {
                 <Link
                   key={l.to}
                   to={l.to}
-                  className={`inline-flex h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold transition-colors ${
+                  className={`inline-flex h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold transition-colors motion-reduce:transition-none ${
                     active
                       ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
                       : "text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
