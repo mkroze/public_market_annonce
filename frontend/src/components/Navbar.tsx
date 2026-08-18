@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Building2, CircleHelp, Mail, Search, Menu, Sun, Moon, LogIn, LogOut, UserRound } from "lucide-react";
+import { Building2, CircleHelp, Mail, Search, Menu, Sun, Moon, LogIn, LogOut, UserRound, Bell } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/auth";
 import logoFull from "../assets/logo-full.svg";
@@ -28,7 +28,7 @@ export default function Navbar() {
   }, [dark]);
 
   const navLinks = [
-    { to: "/tenders", label: "Toutes les consultations", icon: Search },
+    { to: "/tenders", label: "Consultations", icon: Search, protected: true },
     { to: "/about", label: "À propos", icon: Building2 },
     { to: "/faq", label: "FAQ", icon: CircleHelp },
     { to: "/contact", label: "Contact", icon: Mail },
@@ -38,9 +38,9 @@ export default function Navbar() {
     path === "/" ? pathname === "/" : pathname.startsWith(path);
 
   return (
-    <header className="sticky top-0 z-50 bg-[var(--color-ivory)] border-b border-[var(--color-border-subtle)]">
+    <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
       {/* Top bar — brand + auth */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
         <Link to="/tenders" className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <img
             src={dark ? logoFullReversed : logoFull}
@@ -60,6 +60,22 @@ export default function Navbar() {
           </button>
 
           {/* Auth — desktop */}
+          {user && (
+            <div className="hidden md:block">
+              <Link
+                to="/alerts"
+                className={`btn btn-ghost btn-sm btn-square rounded border border-[var(--color-border-subtle)] ${
+                  isActive("/alerts")
+                    ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                    : "text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"
+                }`}
+                aria-label="Mes alertes"
+                title="Mes alertes"
+              >
+                <Bell size={17} />
+              </Link>
+            </div>
+          )}
           {user ? (
             <div className="dropdown dropdown-end hidden md:block">
               <div
@@ -79,6 +95,15 @@ export default function Navbar() {
                   {user.email}
                 </li>
                 <li>
+                  <Link
+                    to="/alerts"
+                    className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                  >
+                    <Bell size={14} />
+                    Mes alertes
+                  </Link>
+                </li>
+                <li>
                   <button type="button" onClick={handleLogout} className="text-sm">
                     <LogOut size={14} />
                     Se déconnecter
@@ -91,6 +116,19 @@ export default function Navbar() {
               <LogIn size={15} />
               Se connecter
             </Link>
+          )}
+
+          {user && (
+            <div className="md:hidden">
+              <Link
+                to="/alerts"
+                className="btn btn-ghost btn-sm btn-square rounded text-[var(--color-primary)]"
+                aria-label="Mes alertes"
+                title="Mes alertes"
+              >
+                <Bell size={18} />
+              </Link>
+            </div>
           )}
 
           {/* Mobile menu */}
@@ -120,6 +158,15 @@ export default function Navbar() {
                     {user.email}
                   </li>
                   <li>
+                    <Link
+                      to="/alerts"
+                      className={`text-sm ${isActive("/alerts") ? "font-semibold text-[var(--color-crimson)]" : ""}`}
+                    >
+                      <Bell size={14} />
+                      Mes alertes
+                    </Link>
+                  </li>
+                  <li>
                     <button type="button" onClick={handleLogout} className="text-sm">
                       <LogOut size={14} />
                       Se déconnecter
@@ -143,8 +190,8 @@ export default function Navbar() {
       </div>
 
       {/* Bottom nav — main links */}
-      <nav className="hidden md:block border-t border-[var(--color-border-subtle)] bg-[var(--color-ivory)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-auto">
+      <nav className="hidden border-t border-[var(--color-border)] bg-[var(--color-surface)] md:block">
+        <div className="mx-auto max-w-[1440px] overflow-x-auto px-4 sm:px-6">
           <div className="flex items-center gap-1 min-w-max">
             {navLinks.map((l) => {
               const active = isActive(l.to);
@@ -152,14 +199,11 @@ export default function Navbar() {
                 <Link
                   key={l.to}
                   to={l.to}
-                  className={`
-                    flex shrink-0 items-center gap-1.5 px-3 xl:px-4 py-2.5 text-sm font-sans font-medium
-                    border-b-2 transition-colors duration-150
-                    ${active
-                      ? "border-[var(--color-crimson)] text-[var(--color-crimson)]"
-                      : "border-transparent text-[var(--color-slate)] hover:text-[var(--color-charcoal)] hover:border-[var(--color-border)]"
-                    }
-                  `}
+                  className={`inline-flex h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold transition-colors ${
+                    active
+                      ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                      : "text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
+                  }`}
                 >
                   <l.icon size={14} />
                   {l.label}

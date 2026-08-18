@@ -1,6 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import Breadcrumbs, { type BreadcrumbItem } from "./Breadcrumbs";
 
 interface PageShellProps {
   /** Page title, rendered as the main heading. */
@@ -11,6 +10,8 @@ interface PageShellProps {
   section?: string;
   /** Human date of the last revision, e.g. "8 août 2026". */
   updatedAt?: string;
+  /** Optional explicit breadcrumb trail after Accueil. */
+  breadcrumbs?: BreadcrumbItem[];
   children: ReactNode;
 }
 
@@ -18,34 +19,27 @@ interface PageShellProps {
  * Cadre commun aux pages de contenu statiques (légal, FAQ, à propos…).
  * Reprend le style « academic » : titres serif, filets fins, ivoire.
  */
-export default function PageShell({ title, lead, section, updatedAt, children }: PageShellProps) {
+export default function PageShell({ title, lead, section, updatedAt, breadcrumbs, children }: PageShellProps) {
   // Les pages de contenu sont longues : on repart en haut à chaque ouverture.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [title]);
 
-  return (
-    <div className="px-4 sm:px-6 py-8 sm:py-10">
-      <nav className="flex items-center gap-1.5 text-xs font-sans text-[var(--color-slate)] mb-6">
-        <Link to="/tenders" className="hover:text-[var(--color-crimson)] transition-colors">
-          Accueil
-        </Link>
-        {section && (
-          <>
-            <ChevronRight size={12} className="opacity-60" />
-            <span>{section}</span>
-          </>
-        )}
-        <ChevronRight size={12} className="opacity-60" />
-        <span className="text-[var(--color-charcoal)]">{title}</span>
-      </nav>
+  const breadcrumbItems = breadcrumbs || [
+    ...(section ? [{ label: section }] : []),
+    { label: title },
+  ];
 
-      <header className="max-w-3xl border-b border-[var(--color-border-subtle)] pb-6 mb-8">
-        <h1 className="font-display text-3xl sm:text-4xl text-[var(--color-charcoal)] leading-tight">
+  return (
+    <div className="px-4 py-6 sm:px-6 sm:py-8">
+      <Breadcrumbs items={breadcrumbItems} className="mb-6" />
+
+      <header className="institutional-panel max-w-4xl p-5 sm:p-6 mb-6 border-l-4 border-l-[var(--color-primary)]">
+        <h1 className="font-display text-3xl sm:text-4xl text-[var(--color-ink)] leading-tight">
           {title}
         </h1>
         {lead && (
-          <p className="mt-4 font-sans text-base text-[var(--color-slate)] leading-relaxed">
+          <p className="mt-4 font-sans text-base text-[var(--color-muted)] leading-relaxed">
             {lead}
           </p>
         )}
@@ -56,16 +50,16 @@ export default function PageShell({ title, lead, section, updatedAt, children }:
 
       <div
         className="
-          max-w-3xl font-sans text-[var(--color-charcoal)] leading-relaxed
-          [&_h2]:font-display [&_h2]:text-xl [&_h2]:sm:text-2xl [&_h2]:text-[var(--color-charcoal)]
+          institutional-panel max-w-4xl p-5 sm:p-6 font-sans text-[var(--color-ink)] leading-relaxed
+          [&_h2]:font-display [&_h2]:text-xl [&_h2]:sm:text-2xl [&_h2]:text-[var(--color-ink)]
           [&_h2]:mt-10 [&_h2]:mb-3
-          [&_h3]:font-sans [&_h3]:font-semibold [&_h3]:text-base [&_h3]:text-[var(--color-charcoal)]
+          [&_h3]:font-sans [&_h3]:font-semibold [&_h3]:text-base [&_h3]:text-[var(--color-ink)]
           [&_h3]:mt-6 [&_h3]:mb-2
-          [&_p]:text-[var(--color-slate)] [&_p]:mb-4
-          [&_a]:text-[var(--color-crimson)] [&_a]:underline [&_a]:underline-offset-2
-          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ul]:space-y-1.5 [&_ul]:text-[var(--color-slate)]
-          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_ol]:space-y-1.5 [&_ol]:text-[var(--color-slate)]
-          [&_strong]:text-[var(--color-charcoal)] [&_strong]:font-semibold
+          [&_p]:text-[var(--color-muted)] [&_p]:mb-4
+          [&_a]:text-[var(--color-primary)] [&_a]:underline [&_a]:underline-offset-2
+          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ul]:space-y-1.5 [&_ul]:text-[var(--color-muted)]
+          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_ol]:space-y-1.5 [&_ol]:text-[var(--color-muted)]
+          [&_strong]:text-[var(--color-ink)] [&_strong]:font-semibold
         "
       >
         {children}
