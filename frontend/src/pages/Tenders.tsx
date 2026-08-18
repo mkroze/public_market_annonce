@@ -35,9 +35,9 @@ function SummaryTile({
         : "border-l-[var(--color-primary)]";
 
   return (
-    <div className={`institutional-panel border-l-4 ${accent} px-4 py-3`}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">{label}</div>
-      <div className="mt-1 text-2xl font-bold tabular-nums text-[var(--color-ink)]">{value}</div>
+    <div className={`institutional-panel border-l-4 ${accent} px-3 py-2.5`}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">{label}</div>
+      <div className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-ink)]">{value}</div>
     </div>
   );
 }
@@ -208,7 +208,7 @@ export default function Tenders() {
       </section>
 
       {result && !loading && (
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <SummaryTile label="Sur cette page" value={pageSummary.shown} />
           <SummaryTile label="En cours" value={pageSummary.active} />
           <SummaryTile label="Urgentes" value={pageSummary.urgent} tone="warning" />
