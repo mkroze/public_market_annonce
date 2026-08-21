@@ -155,6 +155,15 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_logs(action);
         CREATE INDEX IF NOT EXISTS idx_audit_actor ON admin_audit_logs(actor_id);
+
+        -- Admin-editable app settings (key/value). Currently holds the SMTP /
+        -- email configuration set from the admin space; env vars are the fallback.
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT '',
+            updated_at TEXT DEFAULT (datetime('now')),
+            updated_by TEXT
+        );
     """)
 
     # ── Migrations for pre-existing tables ──────────────────────────────────

@@ -6,6 +6,7 @@ import AdminTenders from "./pages/Tenders";
 import AuditLogs from "./pages/AuditLogs";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
+import Settings from "./pages/Settings";
 import { EmptyState } from "./components/StateBlock";
 import { PageHeader } from "./components/ui";
 
@@ -28,7 +29,7 @@ export default function AdminApp() {
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="users" element={<Users />} />
         <Route path="roles" element={<Roles />} />
-        <Route path="settings" element={<ComingSoon title="Settings" />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="integrations" element={<ComingSoon title="Integrations" />} />
         <Route path="*" element={<EmptyState title="Page not found" hint="This admin page does not exist." />} />
       </Routes>

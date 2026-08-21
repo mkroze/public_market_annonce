@@ -2,9 +2,15 @@ import asyncio
 import os
 import re
 import unicodedata
+from datetime import datetime
 
 from database import get_db
-from emailer import email_enabled, send_email
+from emailer import email_is_configured, send_email
+from settings import resolve_email_config
+
+# Wall-clock time (Morocco) the daily digest is expected to go out. Displayed in
+# emails; the scheduler in main.py owns the actual firing.
+DIGEST_TIME_LABEL = "07:00 (heure du Maroc)"
 
 
 def split_csv(value: str) -> list[str]:
@@ -79,48 +85,205 @@ def budget_ok(alert: dict, estimation_text) -> bool:
     return True
 
 
-def render_digest(sections: list[tuple[str, list[dict]]]) -> tuple[str, str, str]:
+def parse_deadline(text) -> datetime | None:
+    """Tender deadlines are stored as text `DD/MM/YYYY HH:MM` (or date-only).
+
+    Returns a naive datetime, or None when the value is missing/unparseable so
+    callers can push those to the end of a chronological sort.
+    """
+    if not text:
+        return None
+    raw = str(text).strip()
+    for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def sort_by_deadline(tenders: list[dict]) -> list[dict]:
+    """Ascending by nearest deadline; missing/invalid deadlines sort last."""
+
+    def key(tender: dict):
+        parsed = parse_deadline(tender.get("deadline"))
+        return (parsed is None, parsed or datetime.max)
+
+    return sorted(tenders, key=key)
+
+
+async def open_matches_for_alert(
+    db,
+    alert: dict,
+    *,
+    limit: int | None = None,
+    exclude_ids: set[str] | None = None,
+) -> list[dict]:
+    """Currently-open tenders matching an alert, sorted by nearest deadline.
+
+    Region-normalized and budget-filtered like the matching used everywhere
+    else. Shared by the digest's urgent-open shortlist and the alert preview
+    endpoint so the two never drift apart. The caller owns the db connection.
+    """
+    from main import normalize_location  # lazy import: avoid a circular import
+
+    exclude = exclude_ids or set()
+    cursor = await db.execute(
+        """SELECT t.*, td.estimation FROM tenders t
+           LEFT JOIN tender_details td ON td.tender_id = t.id
+           WHERE t.status = 'en_cours'"""
+    )
+    matches = []
+    for row in await cursor.fetchall():
+        tender = dict(row)
+        if tender["id"] in exclude:
+            continue
+        tender["region"] = normalize_location(tender.get("location") or "")["region"]
+        if match_alert(alert, tender) and budget_ok(alert, tender.get("estimation")):
+            matches.append(tender)
+
+    matches = sort_by_deadline(matches)
+    return matches[:limit] if limit is not None else matches
+
+
+def _tender_card_html(tender: dict, frontend: str) -> str:
+    estimation = (tender.get("estimation") or "").strip() or "Estimation non communiquee"
+    link = f"{frontend}/tenders/{tender['id']}"
+    return (
+        '<div style="border:1px solid #e3ddcf;border-radius:4px;background:#fffdf7;'
+        'padding:12px;margin:8px 0;">'
+        f'<a href="{link}" style="font-weight:bold;color:#a51c30;text-decoration:none;">'
+        f'{tender.get("title", "")}</a>'
+        f'<div style="font-size:13px;color:#5b5b52;margin-top:4px;">'
+        f'{tender.get("entity", "")} — {tender.get("location", "")}<br>'
+        f'Date limite : {tender.get("deadline", "")} · {estimation}</div></div>'
+    )
+
+
+def _tender_line_text(tender: dict, frontend: str) -> str:
+    estimation = (tender.get("estimation") or "").strip() or "Estimation non communiquee"
+    link = f"{frontend}/tenders/{tender['id']}"
+    return (
+        f"- {tender.get('title', '')} | {tender.get('entity', '')} | "
+        f"{tender.get('location', '')} | Limite: {tender.get('deadline', '')} | "
+        f"{estimation} | {link}"
+    )
+
+
+def render_digest(new_matches: list[dict], urgent: list[dict]) -> tuple[str, str, str]:
+    """Daily digest built around two named blocks so a future HTML template can
+    replace the visual layer without touching matching:
+
+    - `Nouveaux appels d'offres`: newly imported matches (drives the subject count).
+    - `A traiter bientot`: up to 5 still-open matches by nearest deadline (reminder).
+    """
     frontend = os.getenv("FRONTEND_URL", "http://localhost:5173")
-    total = sum(len(tenders) for _, tenders in sections)
-    plural = "s" if total > 1 else ""
-    subject = f"{total} nouvelle{plural} consultation{plural} pour vos alertes"
+    new_count = len(new_matches)
+    if new_count > 1:
+        subject = f"{new_count} nouveaux appels d'offres pour votre alerte"
+    else:
+        subject = "1 nouvel appel d'offres pour votre alerte"
 
     html_parts = [
         '<div style="font-family:Georgia,serif;background:#faf7f0;padding:24px;color:#2b2b2b;">',
         '<h1 style="font-size:20px;border-bottom:2px solid #a51c30;padding-bottom:8px;">Marches Publics Maroc</h1>',
-        f'<p style="font-size:14px;">{total} nouvelle{plural} consultation{plural} correspondent a vos alertes.</p>',
+        f'<p style="font-size:14px;">{new_count} nouvelle{"s" if new_count > 1 else ""} '
+        f'consultation{"s" if new_count > 1 else ""} correspondent a votre alerte.</p>',
     ]
-    text_parts = [f"{total} nouvelle{plural} consultation{plural} correspondent a vos alertes.", ""]
+    text_parts = [
+        f"{new_count} nouvelle(s) consultation(s) correspondent a votre alerte.",
+        "",
+    ]
 
-    for alert_name, tenders in sections:
-        html_parts.append(f'<h2 style="font-size:16px;color:#a51c30;margin-top:20px;">{alert_name}</h2>')
-        text_parts.append(f"== {alert_name} ==")
-        for tender in tenders:
-            estimation = (tender.get("estimation") or "").strip() or "Estimation non communiquee"
-            link = f"{frontend}/tenders/{tender['id']}"
-            html_parts.append(
-                '<div style="border:1px solid #e3ddcf;border-radius:4px;background:#fffdf7;'
-                'padding:12px;margin:8px 0;">'
-                f'<a href="{link}" style="font-weight:bold;color:#a51c30;text-decoration:none;">'
-                f'{tender.get("title", "")}</a>'
-                f'<div style="font-size:13px;color:#5b5b52;margin-top:4px;">'
-                f'{tender.get("entity", "")} — {tender.get("location", "")}<br>'
-                f'Date limite : {tender.get("deadline", "")} · {estimation}</div></div>'
-            )
-            text_parts.append(
-                f"- {tender.get('title', '')} | {tender.get('entity', '')} | "
-                f"{tender.get('location', '')} | Limite: {tender.get('deadline', '')} | "
-                f"{estimation} | {link}"
-            )
+    # Block 1 — new matches, visually emphasized.
+    html_parts.append(
+        '<h2 style="font-size:16px;color:#a51c30;margin-top:20px;">Nouveaux appels d\'offres</h2>'
+    )
+    text_parts.append("== Nouveaux appels d'offres ==")
+    for tender in new_matches:
+        html_parts.append(_tender_card_html(tender, frontend))
+        text_parts.append(_tender_line_text(tender, frontend))
+    text_parts.append("")
+
+    # Block 2 — urgent open shortlist (only when there is something to remind about).
+    if urgent:
+        html_parts.append(
+            '<h2 style="font-size:15px;color:#5b5b52;margin-top:24px;'
+            'border-top:1px solid #e3ddcf;padding-top:12px;">A traiter bientot</h2>'
+        )
+        text_parts.append("== A traiter bientot ==")
+        for tender in urgent:
+            html_parts.append(_tender_card_html(tender, frontend))
+            text_parts.append(_tender_line_text(tender, frontend))
         text_parts.append("")
 
     html_parts.append(
         f'<p style="font-size:12px;color:#5b5b52;margin-top:24px;">'
-        f'Gerez vos alertes : <a href="{frontend}/alerts" style="color:#a51c30;">{frontend}/alerts</a></p></div>'
+        f'Voir toutes vos opportunites : <a href="{frontend}/alerts" style="color:#a51c30;">{frontend}/alerts</a></p></div>'
     )
-    text_parts.append(f"Gerez vos alertes : {frontend}/alerts")
+    text_parts.append(f"Voir toutes vos opportunites : {frontend}/alerts")
 
     return subject, "".join(html_parts), "\n".join(text_parts)
+
+
+def render_confirmation(alert: dict) -> tuple[str, str, str]:
+    """Confirmation email sent when an enabled alert is created/edited/reactivated.
+
+    Named content blocks (status, criteria, next digest time, manage link) so the
+    HTML skin can be swapped later without changing behavior.
+    """
+    from config import SECTORS
+
+    frontend = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    name = (alert.get("name") or "Mon alerte").strip() or "Mon alerte"
+
+    sectors = split_csv(alert.get("sectors", ""))
+    regions = split_csv(alert.get("regions", ""))
+    keywords = split_csv(alert.get("keywords", ""))
+    min_b = (alert.get("min_budget") or "").strip()
+    max_b = (alert.get("max_budget") or "").strip()
+    if min_b or max_b:
+        budget = f"{min_b or '0'} - {max_b or 'illimite'} MAD"
+    else:
+        budget = "Sans limite"
+
+    criteria = [
+        ("Domaines", ", ".join(SECTORS.get(code, code) for code in sectors) if sectors else "Tous les domaines"),
+        ("Regions", ", ".join(regions) if regions else "Toutes les regions"),
+        ("Mots-cles", ", ".join(keywords) if keywords else "Aucun"),
+        ("Budget", budget),
+    ]
+
+    subject = f"Votre alerte est active : {name}"
+
+    html_rows = "".join(
+        f'<tr><td style="padding:4px 12px 4px 0;color:#5b5b52;font-size:13px;">{label}</td>'
+        f'<td style="padding:4px 0;font-size:13px;">{value}</td></tr>'
+        for label, value in criteria
+    )
+    html = (
+        '<div style="font-family:Georgia,serif;background:#faf7f0;padding:24px;color:#2b2b2b;">'
+        '<h1 style="font-size:20px;border-bottom:2px solid #a51c30;padding-bottom:8px;">Marches Publics Maroc</h1>'
+        f'<p style="font-size:14px;">Votre alerte <strong>{name}</strong> est active.</p>'
+        f'<table style="margin:12px 0;border-collapse:collapse;">{html_rows}</table>'
+        f'<p style="font-size:13px;">Prochaine synthese quotidienne a {DIGEST_TIME_LABEL}, '
+        "uniquement s'il y a de nouveaux appels d'offres correspondants.</p>"
+        f'<p style="font-size:12px;color:#5b5b52;margin-top:24px;">'
+        f'Gerer votre alerte : <a href="{frontend}/alerts" style="color:#a51c30;">{frontend}/alerts</a></p></div>'
+    )
+
+    text_lines = [
+        f"Votre alerte '{name}' est active.",
+        "",
+        *[f"{label} : {value}" for label, value in criteria],
+        "",
+        f"Prochaine synthese quotidienne a {DIGEST_TIME_LABEL}, "
+        "uniquement s'il y a de nouveaux appels d'offres correspondants.",
+        "",
+        f"Gerer votre alerte : {frontend}/alerts",
+    ]
+
+    return subject, html, "\n".join(text_lines)
 
 
 async def run_digest(new_ids: list[str]) -> dict:
@@ -163,6 +326,9 @@ async def run_digest(new_ids: list[str]) -> dict:
             estimation_cache[tender["id"]] = (detail or {}).get("estimation") or ""
         return estimation_cache.get(tender["id"], "")
 
+    # Collect this cycle's new matches per user. `alert` is kept so the urgent
+    # shortlist can be computed against the same criteria (one alert per user in
+    # the beta; if several exist, the first matching one drives the shortlist).
     per_user: dict[int, dict] = {}
     for alert in alerts:
         for tender in tenders:
@@ -172,13 +338,16 @@ async def run_digest(new_ids: list[str]) -> dict:
                 continue
             user = per_user.setdefault(
                 alert["user_id"],
-                {"email": alert["user_email"], "seen": set(), "sections": {}, "rows": []},
+                {"email": alert["user_email"], "alert": alert, "seen": set(), "new": [], "rows": []},
             )
             if tender["id"] in user["seen"]:
                 continue
             user["seen"].add(tender["id"])
-            user["sections"].setdefault(alert["name"], []).append(tender)
+            user["new"].append(tender)
             user["rows"].append((alert["id"], tender["id"]))
+
+    email_config = await resolve_email_config()
+    configured = email_is_configured(email_config)
 
     emails_sent = 0
     tenders_matched = 0
@@ -187,26 +356,31 @@ async def run_digest(new_ids: list[str]) -> dict:
             "SELECT tender_id FROM digest_log WHERE user_id = ?", (user_id,)
         )
         already_sent = {r["tender_id"] for r in await cursor.fetchall()}
-        sections = []
-        for name, section_tenders in data["sections"].items():
-            kept = [t for t in section_tenders if t["id"] not in already_sent]
-            if kept:
-                sections.append((name, kept))
-        if not sections:
-            continue
-        section_count = sum(len(ts) for _, ts in sections)
-        tenders_matched += section_count
 
-        if not email_enabled():
+        # Only genuinely new (never-sent) tenders drive the digest and dedup.
+        new_matches = [t for t in data["new"] if t["id"] not in already_sent]
+        if not new_matches:
+            continue
+        tenders_matched += len(new_matches)
+
+        # Urgent-open reminder: still-open matches by nearest deadline. This is a
+        # reminder, so it is NOT deduped against digest_log and never logged —
+        # only the new-matches block above writes dedup rows.
+        exclude = {t["id"] for t in new_matches}
+        urgent = await open_matches_for_alert(
+            db, data["alert"], limit=5, exclude_ids=exclude
+        )
+
+        if not configured:
             print(
-                f"[digest] email disabled (SMTP_HOST unset); "
-                f"{section_count} tenders for {data['email']} not sent"
+                f"[digest] email not configured; "
+                f"{len(new_matches)} new tenders for {data['email']} not sent"
             )
             continue
 
-        subject, html, text = render_digest(sections)
+        subject, html, text = render_digest(new_matches, urgent)
         try:
-            await asyncio.to_thread(send_email, data["email"], subject, html, text)
+            await asyncio.to_thread(send_email, email_config, data["email"], subject, html, text)
         except Exception as e:
             print(f"[digest] send failed for {data['email']}: {e}")
             continue

@@ -15,6 +15,7 @@ import type {
   SectorDetailResponse,
   AlertPreference,
   AlertPreview,
+  AlertMutationResult,
   BlogPost,
   Tender,
 } from "./types";
@@ -267,21 +268,33 @@ export function getAlerts(): Promise<{ data: AlertPreference[] }> {
   return fetchJSON(`${BASE}/alerts`);
 }
 
-export async function createAlert(data: Partial<AlertPreference>): Promise<{ id: number }> {
+export async function createAlert(
+  data: Partial<AlertPreference>,
+): Promise<AlertMutationResult> {
   const res = await fetch(`${BASE}/alerts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
   });
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  // Surface backend errors (e.g. the beta one-alert limit) instead of treating
+  // the error payload as a successful result.
+  if (!res.ok) throw new Error(body.detail || `API error: ${res.status}`);
+  return body;
 }
 
-export async function updateAlert(id: number, data: Partial<AlertPreference>): Promise<void> {
-  await fetch(`${BASE}/alerts/${id}`, {
+export async function updateAlert(
+  id: number,
+  data: Partial<AlertPreference>,
+): Promise<AlertMutationResult> {
+  const res = await fetch(`${BASE}/alerts/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
   });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || `API error: ${res.status}`);
+  return body;
 }
 
 export async function deleteAlert(id: number): Promise<void> {

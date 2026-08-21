@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, Sun, Moon, LogIn, LogOut, UserRound, Bell } from "lucide-react";
+import { Search, Menu, Sun, Moon, LogIn, LogOut, UserRound, Bell, ShieldCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/auth";
+import { isAdminRole } from "../admin/permissions";
 import logoFull from "../assets/logo-full.svg";
 import logoFullReversed from "../assets/logo-full-reversed.svg";
 
@@ -31,6 +32,10 @@ export default function Navbar() {
     { to: "/tenders", label: "Consultations", icon: Search },
     { to: "/alerts", label: "Alertes", icon: Bell },
   ];
+
+  // Lien réservé : n'apparaît que pour un compte administrateur connecté.
+  // Le rôle est re-vérifié côté backend à chaque requête ; ceci ne gate que l'UI.
+  const isAdmin = isAdminRole(user?.role);
 
   const isActive = (path: string) =>
     path === "/" ? pathname === "/" : pathname.startsWith(path);
@@ -96,6 +101,14 @@ export default function Navbar() {
                 <li className="px-2 py-1.5 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
                   {user.email}
                 </li>
+                {isAdmin && (
+                  <li>
+                    <Link to="/admin" className="text-sm font-semibold text-[var(--color-crimson)]">
+                      <ShieldCheck size={14} />
+                      Espace admin
+                    </Link>
+                  </li>
+                )}
                 <li>
                   <button type="button" onClick={handleLogout} className="text-sm">
                     <LogOut size={14} />
@@ -137,6 +150,14 @@ export default function Navbar() {
                   <li className="px-2 py-1 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
                     {user.email}
                   </li>
+                  {isAdmin && (
+                    <li>
+                      <Link to="/admin" className="text-sm font-semibold text-[var(--color-crimson)]">
+                        <ShieldCheck size={14} />
+                        Espace admin
+                      </Link>
+                    </li>
+                  )}
                   <li>
                     <button type="button" onClick={handleLogout} className="text-sm">
                       <LogOut size={14} />

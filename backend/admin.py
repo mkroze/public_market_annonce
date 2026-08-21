@@ -17,6 +17,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from database import get_db
+from emailer import email_is_configured, send_email
+from settings import resolve_email_config, set_email_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -33,6 +35,7 @@ ALL_PERMISSIONS = [
     "audit.view", "audit.export",
     "users.view", "users.suspend", "users.manage_role",
     "roles.view",
+    "settings.view", "settings.manage",
 ]
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -679,3 +682,102 @@ async def admin_audit_export(
         )
     finally:
         await db.close()
+
+
+# ── Email / SMTP settings ─────────────────────────────────────────────────────
+
+class EmailSettingsPatch(BaseModel):
+    # All optional: only provided fields are written. A blank/omitted password
+    # preserves the stored one (the UI never receives it back to resend).
+    smtp_host: str | None = None
+    smtp_port: str | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_from_name: str | None = None
+
+
+def _email_settings_view(config: dict) -> dict:
+    """Public shape of the email config — resolved values minus the secret."""
+    return {
+        "smtp_host": config["smtp_host"],
+        "smtp_port": config["smtp_port"],
+        "smtp_user": config["smtp_user"],
+        "smtp_from": config["smtp_from"],
+        "smtp_from_name": config["smtp_from_name"],
+        "password_set": bool(config["smtp_password"]),
+        "configured": email_is_configured(config),
+    }
+
+
+@router.get("/settings/email")
+async def admin_get_email_settings(user=Depends(require_admin("settings.view"))):
+    config = await resolve_email_config()
+    return _email_settings_view(config)
+
+
+@router.put("/settings/email")
+async def admin_update_email_settings(
+    req: EmailSettingsPatch,
+    request: Request,
+    user=Depends(require_admin("settings.manage")),
+):
+    # Write only the fields that were provided. The password is special: a blank
+    # value means "leave the stored password untouched".
+    values: dict[str, str] = {}
+    for field in ("smtp_host", "smtp_port", "smtp_user", "smtp_from", "smtp_from_name"):
+        provided = getattr(req, field)
+        if provided is not None:
+            values[field] = provided.strip()
+    password_updated = bool(req.smtp_password)
+    if password_updated:
+        values["smtp_password"] = req.smtp_password
+
+    db = await get_db()
+    try:
+        await set_email_settings(db, values, updated_by=user["email"])
+        # Audit the change with the secret redacted.
+        audited = {k: ("***" if k == "smtp_password" else v) for k, v in values.items()}
+        await log_audit(
+            db, actor=user, action="settings.email.update",
+            target_type="settings", target_id="email", request=request,
+            after=audited,
+        )
+    finally:
+        await db.close()
+
+    config = await resolve_email_config()
+    return {**_email_settings_view(config), "password_updated": password_updated}
+
+
+@router.post("/settings/email/test")
+async def admin_test_email_settings(request: Request, user=Depends(require_admin("settings.manage"))):
+    config = await resolve_email_config()
+    if not email_is_configured(config):
+        raise HTTPException(status_code=503, detail="SMTP non configure")
+    subject = "Test - configuration email (admin)"
+    text = "Votre configuration SMTP fonctionne."
+    html = "<p>Votre configuration SMTP fonctionne.</p>"
+    try:
+        await asyncio.to_thread(send_email, config, user["email"], subject, html, text)
+    except Exception as e:
+        db = await get_db()
+        try:
+            await log_audit(
+                db, actor=user, action="settings.email.test", target_type="settings",
+                target_id="email", result="failure", request=request,
+                after={"error": str(e)[:200]},
+            )
+        finally:
+            await db.close()
+        raise HTTPException(status_code=502, detail=f"Echec d'envoi: {e}")
+
+    db = await get_db()
+    try:
+        await log_audit(
+            db, actor=user, action="settings.email.test", target_type="settings",
+            target_id="email", request=request, after={"to": user["email"]},
+        )
+    finally:
+        await db.close()
+    return {"status": "sent", "to": user["email"]}

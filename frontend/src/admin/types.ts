@@ -109,3 +109,27 @@ export interface AuditEvent {
   after_json: string | null;
   created_at: string;
 }
+
+// Email/SMTP settings as returned by the admin API. The password is never sent
+// back to the client — only whether one is stored.
+export interface EmailSettings {
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_from: string;
+  smtp_from_name: string;
+  password_set: boolean;
+  configured: boolean;
+  password_updated?: boolean;
+}
+
+// Fields the client may write. Omit smtp_password (or send "") to keep the
+// stored password unchanged.
+export interface EmailSettingsPatch {
+  smtp_host?: string;
+  smtp_port?: string;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from?: string;
+  smtp_from_name?: string;
+}

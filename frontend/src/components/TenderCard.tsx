@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Building2, Calendar, MapPin, Sparkles } from "lucide-react";
 import { getTenderGuidance } from "../lib/tenderGuidance";
-import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
+import { getTenderUrgency, toSentenceCase, toTenderPath } from "../lib/tenderUtils";
 import { TONE_BADGE } from "../lib/tone";
 import type { Tender } from "../lib/types";
 
@@ -13,6 +13,7 @@ interface TenderCardProps {
 export default function TenderCard({ tender, compact = false }: TenderCardProps) {
   const guidance = getTenderGuidance(tender);
   const urgency = getTenderUrgency(tender.deadline);
+  const displayTitle = tender.title?.trim() ? toSentenceCase(tender.title) : tender.reference?.trim();
 
   return (
     <article className="relative overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-card transition-colors hover:border-[var(--color-primary)] hover:shadow-card-hover motion-reduce:transition-none">
@@ -29,8 +30,8 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
           )}
         </div>
 
-        <h3 className="font-display text-base font-bold leading-snug text-[var(--color-ink)]">
-          {tender.title || tender.reference}
+        <h3 className="line-clamp-3 font-display text-base font-bold leading-snug text-[var(--color-ink)]">
+          {displayTitle}
         </h3>
         {!compact && tender.reference && (
           <p className="mt-1 font-sans text-xs text-[var(--color-muted)]">{tender.reference}</p>
@@ -59,8 +60,11 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
         )}
 
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--color-border-subtle)] pt-4">
-          <span className="text-lg font-bold tabular-nums text-[var(--color-ink)]">
-            {tender.estimation || "Budget à vérifier"}
+          <span className="flex flex-col text-[var(--color-ink)]">
+            <span className="font-sans text-xs font-medium text-[var(--color-muted)]">Caution provisoire</span>
+            <span className="text-sm font-bold tabular-nums">
+              {tender.caution_provisoire?.trim() || "Voir DCE"}
+            </span>
           </span>
           <span className="text-sm font-semibold text-[var(--color-primary)]">Voir le détail</span>
         </div>

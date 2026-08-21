@@ -8,7 +8,8 @@ export type Permission =
   | "imports.view" | "imports.run" | "imports.retry"
   | "audit.view" | "audit.export"
   | "users.view" | "users.suspend" | "users.manage_role"
-  | "roles.view";
+  | "roles.view"
+  | "settings.view" | "settings.manage";
 
 export const ADMIN_ROLES = ["owner", "admin", "operator", "auditor", "support"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -20,6 +21,7 @@ const ALL: Permission[] = [
   "audit.view", "audit.export",
   "users.view", "users.suspend", "users.manage_role",
   "roles.view",
+  "settings.view", "settings.manage",
 ];
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
@@ -86,6 +88,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Audit logs", path: "/admin/audit-logs", icon: "ScrollText", permission: "audit.view" },
   { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view" },
   { label: "Roles", path: "/admin/roles", icon: "ShieldCheck", permission: "roles.view" },
-  { label: "Settings", path: "/admin/settings", icon: "Settings", permission: "overview.view", disabled: true, disabledReason: "Coming soon" },
+  { label: "Settings", path: "/admin/settings", icon: "Settings", permission: "settings.view" },
   { label: "Integrations", path: "/admin/integrations", icon: "Plug", permission: "overview.view", disabled: true, disabledReason: "Coming soon" },
 ];

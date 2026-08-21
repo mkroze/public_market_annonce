@@ -1,22 +1,21 @@
-import os
 import unittest
-from unittest.mock import patch
 
-from emailer import build_message, email_enabled
+from emailer import build_message, email_is_configured, send_email
 
 
-class EmailerTest(unittest.TestCase):
-    def test_email_disabled_when_smtp_host_unset(self):
-        with patch.dict(os.environ, {}, clear=True):
-            self.assertFalse(email_enabled())
+class EmailConfiguredTest(unittest.TestCase):
+    def test_not_configured_without_host(self):
+        self.assertFalse(email_is_configured({}))
+        self.assertFalse(email_is_configured({"smtp_host": "   "}))
 
-    def test_email_enabled_when_smtp_host_set(self):
-        with patch.dict(os.environ, {"SMTP_HOST": "smtp.gmail.com"}):
-            self.assertTrue(email_enabled())
+    def test_configured_with_host(self):
+        self.assertTrue(email_is_configured({"smtp_host": "smtp.example.com"}))
 
-    def test_build_message_is_multipart_alternative(self):
-        with patch.dict(os.environ, {"SMTP_USER": "bot@example.com"}, clear=True):
-            msg = build_message("user@example.com", "Sujet", "<p>Salut</p>", "Salut")
+
+class BuildMessageTest(unittest.TestCase):
+    def test_multipart_alternative_and_headers(self):
+        config = {"smtp_user": "bot@example.com"}
+        msg = build_message(config, "user@example.com", "Sujet", "<p>Salut</p>", "Salut")
         self.assertEqual(msg.get_content_type(), "multipart/alternative")
         parts = msg.get_payload()
         self.assertEqual(len(parts), 2)
@@ -27,10 +26,21 @@ class EmailerTest(unittest.TestCase):
         self.assertEqual(msg["Subject"], "Sujet")
 
     def test_from_prefers_smtp_from_over_user(self):
-        env = {"SMTP_USER": "bot@example.com", "SMTP_FROM": "alerts@example.com"}
-        with patch.dict(os.environ, env, clear=True):
-            msg = build_message("user@example.com", "S", "<p>x</p>", "x")
+        config = {"smtp_user": "bot@example.com", "smtp_from": "alerts@example.com"}
+        msg = build_message(config, "u@example.com", "S", "<p>x</p>", "x")
         self.assertEqual(msg["From"], "alerts@example.com")
+
+    def test_from_includes_display_name(self):
+        config = {"smtp_from": "alerts@example.com", "smtp_from_name": "Marches Publics"}
+        msg = build_message(config, "u@example.com", "S", "<p>x</p>", "x")
+        self.assertEqual(msg["From"], "Marches Publics <alerts@example.com>")
+
+
+class SendEmailGuardTest(unittest.TestCase):
+    def test_raises_without_host(self):
+        # No host → fail fast before any socket work.
+        with self.assertRaises(RuntimeError):
+            send_email({}, "u@example.com", "S", "<p>x</p>", "x")
 
 
 if __name__ == "__main__":

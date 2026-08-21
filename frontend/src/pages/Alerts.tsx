@@ -38,11 +38,8 @@ const EMPTY_DRAFT: AlertDraft = {
   enabled: true,
 };
 
-const FREQUENCIES = [
-  { value: "daily", label: "Quotidien" },
-  { value: "weekly", label: "Hebdomadaire" },
-];
-
+// Beta: daily is the only cadence the digest job honors, so the UI doesn't
+// offer a choice. The draft still carries frequency: "daily" for the backend.
 const CONTROL_CLASS =
   "w-full border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-3 py-2 font-sans text-sm text-[var(--color-charcoal)] rounded focus:border-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-crimson)] transition-colors";
 
@@ -204,17 +201,30 @@ export default function Alerts() {
     e.preventDefault();
     setSaving(true);
     try {
-      if (editingId === null) {
-        await createAlert(toPayload(draft));
-        pushToast("Alerte créée.", "success");
+      const result =
+        editingId === null
+          ? await createAlert(toPayload(draft))
+          : await updateAlert(editingId, toPayload(draft));
+
+      // Distinguish "saved + email sent" from "saved, but email failed" so the
+      // user knows whether email delivery is actually working.
+      const base = editingId === null ? "Alerte créée." : "Alerte mise à jour.";
+      const email = result?.email;
+      if (email?.attempted && email.delivered) {
+        pushToast(`${base} Un email de confirmation vous a été envoyé.`, "success");
+      } else if (email?.attempted && !email.delivered) {
+        pushToast(
+          `${base} L'email de confirmation n'a pas pu être envoyé.`,
+          "info",
+        );
       } else {
-        await updateAlert(editingId, toPayload(draft));
-        pushToast("Alerte mise à jour.", "success");
+        pushToast(base, "success");
       }
       await reload();
       closeEditor();
-    } catch {
-      pushToast("Échec de l'enregistrement.", "error");
+    } catch (err: any) {
+      // Surfaces the backend detail (e.g. the beta one-alert limit) verbatim.
+      pushToast(err?.message || "Échec de l'enregistrement.", "error");
     } finally {
       setSaving(false);
     }
@@ -381,20 +391,15 @@ export default function Alerts() {
             onChange={(e) => patchDraft({ max_budget: e.target.value })}
           />
         </label>
-        <label className="space-y-1.5 block">
+        <div className="space-y-1.5">
           <span className="editorial-label text-[var(--color-slate)]">Fréquence</span>
-          <select
-            className={CONTROL_CLASS}
-            value={draft.frequency}
-            onChange={(e) => patchDraft({ frequency: e.target.value })}
+          <div
+            className={`${CONTROL_CLASS} flex items-center text-[var(--color-slate)] cursor-default`}
+            aria-readonly="true"
           >
-            {FREQUENCIES.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            Quotidien · 07:00 (heure du Maroc)
+          </div>
+        </div>
       </div>
 
       <label className="flex items-center gap-2.5 cursor-pointer">
@@ -479,7 +484,9 @@ export default function Alerts() {
           <Bell className="w-6 h-6 text-[var(--color-crimson)]" />
           Mes alertes
         </h1>
-        {!open && (
+        {/* Beta: one alert per account — the create action disappears once an
+            alert exists, leaving only edit / pause / delete. */}
+        {!open && alerts.length === 0 && (
           <button
             type="button"
             onClick={startCreate}
@@ -491,8 +498,9 @@ export default function Alerts() {
         )}
       </div>
       <p className="font-sans text-sm text-[var(--color-slate)] mb-6 max-w-2xl">
-        Définissez des déclencheurs par domaine, région, mots-clés et budget. Nous vous
-        envoyons un email dès qu'une nouvelle consultation y correspond.
+        Définissez votre alerte par domaine, région, mots-clés et budget. Chaque matin
+        à 07:00 (heure du Maroc), nous vous envoyons un récapitulatif des nouvelles
+        consultations qui y correspondent — uniquement s'il y en a.
       </p>
 
       {loading ? (

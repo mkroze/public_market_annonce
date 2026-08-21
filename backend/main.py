@@ -3,7 +3,14 @@ import os
 import re
 import unicodedata
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+# Load .env (nearest one, searching up from the working directory) before any
+# module reads os.getenv — SMTP creds, DIGEST_HOUR, ADMIN_EMAILS, etc.
+load_dotenv()
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import csv
 from io import BytesIO, StringIO
@@ -21,8 +28,9 @@ from legal_context import SYSTEM_PROMPT
 from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, download_dce, ensure_tender_details
 from config import SECTORS, CATEGORIES
 from auth import hash_password, verify_password, create_token, decode_token
-from digest import run_digest, match_alert, budget_ok
-from emailer import email_enabled, send_email
+from digest import run_digest, open_matches_for_alert, render_confirmation
+from emailer import email_is_configured, send_email
+from settings import resolve_email_config
 from admin import router as admin_router, bootstrap_admins
 from tender_display import build_tender_display
 
@@ -38,14 +46,20 @@ async def run_scrape_and_digest(actor_email: str | None = None, trigger: str = "
         return {**result, **digest_result}
 
 
+# The product contract is 07:00 Morocco time. Anchoring the scheduler to an
+# explicit zone (rather than server-local time) keeps firing correct regardless
+# of host TZ and across Morocco's DST/Ramadan wall-clock shifts.
+MOROCCO_TZ = ZoneInfo("Africa/Casablanca")
+
+
 async def daily_scheduler():
     hour = int(os.getenv("DIGEST_HOUR", "7"))
     while True:
-        now = datetime.now()
+        now = datetime.now(MOROCCO_TZ)
         target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
         if target <= now:
             target += timedelta(days=1)
-        await asyncio.sleep((target - now).total_seconds())
+        await asyncio.sleep(max(0.0, (target - now).total_seconds()))
         try:
             result = await run_scrape_and_digest()
             print(f"[scheduler] daily scrape+digest done: {result}")
@@ -280,7 +294,7 @@ async def list_tenders(
 
     offset = (page - 1) * per_page
     query = f"""
-        SELECT t.*, td.estimation FROM tenders t
+        SELECT t.*, td.estimation, td.caution_provisoire FROM tenders t
         LEFT JOIN tender_details td ON td.tender_id = t.id
         {where_prefixed}
         ORDER BY {order_clause}
@@ -1003,6 +1017,33 @@ class AlertRequest(BaseModel):
     enabled: bool = True
 
 
+# Free beta: one alert per account. Enforced here (not just in the UI) so the
+# rule holds even if someone calls the API directly.
+BETA_ALERT_LIMIT = 1
+BETA_ALERT_LIMIT_MESSAGE = (
+    "La version beta gratuite est limitee a une alerte par compte."
+)
+
+
+async def send_confirmation_email(recipient: str, alert: dict) -> dict:
+    """Best-effort confirmation email for an enabled alert. Never raises; the
+    save always stands. Returns a status the UI uses to phrase its toast.
+
+    reason codes: "disabled_alert" (not enabled, nothing to confirm),
+    "smtp_disabled" (no SMTP configured), "send_failed" (delivery error).
+    """
+    config = await resolve_email_config()
+    if not email_is_configured(config):
+        return {"attempted": False, "delivered": False, "reason": "smtp_disabled"}
+    subject, html, text = render_confirmation(alert)
+    try:
+        await asyncio.to_thread(send_email, config, recipient, subject, html, text)
+    except Exception as e:
+        print(f"[alerts] confirmation send failed for {recipient}: {e}")
+        return {"attempted": True, "delivered": False, "reason": "send_failed"}
+    return {"attempted": True, "delivered": True, "reason": None}
+
+
 @app.get("/api/alerts")
 async def list_alerts(authorization: str | None = Header(None)):
     user = await require_user(authorization)
@@ -1024,6 +1065,14 @@ async def create_alert(req: AlertRequest, authorization: str | None = Header(Non
     user = await require_user(authorization)
     db = await get_db()
     cursor = await db.execute(
+        "SELECT COUNT(*) AS n FROM alert_preferences WHERE user_id = ?", (user["id"],)
+    )
+    existing = (await cursor.fetchone())["n"]
+    if existing >= BETA_ALERT_LIMIT:
+        await db.close()
+        raise HTTPException(status_code=409, detail=BETA_ALERT_LIMIT_MESSAGE)
+
+    cursor = await db.execute(
         """INSERT INTO alert_preferences (user_id, name, sectors, regions, keywords, min_budget, max_budget, frequency, enabled)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (user["id"], req.name, req.sectors, req.regions, req.keywords,
@@ -1032,13 +1081,27 @@ async def create_alert(req: AlertRequest, authorization: str | None = Header(Non
     await db.commit()
     alert_id = cursor.lastrowid
     await db.close()
-    return {"id": alert_id, "status": "created"}
+
+    # Confirmation email only when the saved alert is actually active.
+    if req.enabled:
+        email_status = await send_confirmation_email(user["email"], req.model_dump())
+    else:
+        email_status = {"attempted": False, "delivered": False, "reason": "disabled_alert"}
+    return {"id": alert_id, "status": "created", "email": email_status}
 
 
 @app.put("/api/alerts/{alert_id}")
 async def update_alert(alert_id: int, req: AlertRequest, authorization: str | None = Header(None)):
     user = await require_user(authorization)
     db = await get_db()
+    cursor = await db.execute(
+        "SELECT id FROM alert_preferences WHERE id = ? AND user_id = ?",
+        (alert_id, user["id"]),
+    )
+    if not await cursor.fetchone():
+        await db.close()
+        raise HTTPException(status_code=404, detail="Alerte introuvable.")
+
     await db.execute(
         """UPDATE alert_preferences SET name=?, sectors=?, regions=?, keywords=?,
            min_budget=?, max_budget=?, frequency=?, enabled=? WHERE id=? AND user_id=?""",
@@ -1048,7 +1111,14 @@ async def update_alert(alert_id: int, req: AlertRequest, authorization: str | No
     )
     await db.commit()
     await db.close()
-    return {"status": "updated"}
+
+    # Confirmation fires whenever the alert ends up enabled — covers an edit
+    # while enabled and a disabled→enabled reactivation. Disabling stays silent.
+    if req.enabled:
+        email_status = await send_confirmation_email(user["email"], req.model_dump())
+    else:
+        email_status = {"attempted": False, "delivered": False, "reason": "disabled_alert"}
+    return {"status": "updated", "email": email_status}
 
 
 @app.delete("/api/alerts/{alert_id}")
@@ -1068,20 +1138,10 @@ async def delete_alert(alert_id: int, authorization: str | None = Header(None)):
 async def preview_alert(req: AlertRequest, authorization: str | None = Header(None)):
     await require_user(authorization)
     db = await get_db()
-    cursor = await db.execute(
-        """SELECT t.*, td.estimation FROM tenders t
-           LEFT JOIN tender_details td ON td.tender_id = t.id
-           WHERE t.status = 'en_cours'"""
-    )
-    rows = [dict(r) for r in await cursor.fetchall()]
+    # Same open-matches path the digest uses, so preview counts and digest
+    # contents can never disagree. Sample surfaces the soonest deadlines first.
+    matches = await open_matches_for_alert(db, req.model_dump())
     await db.close()
-
-    criteria = req.model_dump()
-    matches = []
-    for tender in rows:
-        tender["region"] = normalize_location(tender.get("location") or "")["region"]
-        if match_alert(criteria, tender) and budget_ok(criteria, tender.get("estimation")):
-            matches.append(tender)
 
     sample = [
         {key: tender.get(key) for key in ("id", "title", "entity", "location", "deadline")}
@@ -1093,13 +1153,14 @@ async def preview_alert(req: AlertRequest, authorization: str | None = Header(No
 @app.post("/api/alerts/test-email")
 async def test_alert_email(authorization: str | None = Header(None)):
     user = await require_user(authorization)
-    if not email_enabled():
-        raise HTTPException(status_code=503, detail="SMTP non configure (SMTP_HOST manquant)")
+    config = await resolve_email_config()
+    if not email_is_configured(config):
+        raise HTTPException(status_code=503, detail="SMTP non configure")
     subject = "Test - Alertes Marches Publics Maroc"
     text = "Ceci est un email de test de vos alertes. La configuration SMTP fonctionne."
     html = "<p>Ceci est un email de test de vos alertes. La configuration SMTP fonctionne.</p>"
     try:
-        await asyncio.to_thread(send_email, user["email"], subject, html, text)
+        await asyncio.to_thread(send_email, config, user["email"], subject, html, text)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Echec d'envoi: {e}")
     return {"status": "sent"}

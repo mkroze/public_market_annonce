@@ -9,6 +9,13 @@ export function toTenderPath(id: string): string {
   return `/tenders/${encodeURIComponent(id)}`;
 }
 
+/** Trim, then uppercase the first character and lowercase the rest (sentence case). */
+export function toSentenceCase(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
+
 export function decodeTenderRouteId(routeId: string | undefined): string {
   return routeId ? decodeURIComponent(routeId) : "";
 }

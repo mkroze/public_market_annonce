@@ -5,6 +5,7 @@
 import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
   AdminUser, RoleInfo, AuditEvent, ImportRun,
+  EmailSettings, EmailSettingsPatch,
 } from "./types";
 
 const BASE = "/api/admin";
@@ -82,6 +83,15 @@ export const setUserRole = (id: number, role: string) =>
 // ── Roles ──
 export const getRoles = () =>
   request<{ roles: RoleInfo[]; all_permissions: string[] }>("/roles");
+
+// ── Settings: email / SMTP ──
+export const getEmailSettings = () => request<EmailSettings>("/settings/email");
+
+export const updateEmailSettings = (body: EmailSettingsPatch) =>
+  request<EmailSettings>("/settings/email", { method: "PUT", body });
+
+export const testEmailSettings = () =>
+  request<{ status: string; to: string }>("/settings/email/test", { method: "POST" });
 
 // ── Audit logs ──
 export const getAuditLogs = (params: Record<string, string>) =>

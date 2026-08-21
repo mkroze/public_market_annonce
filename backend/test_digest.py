@@ -1,14 +1,23 @@
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+from datetime import datetime
+
+# A resolved email config with a host set — digest.email_is_configured() treats
+# this as "configured" without touching real SMTP.
+ENABLED_CFG = {"smtp_host": "smtp.test", "smtp_port": "587"}
 
 from digest import (
     budget_ok,
     has_budget_bounds,
     match_alert,
+    parse_deadline,
     parse_estimation,
+    render_confirmation,
     render_digest,
+    sort_by_deadline,
     split_csv,
 )
 
@@ -103,19 +112,66 @@ class BudgetTest(unittest.TestCase):
         self.assertFalse(budget_ok(alert, "2 500,00 MAD"))
 
 
+class ParseDeadlineTest(unittest.TestCase):
+    def test_parses_datetime_and_date_only(self):
+        self.assertEqual(parse_deadline("05/08/2026 15:00"), datetime(2026, 8, 5, 15, 0))
+        self.assertEqual(parse_deadline("05/08/2026"), datetime(2026, 8, 5, 0, 0))
+
+    def test_missing_or_garbage_is_none(self):
+        self.assertIsNone(parse_deadline(""))
+        self.assertIsNone(parse_deadline(None))
+        self.assertIsNone(parse_deadline("bientot"))
+
+    def test_sort_by_deadline_orders_ascending_missing_last(self):
+        tenders = [
+            make_tender(id="late", deadline="10/09/2026 10:00"),
+            make_tender(id="missing", deadline=""),
+            make_tender(id="early", deadline="01/09/2026 10:00"),
+        ]
+        self.assertEqual([t["id"] for t in sort_by_deadline(tenders)], ["early", "late", "missing"])
+
+
 class RenderDigestTest(unittest.TestCase):
-    def test_render_contains_titles_links_and_count(self):
-        sections = [("Mon alerte BTP", [make_tender()])]
-        subject, html, text = render_digest(sections)
+    def test_render_contains_titles_links_and_new_count(self):
+        subject, html, text = render_digest([make_tender()], [])
         self.assertIn("1", subject)
         self.assertIn("Construction d'une ecole", html)
         self.assertIn("/tenders/T1", html)
-        self.assertIn("Mon alerte BTP", html)
+        self.assertIn("Nouveaux appels d'offres", html)
         self.assertIn("Construction d'une ecole", text)
 
+    def test_subject_counts_only_new_not_urgent(self):
+        new = [make_tender(id="N1"), make_tender(id="N2")]
+        urgent = [make_tender(id="U1"), make_tender(id="U2", title="Reminder tender")]
+        subject, html, text = render_digest(new, urgent)
+        self.assertIn("2 nouveaux", subject)
+        self.assertIn("A traiter bientot", html)
+        self.assertIn("Reminder tender", html)
+        self.assertIn("A traiter bientot", text)
+
+    def test_urgent_block_omitted_when_empty(self):
+        _, html, _ = render_digest([make_tender()], [])
+        self.assertNotIn("A traiter bientot", html)
+
     def test_missing_estimation_shows_non_communiquee(self):
-        _, html, _ = render_digest([("A", [make_tender(estimation="")])])
+        _, html, _ = render_digest([make_tender(estimation="")], [])
         self.assertIn("Estimation non communiquee", html)
+
+
+class RenderConfirmationTest(unittest.TestCase):
+    def test_summarizes_criteria_and_next_digest_time(self):
+        alert = make_alert(name="BTP Casa", sectors="1.10", regions="Casablanca-Settat", keywords="route")
+        subject, html, text = render_confirmation(alert)
+        self.assertIn("BTP Casa", subject)
+        self.assertIn("07:00", html)
+        self.assertIn("Terrassements", html)  # sector code 1.10 resolved to its name
+        self.assertIn("Casablanca-Settat", html)
+        self.assertIn("route", text)
+
+    def test_empty_criteria_render_defaults(self):
+        _, html, _ = render_confirmation(make_alert(name="Tout"))
+        self.assertIn("Tous les domaines", html)
+        self.assertIn("Sans limite", html)
 
 
 class RunDigestTest(unittest.IsolatedAsyncioTestCase):
@@ -157,8 +213,8 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
         import digest
 
         sent = []
-        with patch.object(digest, "email_enabled", return_value=True), patch.object(
-            digest, "send_email", side_effect=lambda to, s, h, t: sent.append((to, s))
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
+            digest, "send_email", side_effect=lambda cfg, to, s, h, t: sent.append((to, s))
         ):
             result = await digest.run_digest(["T1"])
         self.assertEqual(result["emails_sent"], 1)
@@ -166,8 +222,8 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent[0][0], "u1@test.com")
 
         # second run: digest_log dedups, nothing sent
-        with patch.object(digest, "email_enabled", return_value=True), patch.object(
-            digest, "send_email", side_effect=lambda to, s, h, t: sent.append((to, s))
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
+            digest, "send_email", side_effect=lambda cfg, to, s, h, t: sent.append((to, s))
         ):
             result = await digest.run_digest(["T1"])
         self.assertEqual(result["emails_sent"], 0)
@@ -177,7 +233,7 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
         import database
         import digest
 
-        with patch.object(digest, "email_enabled", return_value=False):
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value={})):
             result = await digest.run_digest(["T1"])
         self.assertEqual(result["emails_sent"], 0)
         self.assertEqual(result["tenders_matched"], 1)
@@ -197,7 +253,72 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
         await db.commit()
         await db.close()
 
-        with patch.object(digest, "email_enabled", return_value=True), patch.object(
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
+            digest, "send_email"
+        ) as mock_send:
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 0)
+        mock_send.assert_not_called()
+
+    async def _insert_open_tender(self, tender_id: str, deadline: str):
+        import database
+
+        db = await database.get_db()
+        await db.execute(
+            """INSERT INTO tenders (id, reference, title, entity, entity_code, sector_code,
+               sector_name, category, deadline, publication_date, status, procedure_type,
+               location, detail_url)
+               VALUES (?, ?, ?, 'Commune X', 'C1', 'A',
+               'BTP', 'Travaux', ?, '01/07/2026', 'en_cours', 'AOO',
+               'CASABLANCA', '')""",
+            (tender_id, f"R-{tender_id}", f"Tender {tender_id}", deadline),
+        )
+        await db.commit()
+        await db.close()
+
+    async def test_urgent_open_section_included_but_not_logged(self):
+        import database
+        import digest
+
+        # T2 is a still-open match that is NOT part of this import cycle.
+        await self._insert_open_tender("T2", "20/08/2026 10:00")
+
+        captured = {}
+
+        def capture(cfg, to, subject, html, text):
+            captured.update(to=to, subject=subject, html=html, text=text)
+
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
+            digest, "send_email", side_effect=capture
+        ):
+            result = await digest.run_digest(["T1"])
+
+        self.assertEqual(result["emails_sent"], 1)
+        self.assertEqual(result["tenders_matched"], 1)  # only T1 is "new"
+        self.assertIn("Nouveaux appels d'offres", captured["html"])
+        self.assertIn("A traiter bientot", captured["html"])
+        self.assertIn("Tender T2", captured["html"])  # reminder shows the open one
+
+        # Only the new tender is logged for dedup; the urgent reminder is not.
+        db = await database.get_db()
+        cursor = await db.execute("SELECT tender_id FROM digest_log ORDER BY tender_id")
+        logged = [r["tender_id"] for r in await cursor.fetchall()]
+        await db.close()
+        self.assertEqual(logged, ["T1"])
+
+    async def test_no_email_when_no_new_matches_even_if_open_exists(self):
+        import database
+        import digest
+
+        # Pretend T1 was already sent on a previous run.
+        db = await database.get_db()
+        await db.execute(
+            "INSERT INTO digest_log (user_id, alert_id, tender_id) VALUES (1, 1, 'T1')"
+        )
+        await db.commit()
+        await db.close()
+
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
             digest, "send_email"
         ) as mock_send:
             result = await digest.run_digest(["T1"])

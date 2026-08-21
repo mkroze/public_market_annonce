@@ -15,6 +15,7 @@ export interface Tender {
   detail_url: string;
   scraped_at: string;
   estimation?: string;
+  caution_provisoire?: string;
 }
 
 export interface TenderListResponse {
@@ -235,6 +236,20 @@ export interface AlertPreference {
 export interface AlertPreview {
   count: number;
   sample: { id: string; title: string; entity: string; location: string; deadline: string }[];
+}
+
+// Confirmation-email outcome returned by create/update so the UI can tell the
+// user whether the alert saved AND whether the confirmation email went out.
+export interface EmailDeliveryStatus {
+  attempted: boolean;
+  delivered: boolean;
+  reason: string | null;
+}
+
+export interface AlertMutationResult {
+  id?: number;
+  status: string;
+  email: EmailDeliveryStatus;
 }
 
 // Blog
