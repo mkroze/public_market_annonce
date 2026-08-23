@@ -1,11 +1,16 @@
 import hashlib
 import hmac
 import json
+import os
 import time
 import secrets
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 
-SECRET_KEY = secrets.token_hex(32)
+# Sign tokens with a stable secret from the environment so sessions survive
+# process restarts / redeploys. The random fallback is dev-only: convenient
+# locally, but it changes every boot and would silently log everyone out on each
+# restart — set SECRET_KEY in any deployed environment.
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 TOKEN_EXPIRY = 86400 * 7  # 7 days
 
 

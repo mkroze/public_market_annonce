@@ -169,9 +169,20 @@ def require_admin(*required: str):
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 
+def bootstrap_admin_emails() -> list[str]:
+    """The ADMIN_EMAILS allowlist, normalized to lowercase. Read at call time
+    (not cached at import) so env changes and test overrides take effect."""
+    return [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
+
+
+def is_bootstrap_admin_email(email: str) -> bool:
+    """True if this email is in the ADMIN_EMAILS bootstrap allowlist."""
+    return (email or "").strip().lower() in bootstrap_admin_emails()
+
+
 async def bootstrap_admins():
     """Promote users listed in the ADMIN_EMAILS env var to ``owner`` on startup."""
-    emails = [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
+    emails = bootstrap_admin_emails()
     if not emails:
         return
     db = await get_db()

@@ -120,6 +120,88 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(run(role_of("boss@x.com")), "owner")
 
 
+class RegisterBootstrapTest(unittest.TestCase):
+    """Registering an ADMIN_EMAILS-listed address is promoted to owner on the
+    spot, so the first admin never needs a server restart to gain access."""
+
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+
+    def _role_in_db(self, email):
+        async def q():
+            db = await database.get_db()
+            row = await (
+                await db.execute("SELECT role FROM users WHERE email = ?", (email,))
+            ).fetchone()
+            await db.close()
+            return row[0] if row else None
+
+        return run(q())
+
+    def test_register_admin_email_promoted_to_owner(self):
+        old = os.environ.get("ADMIN_EMAILS", "")
+        # Mixed case + surrounding whitespace exercises the normalization path.
+        os.environ["ADMIN_EMAILS"] = " Boss@x.com "
+        try:
+            r = self.client.post(
+                "/api/auth/register",
+                json={"email": "boss@x.com", "password": "pw", "name": "Boss"},
+            )
+        finally:
+            os.environ["ADMIN_EMAILS"] = old
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["user"]["role"], "owner")
+        self.assertEqual(self._role_in_db("boss@x.com"), "owner")
+
+    def test_registered_owner_can_reach_admin_immediately(self):
+        old = os.environ.get("ADMIN_EMAILS", "")
+        os.environ["ADMIN_EMAILS"] = "boss@x.com"
+        try:
+            r = self.client.post(
+                "/api/auth/register",
+                json={"email": "boss@x.com", "password": "pw", "name": "Boss"},
+            )
+        finally:
+            os.environ["ADMIN_EMAILS"] = old
+
+        token = r.json()["token"]
+        overview = self.client.get(
+            "/api/admin/overview", headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(overview.status_code, 200)
+
+    def test_register_non_admin_email_stays_user(self):
+        old = os.environ.get("ADMIN_EMAILS", "")
+        os.environ["ADMIN_EMAILS"] = "boss@x.com"
+        try:
+            r = self.client.post(
+                "/api/auth/register",
+                json={"email": "regular@x.com", "password": "pw", "name": "Reg"},
+            )
+        finally:
+            os.environ["ADMIN_EMAILS"] = old
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["user"]["role"], "user")
+        self.assertEqual(self._role_in_db("regular@x.com"), "user")
+
+    def test_register_with_empty_admin_emails_stays_user(self):
+        old = os.environ.get("ADMIN_EMAILS", "")
+        os.environ["ADMIN_EMAILS"] = ""
+        try:
+            r = self.client.post(
+                "/api/auth/register",
+                json={"email": "someone@x.com", "password": "pw", "name": "S"},
+            )
+        finally:
+            os.environ["ADMIN_EMAILS"] = old
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["user"]["role"], "user")
+
+
 class RoleGuardTest(unittest.TestCase):
     def setUp(self):
         run(_reset_db())

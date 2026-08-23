@@ -31,7 +31,7 @@ from auth import hash_password, verify_password, create_token, decode_token
 from digest import run_digest, open_matches_for_alert, render_confirmation
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config
-from admin import router as admin_router, bootstrap_admins
+from admin import router as admin_router, bootstrap_admins, is_bootstrap_admin_email
 from tender_display import build_tender_display
 
 
@@ -179,12 +179,21 @@ async def register(req: RegisterRequest):
         "INSERT INTO users (email, password_hash, name, company, phone) VALUES (?, ?, ?, ?, ?)",
         (req.email, pw_hash, req.name, req.company, req.phone),
     )
-    await db.commit()
     user_id = cursor.lastrowid
+
+    # Promote ADMIN_EMAILS-listed accounts to owner at registration time so the
+    # first admin can trigger an import without a server restart. bootstrap_admins()
+    # still runs at startup as the fallback for accounts created before this ran.
+    role = "user"
+    if is_bootstrap_admin_email(req.email):
+        await db.execute("UPDATE users SET role = 'owner' WHERE id = ?", (user_id,))
+        role = "owner"
+
+    await db.commit()
     await db.close()
 
     token = create_token(user_id, req.email)
-    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": "user", "status": "active"}}
+    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": role, "status": "active"}}
 
 
 @app.post("/api/auth/login")
