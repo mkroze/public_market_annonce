@@ -35,39 +35,6 @@
   --noise: 0;
 }
 
-@plugin "daisyui/theme" {
-  name: "academic-dark";
-  color-scheme: dark;
-  --color-base-100: #16150f;
-  --color-base-200: #1e1d16;
-  --color-base-300: #26251d;
-  --color-base-content: #f0ece2;
-  --color-primary: #f0ece2;
-  --color-primary-content: #17150f;
-  --color-secondary: #9b968a;
-  --color-secondary-content: #17150f;
-  --color-accent: #d1663f;
-  --color-accent-content: #17150f;
-  --color-neutral: #dcd8ce;
-  --color-neutral-content: #17150f;
-  --color-info: #f0ece2;
-  --color-info-content: #17150f;
-  --color-success: #7aa07a;
-  --color-success-content: #17150f;
-  --color-warning: #c2a95f;
-  --color-warning-content: #17150f;
-  --color-error: #d1663f;
-  --color-error-content: #17150f;
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.25rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
 @theme {
   --color-app-bg: #f9f9ff;
   --color-surface: #ffffff;
@@ -169,33 +136,6 @@
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
-@layer base {
-  [data-theme="academic-dark"] {
-    --color-ivory: #16150f;
-    --color-ivory-dim: #1e1d16;
-    --color-ivory-deep: #26251d;
-    --color-charcoal: #f0ece2;
-    --color-slate: #9b968a;
-    --color-crimson: #f0ece2;
-    --color-crimson-dark: #ffffff;
-    --color-crimson-light: #cfcabc;
-    --color-crimson-muted: #33322a;
-    --color-accent: #d1663f;
-    --color-accent-soft: #3a2a22;
-    --color-gold: #c2a95f;
-    --color-gold-light: #d4bc78;
-    --color-border: #3e3d33;
-    --color-border-subtle: #2c2b23;
-    --color-tone-positive: #7aa07a;
-    --color-tone-positive-soft: #212a1f;
-    --color-tone-warning: #c2a95f;
-    --color-tone-warning-soft: #2b2717;
-    --color-tone-critical: #d1663f;
-    --color-tone-critical-soft: #2f211b;
-  }
-}
-
-/* Keep public pages on the institutional palette when the document is dark. */
 .institutional-page {
   --color-base-100: #ffffff;
   --color-base-200: #f0f3ff;

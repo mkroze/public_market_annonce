@@ -1,10 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, Sun, Moon, LogIn, LogOut, UserRound, Bell, ShieldCheck } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { isAdminRole } from "../admin/permissions";
 import logoFull from "../assets/logo-full.svg";
-import logoFullReversed from "../assets/logo-full-reversed.svg";
 
 export default function Navbar() {
   const { pathname } = useLocation();
@@ -15,18 +13,6 @@ export default function Navbar() {
     logout();
     navigate("/login");
   }
-
-  const [dark, setDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("theme") === "dark";
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", dark ? "academic-dark" : "academic");
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
 
   const navLinks = [
     { to: "/tenders", label: "Consultations", icon: Search },
@@ -46,9 +32,9 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
         <Link to="/tenders" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:gap-2.5">
           <img
-            src={dark ? logoFullReversed : logoFull}
+            src={logoFull}
             alt="Marchés Publics Maroc"
-            className="h-9 w-auto max-w-[150px] min-w-0 shrink sm:h-10 sm:max-w-[190px]"
+            className="h-4 w-auto max-w-[150px] min-w-0 shrink sm:h-4 sm:max-w-[190px]"
           />
         </Link>
 
@@ -73,15 +59,6 @@ export default function Navbar() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={() => setDark((d) => !d)}
-            className="btn btn-ghost btn-sm btn-square"
-            aria-label={dark ? "Passer en mode clair" : "Passer en mode sombre"}
-            title={dark ? "Mode clair" : "Mode sombre"}
-          >
-            {dark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
           {/* Auth — desktop */}
           {user ? (
             <div className="dropdown dropdown-end hidden md:block">

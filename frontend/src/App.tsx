@@ -38,8 +38,6 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function PublicLayout() {
-  // NB : pas de data-theme figé ici — le thème (clair/sombre) est piloté sur
-  // <html>. Le forcer localement casserait le mode sombre des composants daisyUI.
   return (
     <div className="min-h-screen flex flex-col institutional-page">
       <a
