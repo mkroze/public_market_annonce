@@ -20,7 +20,7 @@ import {
   CheckCircle2,
   HelpCircle,
 } from "lucide-react";
-import { getTender, downloadDce, downloadPdf } from "../lib/api";
+import { getTender, downloadPdf } from "../lib/api";
 import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
@@ -46,8 +46,6 @@ export default function TenderDetail() {
   const [tender, setTender] = useState<TenderWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [dceLoading, setDceLoading] = useState(false);
-  const [dceError, setDceError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
@@ -195,28 +193,21 @@ export default function TenderDetail() {
       </section>
 
       {/* Actions */}
-      {(dceError || pdfError) && (
+      {pdfError && (
         <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
-          {dceError || pdfError}
+          {pdfError}
         </div>
       )}
       <div className="flex flex-wrap gap-3">
         {d?.dce_url && (
-          <button
+          <a
+            href={d.dce_url}
+            target="_blank"
+            rel="noopener noreferrer"
             className="btn btn-primary font-sans font-semibold gap-2"
-            disabled={dceLoading}
-            onClick={async () => {
-              if (!tenderId) return;
-              setDceLoading(true);
-              setDceError("");
-              try { await downloadDce(tenderId); }
-              catch (e) { setDceError(e instanceof Error ? e.message : "Échec du téléchargement"); }
-              finally { setDceLoading(false); }
-            }}
           >
-            {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
-            {dceLoading ? "Téléchargement..." : "Télécharger le DCE"}
-          </button>
+            <Download size={16} /> Télécharger le DCE
+          </a>
         )}
         <button
           className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] transition-colors"
