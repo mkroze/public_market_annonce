@@ -187,5 +187,57 @@ class TenderDetailApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["signals"]["dce_available"]["value"], True)
 
 
+class DceDownloadRouteTest(unittest.IsolatedAsyncioTestCase):
+    def _db(self, dce_url):
+        class Cursor:
+            async def fetchone(self):
+                return {"dce_url": dce_url}
+
+        class Db:
+            async def execute(self, query, params=()):
+                return Cursor()
+
+            async def close(self):
+                pass
+
+        return Db()
+
+    async def test_download_dce_serves_cached_file(self):
+        import os
+        import tempfile
+        import main
+        from fastapi.responses import FileResponse
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+        tmp.write(b"PK\x03\x04cached-zip")
+        tmp.close()
+        try:
+            with patch.object(main, "get_db", AsyncMock(return_value=self._db("https://example.test/dce"))), \
+                 patch.object(main, "ensure_dce_cached", AsyncMock(return_value=(tmp.name, "DCE AO 03.zip"))) as ensure:
+                resp = await main.download_tender_dce("T9")
+
+            ensure.assert_awaited_once()
+            _db_arg, tid, url = ensure.await_args.args
+            self.assertEqual((tid, url), ("T9", "https://example.test/dce"))
+            self.assertIsInstance(resp, FileResponse)
+            self.assertEqual(resp.path, tmp.name)
+            self.assertEqual(resp.media_type, "application/zip")
+        finally:
+            os.unlink(tmp.name)
+
+    async def test_download_dce_404_when_no_url(self):
+        import main
+        with patch.object(main, "get_db", AsyncMock(return_value=self._db(""))):
+            resp = await main.download_tender_dce("T9")
+        self.assertEqual(resp.status_code, 404)
+
+    async def test_download_dce_502_when_fetch_fails(self):
+        import main
+        with patch.object(main, "get_db", AsyncMock(return_value=self._db("https://example.test/dce"))), \
+             patch.object(main, "ensure_dce_cached", AsyncMock(return_value=None)):
+            resp = await main.download_tender_dce("T9")
+        self.assertEqual(resp.status_code, 502)
+
+
 if __name__ == "__main__":
     unittest.main()

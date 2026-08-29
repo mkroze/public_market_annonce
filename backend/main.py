@@ -25,7 +25,8 @@ import anthropic
 
 from database import init_db, get_db
 from legal_context import SYSTEM_PROMPT
-from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, download_dce, ensure_tender_details
+from scraper import scrape_all_sectors, scrape_homepage_counts, scrape_tender_detail, ensure_tender_details
+from dce_cache import ensure_dce_cached
 from config import SECTORS, CATEGORIES
 from auth import hash_password, verify_password, create_token, decode_token
 from digest import run_digest, open_matches_for_alert, render_confirmation
@@ -1279,24 +1280,23 @@ async def download_tender_dce(tender_id: str):
         "SELECT dce_url FROM tender_details WHERE tender_id = ?", (tender_id,)
     )
     detail = await det_cursor.fetchone()
-    await db.close()
 
     dce_url = detail["dce_url"] if detail else ""
     if not dce_url:
+        await db.close()
         return Response(content='{"error": "No DCE URL for this tender"}', status_code=404,
                         media_type="application/json")
 
-    result = await download_dce(dce_url)
+    # Serve the cached ZIP instantly if present; otherwise fetch it once
+    # (auto-filling the portal form), cache it, and serve — no form for the user.
+    result = await ensure_dce_cached(db, tender_id, dce_url)
+    await db.close()
     if not result:
         return Response(content='{"error": "Failed to download DCE"}', status_code=502,
                         media_type="application/json")
 
-    file_bytes, filename = result
-    return Response(
-        content=file_bytes,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    path, filename = result
+    return FileResponse(path, media_type="application/zip", filename=filename)
 
 
 # Register the catch-all detail route after the download routes so their suffixes win.

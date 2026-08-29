@@ -13,6 +13,19 @@ export interface ImportRun {
   warnings: string | null;
 }
 
+export interface DceCacheRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  total: number;
+  cached: number;
+  skipped: number;
+  failed: number;
+  status: string; // running | done | failed | stopped
+  error: string | null;
+  actor_email: string | null;
+}
+
 export interface AdminOverview {
   last_import: ImportRun | null;
   freshness: {

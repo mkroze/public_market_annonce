@@ -493,6 +493,54 @@ async def admin_retry_import(import_id: int, request: Request, user=Depends(requ
     return {"status": "started"}
 
 
+# ── DCE cache control ────────────────────────────────────────────────────────
+
+def _launch_dce_cache(actor_email: str):
+    from dce_cache import cache_all_dces
+
+    async def runner():
+        try:
+            await cache_all_dces(actor_email=actor_email)
+        except Exception as e:  # noqa: BLE001
+            db = await get_db()
+            try:
+                await db.execute(
+                    "UPDATE dce_cache_log SET status = 'failed', finished_at = datetime('now'), error = ? WHERE status = 'running'",
+                    (str(e)[:500],),
+                )
+                await db.commit()
+            finally:
+                await db.close()
+
+    asyncio.create_task(runner())
+
+
+@router.get("/dce-cache")
+async def admin_dce_cache(limit: int = Query(20, ge=1, le=100), user=Depends(require_admin("imports.view"))):
+    from dce_cache import dce_cache_lock
+    db = await get_db()
+    try:
+        rows = await (await db.execute("SELECT * FROM dce_cache_log ORDER BY id DESC LIMIT ?", (limit,))).fetchall()
+        cached_total = (await (await db.execute("SELECT COUNT(*) FROM dce_cache WHERE status = 'ok'")).fetchone())[0]
+        return {"data": [dict(r) for r in rows], "active": dce_cache_lock.locked(), "cached_total": cached_total}
+    finally:
+        await db.close()
+
+
+@router.post("/dce-cache")
+async def admin_run_dce_cache(request: Request, user=Depends(require_admin("imports.run"))):
+    from dce_cache import dce_cache_lock
+    if dce_cache_lock.locked():
+        raise HTTPException(status_code=409, detail="A DCE cache run is already in progress")
+    _launch_dce_cache(user["email"])
+    db = await get_db()
+    try:
+        await log_audit(db, actor=user, action="dce_cache.run", target_type="dce_cache", request=request)
+    finally:
+        await db.close()
+    return {"status": "started"}
+
+
 # ── Users ────────────────────────────────────────────────────────────────────
 
 @router.get("/users")

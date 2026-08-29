@@ -4,7 +4,7 @@
 
 import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
-  AdminUser, RoleInfo, AuditEvent, ImportRun,
+  AdminUser, RoleInfo, AuditEvent, ImportRun, DceCacheRun,
   EmailSettings, EmailSettingsPatch,
 } from "./types";
 
@@ -69,6 +69,12 @@ export const runImport = () => request<{ status: string }>("/imports", { method:
 
 export const retryImport = (id: number) =>
   request<{ status: string }>(`/imports/${id}/retry`, { method: "POST" });
+
+// ── DCE cache ──
+export const getDceCache = () =>
+  request<{ data: DceCacheRun[]; active: boolean; cached_total: number }>("/dce-cache");
+
+export const runDceCache = () => request<{ status: string }>("/dce-cache", { method: "POST" });
 
 // ── Users ──
 export const getUsers = (params: Record<string, string>) =>

@@ -80,6 +80,30 @@ async def init_db():
             error TEXT
         );
 
+        -- Metadata for DCE ZIPs cached on disk (one row per tender).
+        CREATE TABLE IF NOT EXISTS dce_cache (
+            tender_id TEXT PRIMARY KEY REFERENCES tenders(id),
+            filename TEXT,
+            size INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'ok',   -- 'ok' | 'failed'
+            error TEXT,
+            cached_at TEXT DEFAULT (datetime('now'))
+        );
+
+        -- History of admin "download all DCEs" warm-cache runs.
+        CREATE TABLE IF NOT EXISTS dce_cache_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT,
+            total INTEGER DEFAULT 0,
+            cached INTEGER DEFAULT 0,
+            skipped INTEGER DEFAULT 0,
+            failed INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'running',  -- running | done | failed | stopped
+            error TEXT,
+            actor_email TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tenders_sector ON tenders(sector_code);
         CREATE INDEX IF NOT EXISTS idx_tenders_category ON tenders(category);
         CREATE INDEX IF NOT EXISTS idx_tenders_entity ON tenders(entity);

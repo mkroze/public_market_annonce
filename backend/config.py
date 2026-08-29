@@ -13,6 +13,12 @@ HEADERS = {
 
 DB_PATH = "data/tenders.db"
 
+# Cached DCE ZIPs live next to the DB on the persistent /app/data volume so
+# users get instant, form-free downloads instead of the slow live handshake.
+DCE_CACHE_DIR = "data/dce_cache"
+# A warm-all run stops before free disk drops below this, to protect the volume.
+DCE_MIN_FREE_BYTES = 500 * 1024 * 1024  # 500 MB
+
 SECTORS = {
     "1.10": "Terrassements",
     "1.11": "Fondations, injections, parois moulées, sondages et forages",
