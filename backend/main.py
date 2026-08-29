@@ -442,6 +442,8 @@ async def get_tender(tender_id: str):
     )
     detail_row = await detail_cursor.fetchone()
     detail = dict(detail_row) if detail_row else None
+    if not detail and result.get("detail_url"):
+        detail = await ensure_tender_details(db, tender_id, result["detail_url"])
 
     await db.close()
 

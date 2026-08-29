@@ -135,6 +135,57 @@ class TenderDetailApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["display"]["title"]["value"], "Fourniture de mobilier")
         self.assertEqual(response["signals"]["estimation"]["status"], "missing")
 
+    async def test_get_tender_lazily_scrapes_missing_details_for_dce_url(self):
+        import main
+
+        class Cursor:
+            def __init__(self, row):
+                self.row = row
+
+            async def fetchone(self):
+                return self.row
+
+        class Db:
+            async def execute(self, query, params=()):
+                if "FROM tenders WHERE id" in query:
+                    return Cursor({
+                        "id": "T3",
+                        "reference": "REF-3",
+                        "title": "Travaux de signalisation",
+                        "entity": "Commune de Test",
+                        "location": "RABAT",
+                        "procedure_type": "AOO",
+                        "category": "Travaux",
+                        "deadline": "22/09/2026 10:00",
+                        "detail_url": "https://example.test/detail",
+                    })
+                if "FROM tender_details WHERE tender_id" in query:
+                    return Cursor(None)
+                return Cursor(None)
+
+            async def close(self):
+                pass
+
+        scraped_detail = {
+            "tender_id": "T3",
+            "objet": "Travaux de signalisation",
+            "acheteur": "Commune de Test",
+            "lieu_execution": "Rabat",
+            "procedure": "Appel d'offres ouvert",
+            "categorie": "Travaux",
+            "dce_url": "https://example.test/dce",
+        }
+
+        db = Db()
+        with patch.object(main, "get_db", AsyncMock(return_value=db)), patch.object(
+            main, "ensure_tender_details", AsyncMock(return_value=scraped_detail)
+        ) as ensure:
+            response = await main.get_tender("T3")
+
+        ensure.assert_awaited_once_with(db, "T3", "https://example.test/detail")
+        self.assertEqual(response["details"]["dce_url"], "https://example.test/dce")
+        self.assertEqual(response["signals"]["dce_available"]["value"], True)
+
 
 if __name__ == "__main__":
     unittest.main()
