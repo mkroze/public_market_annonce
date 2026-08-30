@@ -1,3 +1,5 @@
+import os
+
 BASE_URL = "https://www.marchespublics.gov.ma"
 SEARCH_URL = f"{BASE_URL}/index.php"
 PORTAL_URL = f"{BASE_URL}/pmmp/"
@@ -18,6 +20,9 @@ DB_PATH = "data/tenders.db"
 DCE_CACHE_DIR = "data/dce_cache"
 # A warm-all run stops before free disk drops below this, to protect the volume.
 DCE_MIN_FREE_BYTES = 500 * 1024 * 1024  # 500 MB
+# Hard budget for total cached DCE bytes. Lazy caching evicts oldest to stay
+# under this; the warm-all stops when it's reached. Override via env.
+DCE_CACHE_MAX_BYTES = int(os.getenv("DCE_CACHE_MAX_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
 
 SECTORS = {
     "1.10": "Terrassements",

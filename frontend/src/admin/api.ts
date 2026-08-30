@@ -72,9 +72,12 @@ export const retryImport = (id: number) =>
 
 // ── DCE cache ──
 export const getDceCache = () =>
-  request<{ data: DceCacheRun[]; active: boolean; cached_total: number }>("/dce-cache");
+  request<{ data: DceCacheRun[]; active: boolean; cached_total: number; cached_bytes: number; cap_bytes: number }>("/dce-cache");
 
 export const runDceCache = () => request<{ status: string }>("/dce-cache", { method: "POST" });
+
+export const clearDceCache = (mode: "all" | "outdated") =>
+  request<{ removed: number; freed_bytes: number; mode: string }>("/dce-cache/clear", { method: "POST", params: { mode } });
 
 // ── Users ──
 export const getUsers = (params: Record<string, string>) =>

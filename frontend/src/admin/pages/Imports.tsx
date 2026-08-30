@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RotateCcw, Loader2, DownloadCloud } from "lucide-react";
-import { getImports, runImport, retryImport, getDceCache, runDceCache, ApiError } from "../api";
+import { Play, RotateCcw, Loader2, DownloadCloud, Trash2 } from "lucide-react";
+import { getImports, runImport, retryImport, getDceCache, runDceCache, clearDceCache, ApiError } from "../api";
 import type { ImportRun, DceCacheRun } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
@@ -20,6 +20,12 @@ function duration(run: { started_at: string; finished_at: string | null }): stri
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+function fmtBytes(n: number): string {
+  if (!n) return "0 MB";
+  const mb = n / (1024 * 1024);
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
 export default function Imports() {
   const { user } = useAuth();
   const { toasts, push, dismiss } = useToasts();
@@ -33,6 +39,8 @@ export default function Imports() {
   const [dceRuns, setDceRuns] = useState<DceCacheRun[]>([]);
   const [dceActive, setDceActive] = useState(false);
   const [dceCachedTotal, setDceCachedTotal] = useState(0);
+  const [dceCachedBytes, setDceCachedBytes] = useState(0);
+  const [dceCapBytes, setDceCapBytes] = useState(0);
   const dcePollRef = useRef<number | null>(null);
 
   const canRun = can(user?.role, "imports.run");
@@ -56,6 +64,8 @@ export default function Imports() {
         setDceRuns(res.data);
         setDceActive(res.active);
         setDceCachedTotal(res.cached_total);
+        setDceCachedBytes(res.cached_bytes);
+        setDceCapBytes(res.cap_bytes);
       })
       .catch(() => { /* non-fatal: the import view still works without it */ });
   }, []);
@@ -107,6 +117,30 @@ export default function Imports() {
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Failed to start DCE cache run", "error");
     }
+  }
+
+  async function doClearDce(mode: "all" | "outdated") {
+    try {
+      const res = await clearDceCache(mode);
+      push(`Cleared ${res.removed} cached DCE${res.removed === 1 ? "" : "s"} (${fmtBytes(res.freed_bytes)} freed)`, "success");
+      loadDce();
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Failed to clear cache", "error");
+    }
+  }
+
+  function confirmClearDce(mode: "all" | "outdated") {
+    setConfirm({
+      title: mode === "all" ? "Clear entire DCE cache" : "Clear outdated DCEs",
+      action: mode === "all" ? "Clear all cached DCEs" : "Clear outdated cached DCEs",
+      target: mode === "all" ? "Every cached DCE ZIP" : "Archived / past-deadline / removed tenders",
+      consequence: mode === "all"
+        ? "Deletes all cached DCE files from the server. Downloads will re-fetch and re-cache on demand — use this to force fresh copies."
+        : "Deletes cached DCE files for tenders that are archived, past their deadline, or no longer in the catalog. Active tenders keep their cache.",
+      reversible: true,
+      confirmLabel: mode === "all" ? "Clear all" : "Clear outdated",
+      onConfirm: () => doClearDce(mode),
+    });
   }
 
   function confirmRun() {
@@ -233,15 +267,40 @@ export default function Imports() {
 
       <div className="mt-6">
         <Panel title="DCE cache">
-          <div className="mb-4 flex flex-wrap items-center gap-4 text-sm font-sans text-[var(--color-slate)]">
-            <span>
-              <strong className="text-[var(--color-charcoal)] tabular-nums">{dceCachedTotal}</strong> DCE{dceCachedTotal === 1 ? "" : "s"} cached
-            </span>
-            {dceActive && (
-              <span className="inline-flex items-center gap-1.5 text-[var(--color-gold)]">
-                <Loader2 className="w-3.5 h-3.5 motion-safe:animate-spin" aria-hidden /> caching in progress — refreshes automatically
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4 text-sm font-sans text-[var(--color-slate)]">
+              <span>
+                <strong className="text-[var(--color-charcoal)] tabular-nums">{dceCachedTotal}</strong> DCE{dceCachedTotal === 1 ? "" : "s"} cached
               </span>
-            )}
+              {dceCapBytes > 0 && (
+                <span className="tabular-nums">
+                  <strong className="text-[var(--color-charcoal)]">{fmtBytes(dceCachedBytes)}</strong> / {fmtBytes(dceCapBytes)} cap
+                </span>
+              )}
+              {dceActive && (
+                <span className="inline-flex items-center gap-1.5 text-[var(--color-gold)]">
+                  <Loader2 className="w-3.5 h-3.5 motion-safe:animate-spin" aria-hidden /> caching in progress — refreshes automatically
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => confirmClearDce("outdated")}
+                disabled={!canRun || dceActive || dceCachedTotal === 0}
+                title={!canRun ? "Requires imports.run permission" : dceActive ? "A DCE cache run is in progress" : undefined}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden /> Clear outdated
+              </button>
+              <button
+                onClick={() => confirmClearDce("all")}
+                disabled={!canRun || dceActive || dceCachedTotal === 0}
+                title={!canRun ? "Requires imports.run permission" : dceActive ? "A DCE cache run is in progress" : undefined}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-crimson)]/40 text-[var(--color-crimson)] hover:bg-[var(--color-crimson)]/5 focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden /> Clear all
+              </button>
+            </div>
           </div>
           {dceRuns.length === 0 ? (
             <EmptyState title="No DCE cache runs yet" hint="Run “Cache DCEs” to pre-download every tender’s documents for instant, form-free downloads." />

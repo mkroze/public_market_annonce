@@ -517,14 +517,35 @@ def _launch_dce_cache(actor_email: str):
 
 @router.get("/dce-cache")
 async def admin_dce_cache(limit: int = Query(20, ge=1, le=100), user=Depends(require_admin("imports.view"))):
-    from dce_cache import dce_cache_lock
+    from dce_cache import dce_cache_lock, cache_total_bytes
+    from config import DCE_CACHE_MAX_BYTES
     db = await get_db()
     try:
         rows = await (await db.execute("SELECT * FROM dce_cache_log ORDER BY id DESC LIMIT ?", (limit,))).fetchall()
         cached_total = (await (await db.execute("SELECT COUNT(*) FROM dce_cache WHERE status = 'ok'")).fetchone())[0]
-        return {"data": [dict(r) for r in rows], "active": dce_cache_lock.locked(), "cached_total": cached_total}
+        cached_bytes = await cache_total_bytes(db)
+        return {
+            "data": [dict(r) for r in rows],
+            "active": dce_cache_lock.locked(),
+            "cached_total": cached_total,
+            "cached_bytes": cached_bytes,
+            "cap_bytes": DCE_CACHE_MAX_BYTES,
+        }
     finally:
         await db.close()
+
+
+@router.post("/dce-cache/clear")
+async def admin_clear_dce_cache(request: Request, mode: str = Query("all"), user=Depends(require_admin("imports.run"))):
+    from dce_cache import clear_dce_cache
+    clear_mode = mode if mode in ("all", "outdated") else "all"
+    db = await get_db()
+    try:
+        result = await clear_dce_cache(db, mode=clear_mode)
+        await log_audit(db, actor=user, action="dce_cache.clear", target_type="dce_cache", request=request)
+    finally:
+        await db.close()
+    return result
 
 
 @router.post("/dce-cache")

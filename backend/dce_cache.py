@@ -17,12 +17,25 @@ import hashlib
 import os
 import shutil
 
-from config import DCE_CACHE_DIR, DCE_MIN_FREE_BYTES
+from config import DCE_CACHE_DIR, DCE_MIN_FREE_BYTES, DCE_CACHE_MAX_BYTES
 from database import get_db
 from scraper import download_dce, ensure_tender_details
 
 # Only one warm-all run at a time (mirrors main.scrape_lock for imports).
 dce_cache_lock = asyncio.Lock()
+
+# "Outdated" cached DCEs = tenders that are archived, past their deadline, or no
+# longer in the catalog. Deadlines are stored as DD/MM/YYYY HH:MM, so reformat
+# to YYYY-MM-DD before comparing (a raw string compare would be wrong).
+_STALE_TENDER_IDS = """
+    SELECT tender_id FROM dce_cache WHERE tender_id NOT IN (
+        SELECT id FROM tenders
+        WHERE COALESCE(admin_status, '') != 'archived'
+          AND (deadline = '' OR deadline IS NULL OR
+               (substr(deadline, 7, 4) || '-' || substr(deadline, 4, 2) || '-' || substr(deadline, 1, 2))
+               >= date('now'))
+    )
+"""
 
 
 def _disk_path(tender_id: str) -> str:
@@ -39,8 +52,42 @@ def _has_free_space() -> bool:
         return True  # don't block the run on a stat failure
 
 
+async def cache_total_bytes(db) -> int:
+    row = await (await db.execute(
+        "SELECT COALESCE(SUM(size), 0) FROM dce_cache WHERE status = 'ok'"
+    )).fetchone()
+    return int(row[0]) if row else 0
+
+
+async def _remove_entry(db, tender_id: str) -> int:
+    """Delete a cached ZIP (file + row). Returns freed bytes."""
+    freed = 0
+    path = _disk_path(tender_id)
+    try:
+        if os.path.exists(path):
+            freed = os.path.getsize(path)
+            os.remove(path)
+    except OSError:
+        pass
+    await db.execute("DELETE FROM dce_cache WHERE tender_id = ?", (tender_id,))
+    return freed
+
+
+async def _evict_to_fit(db, incoming: int) -> None:
+    """Evict oldest-cached ZIPs until `incoming` bytes fit under the cap."""
+    while await cache_total_bytes(db) + incoming > DCE_CACHE_MAX_BYTES:
+        oldest = await (await db.execute(
+            "SELECT tender_id FROM dce_cache WHERE status = 'ok' ORDER BY cached_at ASC, rowid ASC LIMIT 1"
+        )).fetchone()
+        if not oldest:
+            break
+        await _remove_entry(db, oldest["tender_id"])
+    await db.commit()
+
+
 async def _store(db, tender_id: str, file_bytes: bytes, filename: str) -> tuple[str, str]:
     os.makedirs(DCE_CACHE_DIR, exist_ok=True)
+    await _evict_to_fit(db, len(file_bytes))
     path = _disk_path(tender_id)
     with open(path, "wb") as f:
         f.write(file_bytes)
@@ -122,6 +169,11 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
                     skipped += 1
                     continue
 
+                if await cache_total_bytes(db) >= DCE_CACHE_MAX_BYTES:
+                    final_status = "stopped"
+                    err = "Cache size cap reached — remaining DCEs will cache on demand."
+                    break
+
                 if not _has_free_space():
                     final_status = "stopped"
                     err = "Low disk space — stopped to protect the volume."
@@ -161,3 +213,22 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
 
         return {"total": total, "cached": cached, "skipped": skipped,
                 "failed": failed, "status": final_status}
+
+
+async def clear_dce_cache(db, mode: str = "all") -> dict:
+    """Delete cached DCE ZIPs (files + rows).
+
+    mode="all"      -> wipe the entire cache (e.g. to force a fresh re-download).
+    mode="outdated" -> only tenders that are archived, past deadline, or gone.
+    Returns {"removed": n, "freed_bytes": b, "mode": mode}.
+    """
+    query = _STALE_TENDER_IDS if mode == "outdated" else "SELECT tender_id FROM dce_cache"
+    rows = await (await db.execute(query)).fetchall()
+
+    removed = 0
+    freed = 0
+    for row in rows:
+        freed += await _remove_entry(db, row["tender_id"])
+        removed += 1
+    await db.commit()
+    return {"removed": removed, "freed_bytes": freed, "mode": mode}
