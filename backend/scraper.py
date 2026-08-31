@@ -8,6 +8,10 @@ from bs4 import BeautifulSoup, Tag
 from config import BASE_URL, HEADERS, SEARCH_URL, SECTORS, CATEGORIES
 from database import get_db
 
+# Substrings that mark a rate-limit / CAPTCHA interstitial served in place of a
+# ZIP. Presence => the portal is pushing back on us (a "flag"), not a bad tender.
+_RATE_LIMIT_MARKERS = ("captcha", "trop de requêtes", "trop de requetes", "access denied")
+
 
 async def fetch_page(url: str, params: dict | None = None) -> str:
     async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=30) as client:
@@ -296,10 +300,13 @@ async def ensure_tender_details(db, tender_id: str, detail_url: str) -> dict | N
     return scraped
 
 
-async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
+async def download_dce(dce_url: str) -> tuple[str, tuple[bytes, str] | str | None]:
     """Download the DCE ZIP by filling the form headlessly.
 
-    Returns (file_bytes, filename) or None on failure.
+    Returns a typed result:
+      ("ok", (file_bytes, filename)) on success
+      ("failed", None)               local per-tender failure (skip this tender)
+      ("flagged", reason)            portal pushing back (429/503/reset/captcha)
     Steps: GET form -> POST form with anonymous info -> POST download button -> follow redirect to ZIP.
     """
     from config import HEADERS, BASE_URL
@@ -316,7 +323,7 @@ async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
             pagestate_el = soup.find("input", {"id": "PRADO_PAGESTATE"})
             if not pagestate_el:
                 print("[scraper] DCE: no PAGESTATE found")
-                return None
+                return ("failed", None)
 
             pagestate = pagestate_el["value"]
             france_radio = soup.find(
@@ -366,7 +373,7 @@ async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
             new_pagestate_el = soup2.find("input", {"id": "PRADO_PAGESTATE"})
             if not new_pagestate_el:
                 print("[scraper] DCE: no PAGESTATE after form submit")
-                return None
+                return ("failed", None)
 
             # Step 3: Click the download button (PRADO postback)
             download_data = {
@@ -388,8 +395,11 @@ async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
 
             ct = dl_resp.headers.get("content-type", "")
             if "zip" not in ct and "octet" not in ct and dl_resp.content[:2] != b"PK":
+                body_lower = dl_resp.text[:2000].lower()
+                if any(m in body_lower for m in _RATE_LIMIT_MARKERS):
+                    return ("flagged", "captcha")
                 print(f"[scraper] DCE: unexpected content-type: {ct}")
-                return None
+                return ("failed", None)
 
             # Extract filename from Content-Disposition
             cd = dl_resp.headers.get("content-disposition", "")
@@ -399,11 +409,19 @@ async def download_dce(dce_url: str) -> tuple[bytes, str] | None:
                 if raw:
                     filename = raw
 
-            return (dl_resp.content, filename)
+            return ("ok", (dl_resp.content, filename))
 
+    except httpx.HTTPStatusError as e:
+        code = e.response.status_code
+        if code in (429, 503):
+            return ("flagged", f"http_{code}")
+        return ("failed", None)
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout,
+            httpx.PoolTimeout, httpx.RemoteProtocolError):
+        return ("flagged", "conn_error")
     except Exception as e:
         print(f"[scraper] DCE download error: {e}")
-        return None
+        return ("failed", None)
 
 
 async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "scheduled") -> dict:
