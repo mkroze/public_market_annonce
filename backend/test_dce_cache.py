@@ -22,7 +22,7 @@ class EnsureDceCachedTest(unittest.IsolatedAsyncioTestCase):
     async def test_downloads_and_stores_on_miss(self):
         db = AsyncMock()
         with patch.object(dce_cache, "get_cached", AsyncMock(return_value=None)), \
-             patch.object(dce_cache, "download_dce", AsyncMock(return_value=(b"PKzip", "DCE.zip"))), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=("ok", (b"PKzip", "DCE.zip")))), \
              patch.object(dce_cache, "_store", AsyncMock(return_value=("/cache/T1.zip", "DCE.zip"))) as store:
             result = await dce_cache.ensure_dce_cached(db, "T1", "https://example.test/dce")
 
@@ -32,7 +32,7 @@ class EnsureDceCachedTest(unittest.IsolatedAsyncioTestCase):
     async def test_records_failure_and_returns_none(self):
         db = AsyncMock()
         with patch.object(dce_cache, "get_cached", AsyncMock(return_value=None)), \
-             patch.object(dce_cache, "download_dce", AsyncMock(return_value=None)):
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=("failed", None))):
             result = await dce_cache.ensure_dce_cached(db, "T1", "https://example.test/dce")
 
         self.assertIsNone(result)

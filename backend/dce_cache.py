@@ -130,8 +130,11 @@ async def ensure_dce_cached(db, tender_id: str, dce_url: str) -> tuple[str, str]
     if cached:
         return cached
 
-    result = await download_dce(dce_url)
-    if not result:
+    status, payload = await download_dce(dce_url)
+    if status != "ok":
+        # Both "failed" and "flagged" collapse to the existing lazy behavior: a
+        # 'failed' row so repeat clicks don't blindly re-hit the portal. The
+        # flag distinction only matters to the warm-all supervisor.
         await db.execute(
             """INSERT OR REPLACE INTO dce_cache (tender_id, filename, size, status, error, cached_at)
                VALUES (?, NULL, 0, 'failed', 'download failed', datetime('now'))""",
@@ -140,7 +143,7 @@ async def ensure_dce_cached(db, tender_id: str, dce_url: str) -> tuple[str, str]
         await db.commit()
         return None
 
-    file_bytes, filename = result
+    file_bytes, filename = payload
     return await _store(db, tender_id, file_bytes, filename)
 
 
