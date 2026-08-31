@@ -9,6 +9,12 @@ class V1ApiSurfaceTest(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
 
+    def test_root_redirects_to_public_catalog(self):
+        response = self.client.get("/", follow_redirects=False)
+
+        self.assertIn(response.status_code, (302, 307))
+        self.assertEqual(response.headers["location"], "/tenders")
+
     def test_retired_public_routes_are_not_accessible(self):
         # Retired public features stay removed from the surface (404).
         blocked_paths = [

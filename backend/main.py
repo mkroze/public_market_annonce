@@ -17,7 +17,7 @@ from io import BytesIO, StringIO
 
 from fastapi import FastAPI, Query, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -1640,6 +1640,11 @@ async def assistant_ask(req: AssistantRequest):
 
 
 # ── Serve frontend (Docker production) ───────────────────────────────────────
+
+@app.get("/")
+async def redirect_root_to_catalog():
+    return RedirectResponse(url="/tenders", status_code=307)
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.is_dir():
