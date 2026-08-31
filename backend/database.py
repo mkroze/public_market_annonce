@@ -101,7 +101,9 @@ async def init_db():
             failed INTEGER DEFAULT 0,
             status TEXT DEFAULT 'running',  -- running | done | failed | stopped
             error TEXT,
-            actor_email TEXT
+            actor_email TEXT,
+            concurrency INTEGER,            -- threads the run is currently at
+            pauses INTEGER DEFAULT 0        -- times it flagged + backed off
         );
 
         CREATE INDEX IF NOT EXISTS idx_tenders_sector ON tenders(sector_code);
@@ -209,6 +211,10 @@ async def init_db():
     await _add_column_if_missing(db, "scrape_log", "tenders_updated", "tenders_updated INTEGER DEFAULT 0")
     await _add_column_if_missing(db, "scrape_log", "tenders_skipped", "tenders_skipped INTEGER DEFAULT 0")
     await _add_column_if_missing(db, "scrape_log", "warnings", "warnings TEXT")
+
+    # dce_cache_log: parallel warm-all observability
+    await _add_column_if_missing(db, "dce_cache_log", "concurrency", "concurrency INTEGER")
+    await _add_column_if_missing(db, "dce_cache_log", "pauses", "pauses INTEGER DEFAULT 0")
 
     await db.commit()
     await db.close()
