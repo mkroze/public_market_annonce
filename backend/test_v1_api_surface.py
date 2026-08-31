@@ -12,7 +12,6 @@ class V1ApiSurfaceTest(unittest.TestCase):
     def test_retired_public_routes_are_not_accessible(self):
         # Retired public features stay removed from the surface (404).
         blocked_paths = [
-            "/api/favorites",
             "/api/stats",
             "/api/cities",
             "/api/regions",
@@ -27,20 +26,39 @@ class V1ApiSurfaceTest(unittest.TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 404)
 
-    def test_catalog_requires_authentication(self):
-        # Registration unlocks the catalog and a signed-in user's alerts: the
-        # data is reachable (not 404) but rejects unauthenticated requests (401).
-        gated_paths = [
+    def test_catalog_read_routes_are_public(self):
+        public_read_paths = [
             "/api/tenders",
-            "/api/tenders/export",
             "/api/filters",
+        ]
+
+        for path in public_read_paths:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertNotEqual(response.status_code, 401)
+                self.assertNotEqual(response.status_code, 404)
+
+    def test_catalog_actions_still_require_authentication(self):
+        gated_paths = [
+            "/api/tenders/export",
+            "/api/tenders/A/B/pdf",
+            "/api/tenders/A/B/dce",
             "/api/alerts",
+            "/api/favorites",
         ]
 
         for path in gated_paths:
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 401)
+
+    def test_slash_bearing_tender_detail_is_public_read_path(self):
+        import main
+
+        self.assertTrue(main.is_public_v1_api_path("/api/tenders/A/B", "GET"))
+        self.assertFalse(main.requires_v1_auth("/api/tenders/A/B", "GET"))
+        self.assertFalse(main.is_public_v1_api_path("/api/tenders/A/B/pdf", "GET"))
+        self.assertTrue(main.requires_v1_auth("/api/tenders/A/B/pdf", "GET"))
 
     def test_auth_entry_points_are_public(self):
         # Login and registration must be reachable without a session so users

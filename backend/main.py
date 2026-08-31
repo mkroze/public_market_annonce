@@ -91,15 +91,40 @@ app.include_router(admin_router)
 
 # ── V1 catalog surface guard ─────────────────────────────────────────────────
 
-# Entry points reachable without a session: login and registration. Everything
-# else in the allowlist below requires a valid session — registration is what
-# unlocks the ability to consult the tender catalog.
+# Auth entry points stay public so visitors can obtain a session.
 V1_PUBLIC_API_PATHS = {"/api/auth/login", "/api/auth/register"}
 
-# The full surface the launch exposes. Catalog (tenders/filters), a signed-in
-# user's alerts, and the admin export space are gated: reachable only with a
-# session. Admin routes also enforce role in their own handlers.
+# The launch API surface is intentionally narrow. Some paths are public reads;
+# actions and account data are authenticated below.
 V1_ALLOWED_API_PATHS = V1_PUBLIC_API_PATHS | {"/api/filters", "/api/auth/me"}
+
+
+def is_tender_action_path(path: str) -> bool:
+    return (
+        path == "/api/tenders/export"
+        or path.endswith("/pdf")
+        or path.endswith("/dce")
+    )
+
+
+def is_public_v1_api_path(path: str, method: str) -> bool:
+    if path in V1_PUBLIC_API_PATHS:
+        return True
+    if method != "GET":
+        return False
+    if path == "/api/filters":
+        return True
+    if path == "/api/tenders":
+        return True
+    if path.startswith("/api/tenders/") and not is_tender_action_path(path):
+        return True
+    return False
+
+
+def requires_v1_auth(path: str, method: str) -> bool:
+    if is_public_v1_api_path(path, method):
+        return False
+    return path.startswith("/api/")
 
 
 def is_v1_catalog_api_path(path: str) -> bool:
@@ -109,6 +134,8 @@ def is_v1_catalog_api_path(path: str) -> bool:
         or path.startswith("/api/tenders/")
         or path == "/api/alerts"
         or path.startswith("/api/alerts/")
+        or path == "/api/favorites"
+        or path.startswith("/api/favorites/")
         or path == "/api/admin"
         or path.startswith("/api/admin/")
     )
@@ -120,9 +147,7 @@ async def restrict_v1_api_surface(request: Request, call_next):
     if path.startswith("/api/") and request.method != "OPTIONS":
         if not is_v1_catalog_api_path(path):
             return Response(status_code=404)
-        # Gate the catalog behind registration: only the login/register entry
-        # points are reachable without a valid session.
-        if path not in V1_PUBLIC_API_PATHS:
+        if requires_v1_auth(path, request.method):
             user = await get_current_user(request.headers.get("authorization"))
             if not user:
                 return Response(status_code=401)
