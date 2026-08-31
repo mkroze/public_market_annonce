@@ -84,7 +84,7 @@ export function getTenders(filters: Partial<TenderFilters> = {}): Promise<Tender
   if (filters.order) params.order = filters.order;
   if (filters.page) params.page = String(filters.page);
   if (filters.per_page) params.per_page = String(filters.per_page);
-  return fetchJSON<TenderListResponse>(`${BASE}/tenders`, params);
+  return fetchJSON<TenderListResponse>(`${BASE}/tenders`, params, { redirectOnUnauthorized: false });
 }
 
 export async function exportTenders(
@@ -124,7 +124,9 @@ export async function exportTenders(
 }
 
 export function getTender(id: string): Promise<TenderWithDetails> {
-  return fetchJSON<TenderWithDetails>(`${BASE}/tenders/${tenderPathSegment(id)}`);
+  return fetchJSON<TenderWithDetails>(`${BASE}/tenders/${tenderPathSegment(id)}`, undefined, {
+    redirectOnUnauthorized: false,
+  });
 }
 
 export function getOverview(): Promise<OverviewResponse> {
@@ -136,7 +138,7 @@ export function getStats(): Promise<StatsResponse> {
 }
 
 export function getFilters(): Promise<FiltersResponse> {
-  return fetchJSON<FiltersResponse>(`${BASE}/filters`);
+  return fetchJSON<FiltersResponse>(`${BASE}/filters`, undefined, { redirectOnUnauthorized: false });
 }
 
 export function triggerScrape(): Promise<{ status: string; total_found: number; total_new: number }> {
