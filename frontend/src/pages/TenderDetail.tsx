@@ -19,6 +19,7 @@ import {
   User,
   CheckCircle2,
   HelpCircle,
+  LockKeyhole,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf } from "../lib/api";
 import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
@@ -27,6 +28,7 @@ import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
 import { CATEGORY_COLORS, CATEGORY_FALLBACK, TONE_PANEL } from "../lib/tone";
 import type { DisplayValue, TenderWithDetails } from "../lib/types";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { useAuth } from "../lib/auth";
 
 function rawOrMissing(value: string | undefined | null, missing = "Non détecté"): string {
   return value && value.trim() ? value : missing;
@@ -40,6 +42,28 @@ function sourceLabel(value: DisplayValue | undefined): string {
   return "";
 }
 
+function LockedPanel({ title, children, from }: { title: string; children: React.ReactNode; from: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-4 py-3">
+      <div className="flex items-start gap-2">
+        <LockKeyhole size={16} className="mt-0.5 shrink-0 text-[var(--color-primary)]" />
+        <div className="min-w-0">
+          <p className="font-sans text-sm font-semibold text-[var(--color-ink)]">{title}</p>
+          <p className="mt-0.5 font-sans text-sm text-[var(--color-muted)]">{children}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to="/register" state={{ from }} className="btn btn-primary btn-sm normal-case font-sans">
+              Créer un compte
+            </Link>
+            <Link to="/login" state={{ from }} className="btn btn-outline btn-sm normal-case font-sans">
+              Se connecter
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TenderDetail() {
   const { id } = useParams<{ id: string }>();
   const tenderId = decodeTenderRouteId(id);
@@ -50,6 +74,9 @@ export default function TenderDetail() {
   const [dceError, setDceError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
+  const { user } = useAuth();
+  const isLoggedIn = Boolean(user);
+  const returnPath = id ? `/tenders/${id}` : "/tenders";
 
   useEffect(() => {
     if (!tenderId) return;
@@ -200,50 +227,58 @@ export default function TenderDetail() {
           {dceError || pdfError}
         </div>
       )}
-      <div className="flex flex-wrap gap-3">
-        {d?.dce_url && (
-          <button
-            className="btn btn-primary font-sans font-semibold gap-2"
-            disabled={dceLoading}
-            onClick={async () => {
-              if (!tenderId) return;
-              setDceLoading(true);
-              setDceError("");
-              try { await downloadDce(tenderId); }
-              catch (e) { setDceError(e instanceof Error ? e.message : "Échec du téléchargement"); }
-              finally { setDceLoading(false); }
-            }}
-          >
-            {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
-            {dceLoading ? "Téléchargement..." : "Télécharger le DCE"}
-          </button>
-        )}
-        <button
-          className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] transition-colors"
-          disabled={pdfLoading}
-          onClick={async () => {
-            if (!tenderId) return;
-            setPdfLoading(true);
-            setPdfError("");
-            try { await downloadPdf(tenderId); }
-            catch (e) { setPdfError(e instanceof Error ? e.message : "Échec de l'export PDF"); }
-            finally { setPdfLoading(false); }
-          }}
-        >
-          {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
-          Export PDF
-        </button>
-        {d?.avis_url && (
-          <a href={d.avis_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]">
-            <FileText size={16} /> Avis de publication
-          </a>
-        )}
-        {tender.detail_url && (
-          <a href={tender.detail_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-sans text-[var(--color-slate)] hover:text-[var(--color-charcoal)] transition-colors">
-            <ExternalLink size={16} /> Voir sur marchespublics.gov.ma
-          </a>
+      <div className="space-y-3">
+        {isLoggedIn ? (
+          <div className="flex flex-wrap gap-3">
+            {d?.dce_url && (
+              <button
+                className="btn btn-primary font-sans font-semibold gap-2"
+                disabled={dceLoading}
+                onClick={async () => {
+                  if (!tenderId) return;
+                  setDceLoading(true);
+                  setDceError("");
+                  try { await downloadDce(tenderId); }
+                  catch (e) { setDceError(e instanceof Error ? e.message : "Échec du téléchargement"); }
+                  finally { setDceLoading(false); }
+                }}
+              >
+                {dceLoading ? <span className="loading loading-spinner loading-sm"></span> : <Download size={16} />}
+                {dceLoading ? "Téléchargement..." : "Télécharger le DCE"}
+              </button>
+            )}
+            <button
+              className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-crimson)] text-[var(--color-crimson)] hover:bg-[var(--color-crimson)] hover:text-[var(--color-ivory)] transition-colors"
+              disabled={pdfLoading}
+              onClick={async () => {
+                if (!tenderId) return;
+                setPdfLoading(true);
+                setPdfError("");
+                try { await downloadPdf(tenderId); }
+                catch (e) { setPdfError(e instanceof Error ? e.message : "Échec de l'export PDF"); }
+                finally { setPdfLoading(false); }
+              }}
+            >
+              {pdfLoading ? <span className="loading loading-spinner loading-sm"></span> : <FileText size={16} />}
+              Export PDF
+            </button>
+            {d?.avis_url && (
+              <a href={d.avis_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] transition-colors text-[var(--color-charcoal)]">
+                <FileText size={16} /> Avis de publication
+              </a>
+            )}
+            {tender.detail_url && (
+              <a href={tender.detail_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-sans text-[var(--color-slate)] hover:text-[var(--color-charcoal)] transition-colors">
+                <ExternalLink size={16} /> Voir sur marchespublics.gov.ma
+              </a>
+            )}
+          </div>
+        ) : (
+          <LockedPanel title="Actions réservées aux comptes" from={returnPath}>
+            Connectez-vous pour télécharger le DCE, exporter la fiche PDF et ouvrir les liens officiels de participation.
+          </LockedPanel>
         )}
       </div>
 
@@ -256,11 +291,17 @@ export default function TenderDetail() {
 
       {/* Addresses */}
       {(d?.adresse_retrait || d?.adresse_depot || d?.lieu_ouverture) && (
-        <Section icon={MapPin} title="Adresses">
-          {d?.adresse_retrait && <Field label="Retrait des dossiers" value={d.adresse_retrait} />}
-          {d?.adresse_depot && <Field label="Dépôt des offres" value={d.adresse_depot} />}
-          {d?.lieu_ouverture && <Field label="Ouverture des plis" value={d.lieu_ouverture} />}
-        </Section>
+        isLoggedIn ? (
+          <Section icon={MapPin} title="Adresses">
+            {d?.adresse_retrait && <Field label="Retrait des dossiers" value={d.adresse_retrait} />}
+            {d?.adresse_depot && <Field label="Dépôt des offres" value={d.adresse_depot} />}
+            {d?.lieu_ouverture && <Field label="Ouverture des plis" value={d.lieu_ouverture} />}
+          </Section>
+        ) : (
+          <LockedPanel title="Adresses de retrait et dépôt" from={returnPath}>
+            Les adresses opérationnelles sont disponibles après connexion afin de garder la participation dans l'espace membre.
+          </LockedPanel>
+        )
       )}
 
       {/* Conditions */}
@@ -283,9 +324,15 @@ export default function TenderDetail() {
 
       {/* Contact */}
       {d?.contact && (
-        <Section icon={Phone} title="Contact">
-          <ContactBlock text={d.contact} />
-        </Section>
+        isLoggedIn ? (
+          <Section icon={Phone} title="Contact">
+            <ContactBlock text={d.contact} />
+          </Section>
+        ) : (
+          <LockedPanel title="Contact acheteur" from={returnPath}>
+            Connectez-vous pour consulter les coordonnées et préparer vos échanges depuis la fiche complète.
+          </LockedPanel>
+        )
       )}
 
       {/* Données source brutes : outil de diagnostic, réservé au développement. */}
