@@ -102,5 +102,127 @@ class DceCacheCapAndClearTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await dce_cache.get_cached(self.db, "T2"))
 
 
+class WarmAllBackoffTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.dbpath = os.path.join(self.tmp, "t.db")
+        self.cachedir = os.path.join(self.tmp, "cache")
+        self._patches = [
+            patch.object(dce_cache, "DCE_CACHE_DIR", self.cachedir),
+            patch.object(dce_cache, "DCE_WARM_PAUSE_SECONDS", 0),
+            patch.object(dce_cache, "DCE_WARM_DELAY_MIN", 0),
+            patch.object(dce_cache, "DCE_WARM_DELAY_MAX", 0),
+            patch.object(dce_cache, "DCE_WARM_MIN_THREADS", 1),
+            patch.object(dce_cache, "DCE_WARM_BACKOFF_STEP", 1),
+            patch.object(dce_cache, "ensure_tender_details",
+                         AsyncMock(return_value={"dce_url": "http://t/dce"})),
+        ]
+        for p in self._patches:
+            p.start()
+
+        db = await aiosqlite.connect(self.dbpath)
+        db.row_factory = aiosqlite.Row
+        await db.executescript(
+            """
+            CREATE TABLE tenders (id TEXT PRIMARY KEY, detail_url TEXT,
+                                  deadline TEXT, admin_status TEXT);
+            CREATE TABLE dce_cache (tender_id TEXT PRIMARY KEY, filename TEXT,
+                                    size INTEGER, status TEXT DEFAULT 'ok',
+                                    error TEXT, cached_at TEXT DEFAULT (datetime('now')));
+            CREATE TABLE dce_cache_log (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        started_at TEXT DEFAULT (datetime('now')),
+                                        finished_at TEXT, total INTEGER DEFAULT 0,
+                                        cached INTEGER DEFAULT 0, skipped INTEGER DEFAULT 0,
+                                        failed INTEGER DEFAULT 0, status TEXT DEFAULT 'running',
+                                        error TEXT, actor_email TEXT,
+                                        concurrency INTEGER, pauses INTEGER DEFAULT 0);
+            """
+        )
+        for i in range(5):
+            await db.execute(
+                "INSERT INTO tenders (id, detail_url) VALUES (?, ?)",
+                (f"T{i}", f"http://t/detail/{i}"),
+            )
+        await db.commit()
+        await db.close()
+
+        async def _fresh():
+            c = await aiosqlite.connect(self.dbpath)
+            c.row_factory = aiosqlite.Row
+            return c
+
+        self._getdb = patch.object(dce_cache, "get_db", _fresh)
+        self._getdb.start()
+
+    async def asyncTearDown(self):
+        self._getdb.stop()
+        for p in self._patches:
+            p.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    async def _last_log(self):
+        db = await aiosqlite.connect(self.dbpath)
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute(
+            "SELECT * FROM dce_cache_log ORDER BY id DESC LIMIT 1")).fetchone()
+        await db.close()
+        return dict(row)
+
+    async def test_clean_run_holds_start_threads_and_never_ramps(self):
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 3), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=ok)):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "done")
+        self.assertEqual(res["pauses"], 0)
+        self.assertEqual(res["cached"], 5)
+        log = await self._last_log()
+        self.assertEqual(log["concurrency"], 3)  # never increased
+        self.assertEqual(log["pauses"], 0)
+        self.assertEqual(log["status"], "done")
+
+    async def test_flag_pauses_then_resumes_at_fewer_threads(self):
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        seen = {"n": 0, "flagged": False}
+
+        async def dl(url):
+            seen["n"] += 1
+            if seen["n"] == 2 and not seen["flagged"]:
+                seen["flagged"] = True
+                return ("flagged", "http_429")
+            return ok
+
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 2), \
+             patch.object(dce_cache, "download_dce", AsyncMock(side_effect=dl)):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "done")     # resumed and finished
+        self.assertEqual(res["pauses"], 1)          # exactly one backoff
+        self.assertEqual(res["cached"], 5)          # every tender cached eventually
+        log = await self._last_log()
+        self.assertEqual(log["concurrency"], 1)     # 2 -> 1 after the flag
+
+    async def test_flag_at_floor_stops_run(self):
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 1), \
+             patch.object(dce_cache, "download_dce",
+                          AsyncMock(return_value=("flagged", "http_429"))):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "stopped")
+        self.assertEqual(res["cached"], 0)
+        self.assertGreaterEqual(res["pauses"], 1)
+        log = await self._last_log()
+        self.assertIn("pushing back", (log["error"] or ""))
+
+    async def test_cap_reached_stops_run(self):
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 1), \
+             patch.object(dce_cache, "DCE_CACHE_MAX_BYTES", 1), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=ok)):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "stopped")
+        self.assertGreaterEqual(res["cached"], 1)
+        log = await self._last_log()
+        self.assertIn("cap", (log["error"] or "").lower())
+
+
 if __name__ == "__main__":
     unittest.main()

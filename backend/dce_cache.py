@@ -24,6 +24,10 @@ from config import (
     DCE_CACHE_MAX_BYTES,
     DCE_WARM_DELAY_MIN,
     DCE_WARM_DELAY_MAX,
+    DCE_WARM_START_THREADS,
+    DCE_WARM_PAUSE_SECONDS,
+    DCE_WARM_BACKOFF_STEP,
+    DCE_WARM_MIN_THREADS,
 )
 from database import get_db
 from scraper import download_dce, ensure_tender_details
@@ -147,70 +151,147 @@ async def ensure_dce_cached(db, tender_id: str, dce_url: str) -> tuple[str, str]
     return await _store(db, tender_id, file_bytes, filename)
 
 
-async def cache_all_dces(actor_email: str | None = None) -> dict:
-    """Warm the cache for every tender: ensure details -> download DCE -> store.
+async def _write_run_log(db, log_id: int, state: dict, status: str) -> None:
+    """Flush the in-memory counters to dce_cache_log so the polling admin UI
+    stays fresh. Status stays 'running' for the whole run; the terminal status
+    is written once in cache_all_dces's finally block."""
+    await db.execute(
+        """UPDATE dce_cache_log
+           SET total=?, cached=?, skipped=?, failed=?, pauses=?, concurrency=?, status=?
+           WHERE id=?""",
+        (state["total"], state["cached"], state["skipped"], state["failed"],
+         state["pauses"], state["concurrency"], status, log_id),
+    )
+    await db.commit()
 
-    Skips tenders already cached (resumable), and stops gracefully if free disk
-    space drops below the guard threshold so a run can't fill the volume.
+
+async def _run_sweep(db, log_id: int, items, concurrency: int,
+                     state: dict, counter_lock) -> str:
+    """Run one sweep over `items` (uncached tenders) with `concurrency` workers.
+
+    Workers share the single aiosqlite connection (aiosqlite serializes SQL, so
+    concurrent DB calls are safe); network I/O runs truly in parallel because
+    download_dce opens its own client per call. Returns the sweep outcome:
+    "finished" | "cap" | "disk" | "flagged". On a terminal/flag outcome, workers
+    drain their in-flight download then stop pulling new work.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+    for item in items:
+        queue.put_nowait(item)
+    stop = {"reason": None}  # "cap" | "disk" | "flagged"
+
+    async def worker():
+        while stop["reason"] is None:
+            try:
+                tender_id, detail_url = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            try:
+                if await get_cached(db, tender_id):
+                    async with counter_lock:
+                        state["skipped"] += 1
+                    continue
+                if await cache_total_bytes(db) >= DCE_CACHE_MAX_BYTES:
+                    stop["reason"] = "cap"
+                    return
+                if not _has_free_space():
+                    stop["reason"] = "disk"
+                    return
+
+                detail = await ensure_tender_details(db, tender_id, detail_url)
+                dce_url = (detail or {}).get("dce_url", "")
+                if not dce_url:
+                    async with counter_lock:
+                        state["skipped"] += 1
+                    continue
+
+                dl_status, payload = await download_dce(dce_url)
+                if dl_status == "flagged":
+                    stop["reason"] = "flagged"
+                    return  # no row written -> retried next sweep
+                if dl_status == "failed":
+                    await db.execute(
+                        """INSERT OR REPLACE INTO dce_cache
+                           (tender_id, filename, size, status, error, cached_at)
+                           VALUES (?, NULL, 0, 'failed', 'download failed', datetime('now'))""",
+                        (tender_id,),
+                    )
+                    await db.commit()
+                    async with counter_lock:
+                        state["failed"] += 1
+                    continue
+
+                file_bytes, filename = payload
+                await _store(db, tender_id, file_bytes, filename)
+                async with counter_lock:
+                    state["cached"] += 1
+                await _write_run_log(db, log_id, state, "running")
+                await asyncio.sleep(random.uniform(DCE_WARM_DELAY_MIN, DCE_WARM_DELAY_MAX))
+            finally:
+                queue.task_done()
+
+    workers = [asyncio.create_task(worker()) for _ in range(max(1, concurrency))]
+    await asyncio.gather(*workers)
+    return stop["reason"] or "finished"
+
+
+async def cache_all_dces(actor_email: str | None = None) -> dict:
+    """Warm the cache for every tender in parallel, self-throttling downward.
+
+    Runs in resumable sweeps. Each sweep uses `concurrency` workers; on a portal
+    push-back "flag" it pauses then resumes with fewer threads (never more), down
+    to DCE_WARM_MIN_THREADS where a further flag stops the run. Still stops on the
+    size cap or low disk. Skips already-cached tenders, so a lower-concurrency
+    resume just continues where the last sweep left off.
     """
     async with dce_cache_lock:
         db = await get_db()
+        concurrency = DCE_WARM_START_THREADS
         log_cursor = await db.execute(
-            "INSERT INTO dce_cache_log (status, actor_email) VALUES ('running', ?)",
-            (actor_email,),
+            "INSERT INTO dce_cache_log (status, actor_email, concurrency, pauses) "
+            "VALUES ('running', ?, ?, 0)",
+            (actor_email, concurrency),
         )
         log_id = log_cursor.lastrowid
         await db.commit()
 
-        total = cached = skipped = failed = 0
+        state = {"total": 0, "cached": 0, "skipped": 0, "failed": 0,
+                 "pauses": 0, "concurrency": concurrency}
+        counter_lock = asyncio.Lock()
         final_status = "done"
         err = None
+
         try:
             rows = await (await db.execute(
                 "SELECT id, detail_url FROM tenders "
                 "WHERE detail_url IS NOT NULL AND detail_url != ''"
             )).fetchall()
-            total = len(rows)
+            items = [(r["id"], r["detail_url"]) for r in rows]
+            state["total"] = len(items)
 
-            for row in rows:
-                tender_id = row["id"]
-
-                if await get_cached(db, tender_id):
-                    skipped += 1
-                    continue
-
-                if await cache_total_bytes(db) >= DCE_CACHE_MAX_BYTES:
+            while True:
+                outcome = await _run_sweep(db, log_id, items, concurrency, state, counter_lock)
+                if outcome == "finished":
+                    final_status = "done"
+                    break
+                if outcome == "cap":
                     final_status = "stopped"
                     err = "Cache size cap reached — remaining DCEs will cache on demand."
                     break
-
-                if not _has_free_space():
+                if outcome == "disk":
                     final_status = "stopped"
                     err = "Low disk space — stopped to protect the volume."
                     break
-
-                # Make sure we have a dce_url (lazily scrape details if missing).
-                detail = await ensure_tender_details(db, tender_id, row["detail_url"])
-                dce_url = (detail or {}).get("dce_url", "")
-                if not dce_url:
-                    skipped += 1
-                    continue
-
-                if await ensure_dce_cached(db, tender_id, dce_url):
-                    cached += 1
-                else:
-                    failed += 1
-
-                # Keep counters fresh so the polling admin UI shows progress.
-                await db.execute(
-                    "UPDATE dce_cache_log SET total=?, cached=?, skipped=?, failed=? WHERE id=?",
-                    (total, cached, skipped, failed, log_id),
-                )
-                await db.commit()
-
-                # Space out portal hits: a fresh random 5-7s pause after each
-                # download so a bulk warm-all from one IP stays under the radar.
-                await asyncio.sleep(random.uniform(DCE_WARM_DELAY_MIN, DCE_WARM_DELAY_MAX))
+                # outcome == "flagged": back off one step, or stop at the floor.
+                state["pauses"] += 1
+                concurrency -= DCE_WARM_BACKOFF_STEP
+                if concurrency < DCE_WARM_MIN_THREADS:
+                    final_status = "stopped"
+                    err = "Portal pushing back even at the minimum thread count — try again later."
+                    break
+                state["concurrency"] = concurrency
+                await _write_run_log(db, log_id, state, "running")
+                await asyncio.sleep(DCE_WARM_PAUSE_SECONDS)
         except Exception as e:  # noqa: BLE001
             final_status = "failed"
             err = str(e)[:500]
@@ -218,15 +299,18 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
             await db.execute(
                 """UPDATE dce_cache_log
                    SET finished_at = datetime('now'),
-                       total=?, cached=?, skipped=?, failed=?, status=?, error=?
+                       total=?, cached=?, skipped=?, failed=?, pauses=?, concurrency=?,
+                       status=?, error=?
                    WHERE id = ?""",
-                (total, cached, skipped, failed, final_status, err, log_id),
+                (state["total"], state["cached"], state["skipped"], state["failed"],
+                 state["pauses"], state["concurrency"], final_status, err, log_id),
             )
             await db.commit()
             await db.close()
 
-        return {"total": total, "cached": cached, "skipped": skipped,
-                "failed": failed, "status": final_status}
+        return {"total": state["total"], "cached": state["cached"],
+                "skipped": state["skipped"], "failed": state["failed"],
+                "pauses": state["pauses"], "status": final_status}
 
 
 async def clear_dce_cache(db, mode: str = "all") -> dict:
