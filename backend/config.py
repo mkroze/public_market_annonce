@@ -25,11 +25,21 @@ DCE_MIN_FREE_BYTES = 500 * 1024 * 1024  # 500 MB
 # Sized for the 5 GB persistent volume: 4 GB budget leaves ~1 GB headroom, well
 # clear of the 500 MB free-disk guard above.
 DCE_CACHE_MAX_BYTES = int(os.getenv("DCE_CACHE_MAX_BYTES", str(4 * 1024 * 1024 * 1024)))  # 4 GB
-# Variable pause between DCE downloads in a warm-all run so a bulk pull from one
-# server IP doesn't hammer the portal (and risk an IP block). A fresh random
-# value in [MIN, MAX] is drawn per download. Override via env.
-DCE_WARM_DELAY_MIN = float(os.getenv("DCE_WARM_DELAY_MIN", "5"))  # seconds
-DCE_WARM_DELAY_MAX = float(os.getenv("DCE_WARM_DELAY_MAX", "7"))  # seconds
+# Per-download jitter in a warm-all run. Concurrency is now the throughput lever
+# and downward backoff is the safety mechanism, so this only needs to add mild
+# jitter (reduced from 5-7s). A fresh random value in [MIN, MAX] is drawn per
+# download. Override via env.
+DCE_WARM_DELAY_MIN = float(os.getenv("DCE_WARM_DELAY_MIN", "1"))  # seconds
+DCE_WARM_DELAY_MAX = float(os.getenv("DCE_WARM_DELAY_MAX", "2"))  # seconds
+
+# Parallel warm-all with downward-only self-throttling. Start at START_THREADS
+# concurrent downloads; NEVER increase. On a portal push-back "flag", pause for
+# PAUSE_SECONDS then resume with BACKOFF_STEP fewer threads, down to MIN_THREADS.
+# A flag at MIN_THREADS stops the run. All env-overridable.
+DCE_WARM_START_THREADS = int(os.getenv("DCE_WARM_START_THREADS", "4"))
+DCE_WARM_PAUSE_SECONDS = float(os.getenv("DCE_WARM_PAUSE_SECONDS", "60"))
+DCE_WARM_BACKOFF_STEP = int(os.getenv("DCE_WARM_BACKOFF_STEP", "1"))
+DCE_WARM_MIN_THREADS = int(os.getenv("DCE_WARM_MIN_THREADS", "1"))
 
 SECTORS = {
     "1.10": "Terrassements",
