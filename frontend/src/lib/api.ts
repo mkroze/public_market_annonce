@@ -48,7 +48,15 @@ function handleUnauthorized() {
   }
 }
 
-async function fetchJSON<T>(path: string, params?: Record<string, string>): Promise<T> {
+interface FetchJSONOptions {
+  redirectOnUnauthorized?: boolean;
+}
+
+async function fetchJSON<T>(
+  path: string,
+  params?: Record<string, string>,
+  options: FetchJSONOptions = {},
+): Promise<T> {
   const url = new URL(path, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -56,7 +64,7 @@ async function fetchJSON<T>(path: string, params?: Record<string, string>): Prom
     });
   }
   const res = await fetch(url.toString(), { headers: authHeaders() });
-  if (res.status === 401) handleUnauthorized();
+  if (res.status === 401 && options.redirectOnUnauthorized !== false) handleUnauthorized();
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -205,7 +213,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export function getMe(): Promise<User> {
-  return fetchJSON<User>(`${BASE}/auth/me`);
+  return fetchJSON<User>(`${BASE}/auth/me`, undefined, { redirectOnUnauthorized: false });
 }
 
 // ── Cities ──
