@@ -22,7 +22,14 @@ DCE_CACHE_DIR = "data/dce_cache"
 DCE_MIN_FREE_BYTES = 500 * 1024 * 1024  # 500 MB
 # Hard budget for total cached DCE bytes. Lazy caching evicts oldest to stay
 # under this; the warm-all stops when it's reached. Override via env.
-DCE_CACHE_MAX_BYTES = int(os.getenv("DCE_CACHE_MAX_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
+# Sized for the 5 GB persistent volume: 4 GB budget leaves ~1 GB headroom, well
+# clear of the 500 MB free-disk guard above.
+DCE_CACHE_MAX_BYTES = int(os.getenv("DCE_CACHE_MAX_BYTES", str(4 * 1024 * 1024 * 1024)))  # 4 GB
+# Variable pause between DCE downloads in a warm-all run so a bulk pull from one
+# server IP doesn't hammer the portal (and risk an IP block). A fresh random
+# value in [MIN, MAX] is drawn per download. Override via env.
+DCE_WARM_DELAY_MIN = float(os.getenv("DCE_WARM_DELAY_MIN", "5"))  # seconds
+DCE_WARM_DELAY_MAX = float(os.getenv("DCE_WARM_DELAY_MAX", "7"))  # seconds
 
 SECTORS = {
     "1.10": "Terrassements",

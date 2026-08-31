@@ -15,9 +15,16 @@ Two entry points:
 import asyncio
 import hashlib
 import os
+import random
 import shutil
 
-from config import DCE_CACHE_DIR, DCE_MIN_FREE_BYTES, DCE_CACHE_MAX_BYTES
+from config import (
+    DCE_CACHE_DIR,
+    DCE_MIN_FREE_BYTES,
+    DCE_CACHE_MAX_BYTES,
+    DCE_WARM_DELAY_MIN,
+    DCE_WARM_DELAY_MAX,
+)
 from database import get_db
 from scraper import download_dce, ensure_tender_details
 
@@ -197,6 +204,10 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
                     (total, cached, skipped, failed, log_id),
                 )
                 await db.commit()
+
+                # Space out portal hits: a fresh random 5-7s pause after each
+                # download so a bulk warm-all from one IP stays under the radar.
+                await asyncio.sleep(random.uniform(DCE_WARM_DELAY_MIN, DCE_WARM_DELAY_MAX))
         except Exception as e:  # noqa: BLE001
             final_status = "failed"
             err = str(e)[:500]
