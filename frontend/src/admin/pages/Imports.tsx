@@ -314,6 +314,8 @@ export default function Imports() {
                     <th scope="col" className="px-4 py-2 font-medium">Actor</th>
                     <th scope="col" className="px-4 py-2 font-medium">Started</th>
                     <th scope="col" className="px-4 py-2 font-medium">Duration</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Threads</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Pauses</th>
                     <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Cached</th>
                     <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Skipped</th>
                     <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Failed</th>
@@ -328,6 +330,8 @@ export default function Imports() {
                       <td className="px-4 py-2 text-[var(--color-slate)]">{run.actor_email || "—"}</td>
                       <td className="px-4 py-2 tabular-nums">{fmtDate(run.started_at)}</td>
                       <td className="px-4 py-2 tabular-nums">{duration(run)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{run.concurrency ?? "—"}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{run.pauses ?? 0}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{run.cached}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{run.skipped}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-[var(--color-crimson)]">{run.failed}</td>

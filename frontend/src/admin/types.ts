@@ -24,6 +24,8 @@ export interface DceCacheRun {
   status: string; // running | done | failed | stopped
   error: string | null;
   actor_email: string | null;
+  concurrency: number | null;
+  pauses: number | null;
 }
 
 export interface AdminOverview {
