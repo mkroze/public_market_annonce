@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { LockKeyhole } from "lucide-react";
 import { getTenders, exportTenders } from "../lib/api";
 import type { TenderListResponse, TenderFilters } from "../lib/types";
 import FilterBar from "../components/FilterBar";
@@ -10,6 +11,7 @@ import ExportDropdown from "../components/ExportDropdown";
 import ToastContainer, { createToast, type ToastData } from "../components/Toast";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { getTenderUrgency } from "../lib/tenderUtils";
+import { useAuth } from "../lib/auth";
 
 const STATUS_SEGMENTS = [
   { key: "active", label: "En cours", filters: { status: "en_cours" } },
@@ -48,6 +50,7 @@ export default function Tenders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const { user } = useAuth();
 
   const filters: Partial<TenderFilters> = useMemo(
     () => ({
@@ -203,7 +206,18 @@ export default function Tenders() {
           )}
         </div>
         {result && !loading && result.total > 0 && (
-          <ExportDropdown total={result.total} onExport={handleExport} />
+          user ? (
+            <ExportDropdown total={result.total} onExport={handleExport} />
+          ) : (
+            <Link
+              to="/login"
+              state={{ from: "/tenders" }}
+              className="btn btn-outline btn-sm gap-1.5 normal-case font-sans"
+            >
+              <LockKeyhole size={14} />
+              Exporter après connexion
+            </Link>
+          )
         )}
       </section>
 

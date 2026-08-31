@@ -15,9 +15,9 @@ export default function Navbar() {
   }
 
   const navLinks = [
-    { to: "/tenders", label: "Consultations", icon: Search },
-    { to: "/alerts", label: "Alertes", icon: Bell },
-  ];
+    { to: "/tenders", label: "Consultations", icon: Search, public: true },
+    { to: "/alerts", label: "Alertes", icon: Bell, public: false },
+  ].filter((link) => link.public || user);
 
   // Lien réservé : n'apparaît que pour un compte administrateur connecté.
   // Le rôle est re-vérifié côté backend à chaque requête ; ceci ne gate que l'UI.

@@ -51,22 +51,8 @@ function PublicLayout() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route
-            path="/tenders"
-            element={
-              <RequireAuth>
-                <Tenders />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/tenders/:id"
-            element={
-              <RequireAuth>
-                <TenderDetail />
-              </RequireAuth>
-            }
-          />
+          <Route path="/tenders" element={<Tenders />} />
+          <Route path="/tenders/:id" element={<TenderDetail />} />
           <Route
             path="/alerts"
             element={
