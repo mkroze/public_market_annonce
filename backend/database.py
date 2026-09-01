@@ -199,6 +199,7 @@ async def init_db():
     await _add_column_if_missing(db, "users", "last_login", "last_login TEXT")
     await _add_column_if_missing(db, "users", "invited_by", "invited_by INTEGER")
     await _add_column_if_missing(db, "users", "mfa_enabled", "mfa_enabled INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "users", "theme", "theme TEXT DEFAULT 'system'")
 
     # tenders: admin moderation state
     await _add_column_if_missing(db, "tenders", "admin_status", "admin_status TEXT DEFAULT 'active'")

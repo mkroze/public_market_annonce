@@ -134,6 +134,8 @@ def is_v1_catalog_api_path(path: str) -> bool:
         or path.startswith("/api/tenders/")
         or path == "/api/alerts"
         or path.startswith("/api/alerts/")
+        or path == "/api/account"
+        or path.startswith("/api/account/")
         or path == "/api/favorites"
         or path.startswith("/api/favorites/")
         or path == "/api/admin"
@@ -174,6 +176,8 @@ async def require_user(authorization: str | None = Header(None)):
     user = await get_current_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+    if user.get("status", "active") != "active":
+        raise HTTPException(status_code=403, detail="Account is not active")
     return user
 
 
@@ -190,6 +194,15 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class AccountPreferencesRequest(BaseModel):
+    theme: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 @app.post("/api/auth/register")
@@ -219,7 +232,7 @@ async def register(req: RegisterRequest):
     await db.close()
 
     token = create_token(user_id, req.email)
-    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": role, "status": "active"}}
+    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": role, "status": "active", "theme": "system"}}
 
 
 @app.post("/api/auth/login")
@@ -233,6 +246,8 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user = dict(user)
+    if user.get("status", "active") != "active":
+        raise HTTPException(status_code=403, detail="Account is not active")
 
     db = await get_db()
     await db.execute("UPDATE users SET last_login = datetime('now') WHERE id = ?", (user["id"],))
@@ -250,6 +265,7 @@ async def login(req: LoginRequest):
             "company": user.get("company", ""),
             "role": user.get("role", "user"),
             "status": user.get("status", "active"),
+            "theme": user.get("theme", "system") or "system",
         },
     }
 
@@ -265,7 +281,78 @@ async def me(authorization: str | None = Header(None)):
         "company": user.get("company", ""),
         "role": user.get("role", "user"),
         "status": user.get("status", "active"),
+        "theme": user.get("theme", "system") or "system",
     }
+
+
+ALLOWED_ACCOUNT_THEMES = {"system", "light", "dark"}
+
+
+def account_view(user: dict) -> dict:
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "company": user.get("company", "") or "",
+        "phone": user.get("phone", "") or "",
+        "plan": user.get("plan", "free"),
+        "role": user.get("role", "user"),
+        "status": user.get("status", "active"),
+        "theme": user.get("theme", "system") or "system",
+        "created_at": user.get("created_at"),
+        "last_login": user.get("last_login"),
+    }
+
+
+@app.get("/api/account")
+async def get_account(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    return account_view(user)
+
+
+@app.patch("/api/account/preferences")
+async def update_account_preferences(
+    req: AccountPreferencesRequest,
+    authorization: str | None = Header(None),
+):
+    user = await require_user(authorization)
+    if req.theme not in ALLOWED_ACCOUNT_THEMES:
+        raise HTTPException(status_code=422, detail="Theme must be system, light, or dark")
+
+    db = await get_db()
+    try:
+        await db.execute("UPDATE users SET theme = ? WHERE id = ?", (req.theme, user["id"]))
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user["id"],))
+        updated = await cursor.fetchone()
+        return account_view(dict(updated))
+    finally:
+        await db.close()
+
+
+@app.post("/api/account/change-password")
+async def change_account_password(
+    req: ChangePasswordRequest,
+    authorization: str | None = Header(None),
+):
+    user = await require_user(authorization)
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit contenir au moins 8 caracteres.")
+    if req.current_password == req.new_password:
+        raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit etre different.")
+    if not verify_password(req.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Mot de passe actuel incorrect.")
+
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(req.new_password), user["id"]),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return {"status": "updated"}
 
 
 # ── Tenders ──────────────────────────────────────────────────────────────────
