@@ -215,7 +215,17 @@ export default function Tenders() {
         </div>
         {result && !loading && result.total > 0 && (
           user ? (
-            <ExportDropdown total={result.total} onExport={handleExport} />
+            <div className="flex flex-wrap items-center gap-2">
+              {filtersActive && (
+                <Link
+                  to={`/alerts?${searchParams.toString()}`}
+                  className="btn btn-outline btn-sm font-sans font-semibold"
+                >
+                  Créer une alerte
+                </Link>
+              )}
+              <ExportDropdown total={result.total} onExport={handleExport} />
+            </div>
           ) : (
             <Link
               to="/login"

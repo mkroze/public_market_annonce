@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Bell, Plus, Pencil, Trash2, Send, X, Loader2 } from "lucide-react";
 import {
   getAlerts,
@@ -103,6 +103,7 @@ function matchSignature(draft: AlertDraft): string {
 }
 
 export default function Alerts({ embedded = false }: { embedded?: boolean }) {
+  const [searchParams] = useSearchParams();
   const [alerts, setAlerts] = useState<AlertPreference[]>([]);
   const [options, setOptions] = useState<FiltersResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,6 +146,31 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
       .catch(() => pushToast("Impossible de charger vos alertes.", "error"))
       .finally(() => setLoading(false));
   }, []);
+
+  // Préremplissage depuis une recherche ou une consultation : quand la page est
+  // ouverte avec des filtres dans l'URL (q, sector, location, entity, tender),
+  // on ouvre directement l'éditeur en mode création avec ces critères, pour ne
+  // pas obliger l'utilisateur à ressaisir des codes secteur de mémoire.
+  useEffect(() => {
+    const keyword = searchParams.get("q") || "";
+    const sector = searchParams.get("sector") || "";
+    const location = searchParams.get("location") || "";
+    const entity = searchParams.get("entity") || "";
+    const tender = searchParams.get("tender") || "";
+
+    if (keyword || sector || location || entity || tender) {
+      setEditingId(null);
+      setPreview(null);
+      setDraft({
+        ...EMPTY_DRAFT,
+        name: tender ? "Alerte similaire à cette consultation" : "Alerte depuis ma recherche",
+        keywords: keyword,
+        sectors: sector,
+        regions: location,
+      });
+      setOpen(true);
+    }
+  }, [searchParams]);
 
   const sectorName = useMemo(() => {
     const map = new Map<string, string>();
