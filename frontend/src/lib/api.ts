@@ -304,10 +304,13 @@ export async function addFavorite(tenderId: string): Promise<void> {
 }
 
 export async function removeFavorite(tenderId: string): Promise<void> {
-  await fetch(`${BASE}/favorites/${tenderId}`, {
+  const res = await fetch(`${BASE}/favorites/${tenderId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw new Error(body.detail || body.error || `API error: ${res.status}`);
 }
 
 // ── Alerts ──

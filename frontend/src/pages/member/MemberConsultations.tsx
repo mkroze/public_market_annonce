@@ -22,8 +22,13 @@ export default function MemberConsultations() {
   }, []);
 
   async function handleRemove(tenderId: string) {
-    await removeFavorite(tenderId);
-    setFavorites((current) => current.filter((tender) => tender.id !== tenderId));
+    try {
+      setError("");
+      await removeFavorite(tenderId);
+      setFavorites((current) => current.filter((tender) => tender.id !== tenderId));
+    } catch {
+      setError("Impossible de retirer cette consultation. Réessayez.");
+    }
   }
 
   return (
