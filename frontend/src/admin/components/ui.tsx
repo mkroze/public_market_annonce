@@ -14,7 +14,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`border border-[var(--color-border-subtle)] rounded bg-base-100 ${className}`}>
+    <section className={`border border-[var(--color-border-subtle)] rounded-xl bg-base-100 shadow-card ${className}`}>
       {title && (
         <div className="px-4 py-2.5 border-b border-[var(--color-border-subtle)]">
           <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)]">{title}</h2>
@@ -42,13 +42,13 @@ export function MetricCard({
   return (
     <Comp
       onClick={onClick}
-      className={`text-left w-full border border-[var(--color-border-subtle)] border-l-4 ${border} rounded bg-base-100 px-4 py-3 ${
-        onClick ? "hover:border-[var(--color-border)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] transition-colors" : ""
+      className={`text-left w-full border border-[var(--color-border-subtle)] border-l-4 ${border} rounded-xl bg-base-100 shadow-card px-4 py-3.5 ${
+        onClick ? "hover:border-[var(--color-primary)] hover:shadow-card-hover focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] transition-all" : ""
       }`}
     >
-      <div className="text-xs font-sans uppercase tracking-wide text-[var(--color-slate)]">{label}</div>
-      <div className="text-2xl font-display text-[var(--color-charcoal)] tabular-nums mt-0.5">{value}</div>
-      {sub && <div className="text-xs font-sans text-[var(--color-slate)] mt-1">{sub}</div>}
+      <div className="text-[11px] font-sans font-semibold uppercase tracking-[0.06em] text-[var(--color-slate)]">{label}</div>
+      <div className="text-[26px] font-bold leading-tight text-[var(--color-charcoal)] tabular-nums mt-1">{value}</div>
+      {sub && <div className="text-xs font-sans text-[var(--color-muted-light)] mt-1.5">{sub}</div>}
     </Comp>
   );
 }
@@ -85,10 +85,10 @@ export function GatedButton({
       onClick={allowed ? onClick : undefined}
       disabled={!allowed}
       title={!allowed ? reason || "You do not have permission for this action" : undefined}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans font-medium rounded text-white transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-sans font-semibold rounded-lg text-white shadow-card transition-all focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-45 disabled:shadow-none disabled:cursor-not-allowed ${
         danger
-          ? "bg-[var(--color-crimson)] hover:bg-[var(--color-crimson-dark)] focus-visible:ring-[var(--color-crimson)]"
-          : "bg-[var(--color-charcoal)] hover:opacity-90 focus-visible:ring-[var(--color-charcoal)]"
+          ? "bg-[var(--color-danger)] hover:brightness-110 focus-visible:ring-[var(--color-danger)]"
+          : "bg-[var(--color-primary)] hover:bg-[var(--color-primary-strong)] focus-visible:ring-[var(--color-primary)]"
       } ${className}`}
     >
       {children}

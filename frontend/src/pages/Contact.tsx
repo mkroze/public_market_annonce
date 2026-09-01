@@ -32,30 +32,37 @@ export default function Contact() {
     <PageShell
       title="Contact"
       section="Aide"
+      width="wide"
       lead="Une question, une suggestion ou une anomalie à signaler ? Écrivez-nous, nous vous répondrons dans les meilleurs délais."
     >
-      <div className="not-prose grid gap-8 md:grid-cols-[1fr_1.4fr]">
+      {/* Une seule surface, deux colonnes : coordonnées à gauche, formulaire à
+          droite — plus de carte dans la carte. */}
+      <div className="not-prose institutional-panel grid gap-8 p-6 sm:p-8 md:grid-cols-[0.85fr_1.4fr] md:gap-10 md:divide-x md:divide-[var(--color-border-subtle)]">
         {/* Coordonnées */}
-        <aside className="space-y-6">
+        <aside className="space-y-5 md:pr-2">
           <div className="flex items-start gap-3">
-            <Mail className="w-5 h-5 text-[var(--color-crimson)] shrink-0 mt-0.5" />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
+              <Mail className="h-4 w-4" />
+            </span>
             <div>
-              <p className="label-academic">Par e-mail</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-muted)]">Par e-mail</p>
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="font-sans text-sm text-[var(--color-charcoal)] hover:text-[var(--color-crimson)]"
+                className="font-sans text-sm font-medium text-[var(--color-ink)] hover:text-[var(--color-primary)]"
               >
                 {CONTACT_EMAIL}
               </a>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <MessageSquare className="w-5 h-5 text-[var(--color-crimson)] shrink-0 mt-0.5" />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
+              <MessageSquare className="h-4 w-4" />
+            </span>
             <div>
-              <p className="label-academic">Support</p>
-              <p className="font-sans text-sm text-[var(--color-slate)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-muted)]">Support</p>
+              <p className="font-sans text-sm text-[var(--color-muted)]">
                 Consultez d'abord la{" "}
-                <a href="/faq" className="text-[var(--color-crimson)] underline underline-offset-2">
+                <a href="/faq" className="text-[var(--color-primary)] underline underline-offset-2">
                   foire aux questions
                 </a>
                 .
@@ -64,8 +71,8 @@ export default function Contact() {
           </div>
         </aside>
 
-        {/* Formulaire */}
-        <div className="border border-[var(--color-border-subtle)] rounded shadow-card bg-[var(--color-ivory)] p-6">
+        {/* Formulaire — pas de carte imbriquée, il occupe la colonne */}
+        <div className="md:pl-8">
           {sent ? (
             <div className="flex flex-col items-center text-center py-8">
               <CheckCircle className="w-10 h-10 text-[var(--color-crimson)] mb-3" />
@@ -98,13 +105,13 @@ export default function Contact() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="form-control">
                   <label htmlFor="contact-name" className="label">
-                    <span className="label-academic">Nom</span>
+                    <span className="text-[13px] font-semibold text-[var(--color-ink)]">Nom</span>
                   </label>
                   <input
                     id="contact-name"
                     type="text"
                     autoComplete="name"
-                    className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
+                    className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded-lg"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -112,13 +119,13 @@ export default function Contact() {
                 </div>
                 <div className="form-control">
                   <label htmlFor="contact-email" className="label">
-                    <span className="label-academic">Email</span>
+                    <span className="text-[13px] font-semibold text-[var(--color-ink)]">Email</span>
                   </label>
                   <input
                     id="contact-email"
                     type="email"
                     autoComplete="email"
-                    className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
+                    className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded-lg"
                     placeholder="email@exemple.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -129,12 +136,12 @@ export default function Contact() {
 
               <div className="form-control">
                 <label htmlFor="contact-subject" className="label">
-                  <span className="label-academic">Sujet</span>
+                  <span className="text-[13px] font-semibold text-[var(--color-ink)]">Sujet</span>
                 </label>
                 <input
                   id="contact-subject"
                   type="text"
-                  className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded"
+                  className="input input-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded-lg"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   required
@@ -143,18 +150,18 @@ export default function Contact() {
 
               <div className="form-control">
                 <label htmlFor="contact-message" className="label">
-                  <span className="label-academic">Message</span>
+                  <span className="text-[13px] font-semibold text-[var(--color-ink)]">Message</span>
                 </label>
                 <textarea
                   id="contact-message"
-                  className="textarea textarea-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded min-h-32"
+                  className="textarea textarea-bordered font-sans bg-base-100 border-[var(--color-border-subtle)] w-full rounded-lg min-h-32"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   required
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary font-sans font-semibold w-full rounded">
+              <button type="submit" className="btn btn-primary font-sans font-semibold w-full rounded-lg">
                 Envoyer
               </button>
             </form>

@@ -41,7 +41,7 @@ export default function Login() {
         <div
           className="relative hidden min-h-[640px] overflow-hidden bg-[var(--color-primary)] lg:block"
           style={{
-            clipPath: "polygon(0 0, 100% 0, 88% 100%, 0% 100%)",
+            clipPath: "polygon(0 0, 100% 0, 93% 100%, 0% 100%)",
           }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_22%,rgba(245,158,11,0.24),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.12),transparent_44%)]" />
@@ -78,7 +78,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-6 shadow-card sm:p-8">
+            <div className="p-1 sm:p-2">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
                 Accès membre
               </p>

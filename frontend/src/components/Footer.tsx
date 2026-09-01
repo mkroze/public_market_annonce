@@ -25,13 +25,13 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-[var(--color-border-subtle)] bg-[var(--color-ivory)] mt-16">
+    <footer className="relative z-10 border-t border-[var(--color-border-subtle)] bg-[color-mix(in_srgb,var(--color-surface)_88%,transparent)] backdrop-blur-sm mt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-2 max-w-sm">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded bg-[var(--color-crimson)] flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-2xl bg-[var(--color-crimson)] flex items-center justify-center shrink-0 shadow-card">
                 <span className="text-[var(--color-ivory)] font-bold text-sm font-sans">MP</span>
               </div>
               <span className="font-display text-lg font-bold text-[var(--color-charcoal)]">

@@ -70,12 +70,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <div className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-charcoal)] flex" data-theme="academic">
+    <div className="min-h-screen text-[var(--color-charcoal)] flex" data-theme="academic">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-ivory)] sticky top-0 h-screen">
         <div className="px-4 py-4 border-b border-[var(--color-border-subtle)]">
-          <NavLink to="/admin" className="font-display text-lg text-[var(--color-charcoal)]">
-            MP Maroc <span className="text-[var(--color-crimson)]">Admin</span>
+          <NavLink to="/admin" className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--color-primary)] text-[11px] font-bold text-white">
+              MP
+            </span>
+            <span className="font-display text-[15px] font-bold leading-tight text-[var(--color-charcoal)]">
+              Marchés Publics
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
+                Espace admin
+              </span>
+            </span>
           </NavLink>
         </div>
         <div className="p-3 flex-1 overflow-y-auto">
@@ -97,7 +105,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="absolute inset-0 bg-black/40" onClick={closeMobile} />
           <aside className="relative w-64 bg-[var(--color-ivory)] border-r border-[var(--color-border-subtle)] flex flex-col">
             <div className="px-4 py-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
-              <span className="font-display text-lg">MP Maroc <span className="text-[var(--color-crimson)]">Admin</span></span>
+              <span className="flex items-center gap-2">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--color-primary)] text-[10px] font-bold text-white">MP</span>
+                <span className="font-display text-sm font-bold leading-tight">Marchés Publics<span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">Espace admin</span></span>
+              </span>
               <button onClick={closeMobile} aria-label="Close navigation" className="p-1">
                 <X className="w-5 h-5" aria-hidden />
               </button>

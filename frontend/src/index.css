@@ -25,9 +25,9 @@
   --color-warning-content: #151c27;
   --color-error: #ba1a1a;
   --color-error-content: #ffffff;
-  --radius-selector: 0.5rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  --radius-selector: 1rem;
+  --radius-field: 0.7rem;
+  --radius-box: 1.25rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -61,9 +61,9 @@
   --font-display: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: var(--font-display);
-  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.05);
-  --shadow-card-hover: 0 6px 18px rgba(21, 28, 39, 0.09);
-  --shadow-pop: 0 10px 30px rgba(21, 28, 39, 0.12);
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.04), 0 12px 26px -16px rgba(21, 28, 39, 0.16);
+  --shadow-card-hover: 0 2px 6px rgba(21, 28, 39, 0.05), 0 26px 50px -22px rgba(21, 28, 39, 0.26);
+  --shadow-pop: 0 18px 44px -14px rgba(21, 28, 39, 0.20);
 
   /* Compatibility aliases for existing files during this redesign. */
   --color-ivory: var(--color-surface);
@@ -87,53 +87,60 @@
   --color-tone-critical-soft: var(--color-danger-soft);
 }
 
-/* Preserve the pre-redesign editorial palette inside the admin root. */
+/* Admin shares the public navy brand system — denser (tighter radii) but the
+   same palette, borders, and accent, so it no longer reads like a different
+   product. */
 [data-theme="academic"]:not(html):not(.institutional-page) {
-  --color-base-100: #f4f1ea;
-  --color-base-200: #eae5db;
-  --color-base-300: #e0dacd;
-  --color-base-content: #17150f;
-  --color-primary: #17150f;
-  --color-primary-content: #f4f1ea;
-  --color-secondary: #6f6a5e;
-  --color-secondary-content: #f4f1ea;
-  --color-accent: #b4462f;
-  --color-accent-content: #f4f1ea;
-  --color-neutral: #17150f;
-  --color-neutral-content: #f4f1ea;
-  --color-info: #17150f;
-  --color-info-content: #f4f1ea;
-  --color-success: #375237;
-  --color-success-content: #f4f1ea;
-  --color-warning: #8a6d1f;
-  --color-warning-content: #f4f1ea;
-  --color-error: #b4462f;
-  --color-error-content: #f4f1ea;
-  --radius-selector: 0.25rem;
-  --radius-box: 0.25rem;
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.6rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
 
-  --color-ivory: #f4f1ea;
-  --color-ivory-dim: #eae5db;
-  --color-ivory-deep: #e0dacd;
-  --color-crimson: #17150f;
-  --color-crimson-dark: #000000;
-  --color-crimson-light: #3a352b;
-  --color-crimson-muted: #d9d4c8;
-  --color-charcoal: #17150f;
-  --color-slate: #6f6a5e;
-  --color-gold: #8a6d1f;
-  --color-gold-light: #c2a95f;
-  --color-border: #c9c3b4;
-  --color-border-subtle: #ddd8cb;
-  --color-tone-positive: #375237;
-  --color-tone-positive-soft: #e4ebe0;
-  --color-tone-warning: #8a6d1f;
-  --color-tone-warning-soft: #efe7cf;
-  --color-tone-critical: #b4462f;
-  --color-tone-critical-soft: #f1ddd5;
-  --font-serif: "Archivo", "Inter", system-ui, sans-serif;
-  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --color-ivory: #ffffff;
+  --color-ivory-dim: #f0f3ff;
+  --color-ivory-deep: #dce2f3;
+  --color-crimson: #00236f;
+  --color-crimson-dark: #1e3a8a;
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: #dce1ff;
+  --color-charcoal: #151c27;
+  --color-slate: #444651;
+  --color-gold: #f59e0b;
+  --color-gold-light: #ffb95f;
+  --color-border: #c5c5d3;
+  --color-border-subtle: #dce2f3;
+  --color-tone-positive: #16803a;
+  --color-tone-positive-soft: #dff7e8;
+  --color-tone-warning: #f59e0b;
+  --color-tone-warning-soft: #fff2d8;
+  --color-tone-critical: #ba1a1a;
+  --color-tone-critical-soft: #ffdad6;
+  --font-serif: "Inter", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* Cleaner near-white blue-tint canvas, aligned with the public shell. */
+  background:
+    radial-gradient(46rem 32rem at 0% -10%, color-mix(in srgb, #00236f 6%, transparent), transparent 60%),
+    #f9f9ff;
 }
 
 .institutional-page {
@@ -177,9 +184,9 @@
   --color-success-soft: #dff7e8;
   --color-danger: #ba1a1a;
   --color-danger-soft: #ffdad6;
-  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.05);
-  --shadow-card-hover: 0 6px 18px rgba(21, 28, 39, 0.09);
-  --shadow-pop: 0 10px 30px rgba(21, 28, 39, 0.12);
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.04), 0 12px 26px -16px rgba(21, 28, 39, 0.16);
+  --shadow-card-hover: 0 2px 6px rgba(21, 28, 39, 0.05), 0 26px 50px -22px rgba(21, 28, 39, 0.26);
+  --shadow-pop: 0 18px 44px -14px rgba(21, 28, 39, 0.20);
 
   --color-ivory: var(--color-surface);
   --color-ivory-dim: var(--color-surface-muted);
@@ -248,20 +255,24 @@ body {
 }
 
 .institutional-page {
-  background: var(--color-app-bg);
   color: var(--color-ink);
+  background:
+    radial-gradient(58rem 40rem at 6% -12%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 60%),
+    radial-gradient(50rem 38rem at 104% 2%, color-mix(in srgb, var(--color-crimson-light) 9%, transparent), transparent 60%),
+    var(--color-app-bg);
+  background-attachment: fixed;
 }
 
 .institutional-panel {
   background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
+  border-radius: 1.25rem;
   box-shadow: var(--shadow-card);
 }
 
 .institutional-control {
   border: 1px solid var(--color-border);
-  border-radius: 0.25rem;
+  border-radius: 0.7rem;
   background: var(--color-surface);
   color: var(--color-ink);
 }
@@ -273,23 +284,26 @@ body {
   outline-offset: 1px;
 }
 
-/* ── Institutional card — white surface, soft shadow, rounded ──────── */
+/* ── Institutional card — white surface, floating soft shadow ─────── */
 .institutional-page .card {
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
   box-shadow: var(--shadow-card);
-  border-radius: 0.5rem;
+  border-radius: 1.25rem;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
 }
 
 .institutional-page .card:hover {
-  border-color: var(--color-border);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
   box-shadow: var(--shadow-card-hover);
+  transform: translateY(-3px);
 }
 
 /* ── Stat ─────────────────────────────────────────────────────────── */
 .institutional-page .stats {
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
   box-shadow: var(--shadow-card);
-  border-radius: 0.5rem;
+  border-radius: 1.25rem;
 }
 
 /* ── Table — structured list with thin dividers ──────────────────── */
@@ -307,10 +321,31 @@ body {
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-/* ── Badge ───────────────────────────────────────────────────────── */
+/* ── Admin tables — stronger headers + zebra + row hover (scan-friendly) ── */
+[data-theme="academic"]:not(html):not(.institutional-page) .table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+[data-theme="academic"]:not(html):not(.institutional-page) .table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--color-surface-muted) 50%, transparent);
+}
+[data-theme="academic"]:not(html):not(.institutional-page) .table tbody tr:hover {
+  background: var(--color-surface-muted);
+}
+
+/* ── Badge — pill ────────────────────────────────────────────────── */
 .institutional-page .badge {
-  border-radius: 0.5rem;
+  border-radius: 999px;
   font-weight: 600;
+}
+
+/* ── Button — pill (standalone; joined groups keep their join radii) ─ */
+.institutional-page .btn:not(.join-item) {
+  border-radius: 999px;
 }
 
 /* ── Button focus — blue ring ────────────────────────────────────── */
@@ -337,7 +372,7 @@ body {
 
 /* ── Navbar — hairline + faint shadow ────────────────────────────── */
 .institutional-page .navbar {
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border-subtle) 60%, transparent);
   box-shadow: var(--shadow-card);
 }
 
@@ -348,9 +383,9 @@ body {
 
 /* ── Dropdown — soft popover shadow ──────────────────────────────── */
 .institutional-page .dropdown-content {
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 75%, transparent);
   box-shadow: var(--shadow-pop);
-  border-radius: 0.5rem;
+  border-radius: 1rem;
 }
 
 /* ── Thin horizontal rule ────────────────────────────────────────── */
@@ -405,6 +440,81 @@ body {
   animation: fadeSlideIn 150ms ease-out;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   Reskin « vivant mais doux » — entrées en cascade, survol qui soulève,
+   ambiance qui dérive. Tout est neutralisé par [data-motion="off"] et
+   par prefers-reduced-motion (bloc plus bas).
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes driftSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(24px, -18px) scale(1.08); }
+}
+@keyframes floatSoft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Entrée simple (fondu + montée) */
+.rise-in {
+  opacity: 0;
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Entrée en cascade : les enfants directs apparaissent l'un après l'autre */
+.stagger > * {
+  opacity: 0;
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.stagger > *:nth-child(4) { animation-delay: 0.22s; }
+.stagger > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger > *:nth-child(6) { animation-delay: 0.34s; }
+.stagger > *:nth-child(7) { animation-delay: 0.40s; }
+.stagger > *:nth-child(8) { animation-delay: 0.46s; }
+.stagger > *:nth-child(n + 9) { animation-delay: 0.5s; }
+
+/* Survol qui soulève, pour les cartes/tuiles cliquables non-.card */
+.hover-lift {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Blobs d'ambiance qui dérivent lentement en arrière-plan */
+.ambiance-blob {
+  position: fixed;
+  border-radius: 9999px;
+  filter: blur(64px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  animation: driftSlow 20s ease-in-out infinite;
+}
+.float-soft { animation: floatSoft 6s ease-in-out infinite; }
+
+/* Coupe-circuit global : bouton « animations off » */
+[data-motion="off"] .rise-in,
+[data-motion="off"] .stagger > *,
+[data-motion="off"] .ambiance-blob,
+[data-motion="off"] .float-soft {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+[data-motion="off"] .ambiance-blob { display: none; }
+[data-motion="off"] * {
+  transition-duration: 0.01ms !important;
+}
+
 /* Respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -412,8 +522,17 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .rise-in,
+  .stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .ambiance-blob {
+    display: none !important;
   }
 }
 

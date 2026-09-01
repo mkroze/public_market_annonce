@@ -16,15 +16,15 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
   const displayTitle = tender.title?.trim() ? toSentenceCase(tender.title) : tender.reference?.trim();
 
   return (
-    <article className="relative overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-card transition-colors hover:border-[var(--color-primary)] hover:shadow-card-hover motion-reduce:transition-none">
+    <article className="hover-lift relative overflow-hidden rounded-[1.25rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_70%,transparent)] bg-[var(--color-surface)] shadow-card hover:border-[color-mix(in_srgb,var(--color-primary)_22%,transparent)] motion-reduce:transition-none">
       {/* Un seul lien couvre toute la carte : cible unique, clavier + lecteur d'écran. */}
       <Link to={toTenderPath(tender.id)} className="block p-5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className={`rounded border px-2 py-0.5 font-sans text-xs font-semibold ${TONE_BADGE[guidance.tone]}`}>
+          <span className={`rounded-full border px-2.5 py-0.5 font-sans text-xs font-semibold ${TONE_BADGE[guidance.tone]}`}>
             {guidance.label}
           </span>
           {tender.category && (
-            <span className="rounded border border-[var(--color-border-subtle)] px-2 py-0.5 font-sans text-xs text-[var(--color-muted)]">
+            <span className="rounded-full border border-[var(--color-border-subtle)] px-2.5 py-0.5 font-sans text-xs text-[var(--color-muted)]">
               {tender.category}
             </span>
           )}

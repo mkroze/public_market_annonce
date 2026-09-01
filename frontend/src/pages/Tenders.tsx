@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, Inbox, SearchX } from "lucide-react";
 import { getTenders, exportTenders } from "../lib/api";
 import type { TenderListResponse, TenderFilters } from "../lib/types";
 import FilterBar from "../components/FilterBar";
@@ -10,6 +10,7 @@ import Pagination from "../components/Pagination";
 import ExportDropdown from "../components/ExportDropdown";
 import ToastContainer, { createToast, type ToastData } from "../components/Toast";
 import Breadcrumbs from "../components/Breadcrumbs";
+import EmptyState from "../components/EmptyState";
 import { getTenderUrgency } from "../lib/tenderUtils";
 import { useAuth } from "../lib/auth";
 
@@ -29,17 +30,20 @@ function SummaryTile({
   value: number | string;
   tone?: "primary" | "warning" | "neutral";
 }) {
-  const accent =
+  const dot =
     tone === "warning"
-      ? "border-l-[var(--color-warning)]"
+      ? "bg-[var(--color-warning)]"
       : tone === "neutral"
-        ? "border-l-[var(--color-border)]"
-        : "border-l-[var(--color-primary)]";
+        ? "bg-[var(--color-border)]"
+        : "bg-[var(--color-primary)]";
 
   return (
-    <div className={`institutional-panel border-l-4 ${accent} px-3 py-2.5`}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">{label}</div>
-      <div className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-ink)]">{value}</div>
+    <div className="hover-lift institutional-panel px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-bold tabular-nums text-[var(--color-ink)]">{value}</div>
     </div>
   );
 }
@@ -187,6 +191,10 @@ export default function Tenders() {
     return { active, urgent, expired, shown: displayedTenders.length };
   }, [result, displayedTenders.length]);
 
+  // Catalogue réellement vide (aucune donnée, aucun filtre) : on masque tout le
+  // cockpit (stats à zéro, bandeau, onglets, filtres) pour une page calme.
+  const catalogEmpty = Boolean(result) && !loading && !error && result!.total === 0 && !filtersActive;
+
   return (
     <div className="px-4 py-6 sm:px-6 sm:py-8 space-y-5">
       <Breadcrumbs items={[{ label: "Consultations" }]} />
@@ -197,7 +205,7 @@ export default function Tenders() {
             Marchés publics
           </p>
           <h1 className="mt-1 text-3xl font-bold leading-tight text-[var(--color-ink)]">Consultations</h1>
-          {result && !loading && (
+          {result && !loading && !catalogEmpty && (
             <p className="mt-1 text-sm text-[var(--color-muted)] tabular-nums">
               {urgentSegmentActive
                 ? `${displayedTenders.length} consultation${displayedTenders.length !== 1 ? "s" : ""} urgente${displayedTenders.length !== 1 ? "s" : ""} sur cette page`
@@ -221,8 +229,8 @@ export default function Tenders() {
         )}
       </section>
 
-      {result && !loading && (
-        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {result && !loading && !catalogEmpty && (
+        <section className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
           <SummaryTile label="Sur cette page" value={pageSummary.shown} />
           <SummaryTile label="En cours" value={pageSummary.active} />
           <SummaryTile label="Urgentes" value={pageSummary.urgent} tone="warning" />
@@ -230,6 +238,8 @@ export default function Tenders() {
         </section>
       )}
 
+      {!catalogEmpty && (
+      <>
       <div className="institutional-panel px-4 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -243,7 +253,7 @@ export default function Tenders() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[var(--color-border-subtle)]" aria-label="Statut des consultations">
+      <div className="flex flex-wrap gap-2" aria-label="Statut des consultations">
         {STATUS_SEGMENTS.map((segment) => {
           const active =
             segment.key === "urgent"
@@ -256,10 +266,10 @@ export default function Tenders() {
               key={segment.key}
               type="button"
               aria-pressed={active}
-              className={`border-b-2 px-3 py-2 font-sans text-sm font-medium transition-colors motion-reduce:transition-none ${
+              className={`rounded-full px-4 py-1.5 font-sans text-sm font-semibold transition-all motion-reduce:transition-none ${
                 active
-                  ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                  : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                  ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-card"
+                  : "bg-[var(--color-surface)] text-[var(--color-muted)] ring-1 ring-[color-mix(in_srgb,var(--color-border-subtle)_70%,transparent)] hover:text-[var(--color-ink)] hover:ring-[var(--color-primary)]"
               }`}
               onClick={() => selectStatusSegment(segment)}
             >
@@ -270,6 +280,8 @@ export default function Tenders() {
       </div>
 
       <FilterBar filters={filters} onChange={updateFilters} />
+      </>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -283,27 +295,29 @@ export default function Tenders() {
           </button>
         </div>
       ) : result && displayedTenders.length === 0 ? (
-        <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-6 py-14 text-center">
-          <p className="font-display text-lg text-[var(--color-ink)]">
-            {filtersActive
-              ? "Aucune consultation ne correspond à vos critères."
-              : "Aucune consultation disponible pour le moment."}
-          </p>
-          <p className="mt-1 font-sans text-sm text-[var(--color-muted)]">
-            {filtersActive
-              ? "Élargissez ou réinitialisez vos filtres pour voir plus de résultats."
-              : "De nouvelles consultations sont ajoutées régulièrement. Revenez bientôt."}
-          </p>
-          {filtersActive && (
-            <button className="btn btn-sm btn-primary mt-4" onClick={resetFilters}>
-              Réinitialiser les filtres
-            </button>
-          )}
-        </div>
+        filtersActive ? (
+          <EmptyState
+            icon={SearchX}
+            title="Aucune consultation ne correspond à vos critères."
+            description="Élargissez ou réinitialisez vos filtres pour voir plus de résultats."
+            action={
+              <button className="btn btn-sm btn-primary" onClick={resetFilters}>
+                Réinitialiser les filtres
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            size="md"
+            icon={Inbox}
+            title="Aucune consultation disponible pour le moment."
+            description="De nouvelles consultations sont ajoutées régulièrement. Revenez bientôt."
+          />
+        )
       ) : result ? (
         <>
           {viewMode === "guided" ? (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-4">
               {displayedTenders.map((tender) => (
                 <TenderCard
                   key={tender.id}

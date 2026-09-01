@@ -258,7 +258,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             <button
               key={key}
               type="button"
-              className="inline-flex items-center gap-1.5 border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-2 py-1 font-sans text-xs text-[var(--color-ink)] hover:border-[var(--color-primary)] transition-colors motion-reduce:transition-none"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-2.5 py-1 font-sans text-xs text-[var(--color-ink)] hover:border-[var(--color-primary)] transition-colors motion-reduce:transition-none"
               onClick={() => removeFilter(key)}
               title="Retirer ce filtre"
             >
@@ -404,7 +404,7 @@ export default function FilterBar({ filters, onChange }: Props) {
             <button
               type="submit"
               disabled={!hasDraftChanges}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-[var(--color-on-primary)] shadow-card transition-all hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
               {hasDraftChanges ? "Appliquer" : "Filtres appliqués"}
             </button>

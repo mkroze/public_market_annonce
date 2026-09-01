@@ -15,6 +15,7 @@ import Privacy from "./pages/legal/Privacy";
 import Terms from "./pages/legal/Terms";
 import Cookies from "./pages/legal/Cookies";
 import Footer from "./components/Footer";
+import Ambiance from "./components/Ambiance";
 import AdminGuard from "./admin/AdminGuard";
 
 // L'espace admin est isolé et chargé à la demande (bundle séparé).
@@ -39,7 +40,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 function PublicLayout() {
   return (
-    <div className="min-h-screen flex flex-col institutional-page">
+    <div className="relative min-h-screen flex flex-col institutional-page">
+      <Ambiance />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:top-2 focus:left-2 focus:rounded focus:bg-[var(--color-crimson)] focus:px-3 focus:py-2 focus:text-[var(--color-ivory)] focus:font-sans focus:text-sm"
@@ -47,7 +49,7 @@ function PublicLayout() {
         Aller au contenu
       </a>
       <Navbar />
-      <main id="main-content" className="flex-1 w-full max-w-[1440px] mx-auto">
+      <main id="main-content" className="relative z-10 flex-1 w-full max-w-[1440px] mx-auto">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

@@ -97,31 +97,24 @@ export default function Faq() {
       lead="Les réponses aux questions les plus fréquentes sur la plateforme et son utilisation."
     >
       <section className="not-prose w-full max-w-2xl">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrer par catégorie">
           {CATEGORIES.map((category) => {
             const active = activeCat === category.key;
-            const count = FAQS.filter((f) => f.category === category.key).length;
 
             return (
               <button
                 key={category.key}
                 type="button"
+                role="tab"
                 onClick={() => selectCategory(category.key)}
-                aria-pressed={active}
-                className={`inline-flex h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors ${
+                aria-selected={active}
+                className={`inline-flex h-9 items-center rounded-full px-4 text-xs font-semibold transition-all ${
                   active
-                    ? "border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-ivory)]"
-                    : "border-[var(--color-border-subtle)] bg-[var(--color-ivory)] text-[var(--color-charcoal)] hover:border-[var(--color-border)]"
+                    ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-card"
+                    : "bg-[var(--color-surface)] text-[var(--color-muted)] ring-1 ring-[color-mix(in_srgb,var(--color-border-subtle)_70%,transparent)] hover:text-[var(--color-ink)] hover:ring-[var(--color-primary)]"
                 }`}
               >
                 {category.label}
-                <span
-                  className={`text-[10px] ${
-                    active ? "text-[var(--color-ivory-dim)]" : "text-[var(--color-slate)]"
-                  }`}
-                >
-                  {count}
-                </span>
               </button>
             );
           })}
@@ -149,7 +142,7 @@ export default function Faq() {
                   aria-controls={answerId}
                   className="flex w-full items-center gap-3 px-3 py-3 text-left sm:px-4"
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] text-[var(--color-charcoal)]">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
                     <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-[var(--color-charcoal)] sm:text-[15px]">
@@ -169,9 +162,9 @@ export default function Faq() {
                     id={answerId}
                     role="region"
                     aria-labelledby={buttonId}
-                    className="px-3 pb-4 pl-[4.25rem] pr-5 sm:px-4 sm:pb-5 sm:pl-[4.75rem]"
+                    className="pb-4 pl-[3rem] pr-5 sm:pb-5 sm:pl-[3.25rem]"
                   >
-                    <p className="mb-0 text-sm leading-6 text-[var(--color-slate)]">{item.a}</p>
+                    <p className="mb-0 text-sm leading-6 text-[var(--color-muted)]">{item.a}</p>
                   </div>
                 )}
               </article>
@@ -179,12 +172,12 @@ export default function Faq() {
           })}
         </div>
 
-        <div className="mt-6 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] px-4 py-4">
-          <p className="mb-0 text-sm text-[var(--color-slate)]">
+        <div className="mt-6 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-4 py-4">
+          <p className="mb-0 text-sm text-[var(--color-muted)]">
             Vous ne trouvez pas votre réponse ?{" "}
             <a
               href="/contact"
-              className="font-semibold text-[var(--color-charcoal)] underline underline-offset-4"
+              className="font-semibold text-[var(--color-primary)] underline underline-offset-4"
             >
               Contactez-nous
             </a>

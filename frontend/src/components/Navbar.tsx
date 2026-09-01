@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { isAdminRole } from "../admin/permissions";
+import MotionToggle from "./MotionToggle";
 import logoFull from "../assets/logo-full.svg";
 
 export default function Navbar() {
@@ -27,14 +28,14 @@ export default function Navbar() {
     path === "/" ? pathname === "/" : pathname.startsWith(path);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-[color-mix(in_srgb,var(--color-border-subtle)_60%,transparent)] bg-[var(--color-surface)]/75 shadow-card backdrop-blur-xl">
       {/* Top bar — brand + auth */}
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
         <Link to="/tenders" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:gap-2.5">
           <img
             src={logoFull}
             alt="Marchés Publics Maroc"
-            className="h-4 w-auto max-w-[150px] min-w-0 shrink sm:h-4 sm:max-w-[190px]"
+            className="h-5 w-auto max-w-[160px] min-w-0 shrink sm:h-6 sm:max-w-[210px]"
           />
         </Link>
 
@@ -45,9 +46,9 @@ export default function Navbar() {
               <Link
                 key={l.to}
                 to={l.to}
-                className={`inline-flex h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold transition-colors motion-reduce:transition-none ${
+                className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all motion-reduce:transition-none ${
                   active
-                    ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                    ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-primary)_18%,transparent)]"
                     : "text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
                 }`}
               >
@@ -59,6 +60,7 @@ export default function Navbar() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <MotionToggle className="hidden sm:inline-grid" />
           {/* Auth — desktop */}
           {user ? (
             <div className="dropdown dropdown-end hidden md:block">

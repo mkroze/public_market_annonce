@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import type { AlertPreference, AlertPreview, FiltersResponse } from "../lib/types";
 import Breadcrumbs from "../components/Breadcrumbs";
+import EmptyState from "../components/EmptyState";
 import ToastContainer, { createToast, type ToastData } from "../components/Toast";
 
 // Brouillon d'édition : les champs du formulaire, alignés sur le contrat backend
@@ -480,8 +481,10 @@ export default function Alerts() {
       <Breadcrumbs items={[{ label: "Compte" }, { label: "Mes alertes" }]} className="mb-6" />
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h1 className="font-display text-2xl text-[var(--color-charcoal)] flex items-center gap-2">
-          <Bell className="w-6 h-6 text-[var(--color-crimson)]" />
+        <h1 className="flex items-center gap-2.5 text-2xl font-bold text-[var(--color-ink)]">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
+            <Bell size={16} />
+          </span>
           Mes alertes
         </h1>
         {/* Beta: one alert per account — the create action disappears once an
@@ -513,21 +516,22 @@ export default function Alerts() {
           {open && editingId === null && editor}
 
           {alerts.length === 0 && !open ? (
-            <div className="border border-dashed border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-10 text-center">
-              <Bell className="mx-auto mb-3 h-8 w-8 text-[var(--color-slate)]" />
-              <p className="font-sans text-sm text-[var(--color-slate)] mb-4">
-                Vous n'avez pas encore d'alerte. Créez votre première pour être prévenu des
-                nouvelles consultations.
-              </p>
-              <button
-                type="button"
-                onClick={startCreate}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-crimson)] px-4 py-2 text-sm font-semibold text-[var(--color-ivory)] transition-colors hover:bg-[var(--color-crimson-dark)]"
-              >
-                <Plus size={16} />
-                Créer une alerte
-              </button>
-            </div>
+            <EmptyState
+              size="md"
+              icon={Bell}
+              title="Aucune alerte pour le moment"
+              description="Créez votre première alerte pour être prévenu, chaque matin, des nouvelles consultations qui correspondent à vos critères."
+              action={
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)] shadow-card transition-colors hover:bg-[var(--color-primary-strong)]"
+                >
+                  <Plus size={16} />
+                  Créer une alerte
+                </button>
+              }
+            />
           ) : (
             <ul className="space-y-3">
               {alerts.map((alert) => (
