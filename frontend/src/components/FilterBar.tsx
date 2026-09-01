@@ -206,7 +206,7 @@ export default function FilterBar({ filters, onChange }: Props) {
       </form>
 
       {/* Control row — FILTRES + / TRIER + */}
-      <div className="flex items-center justify-between gap-4 py-3 border-t border-[var(--color-border-subtle)]">
+      <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border-subtle)] px-3 py-3 sm:px-4">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -253,7 +253,7 @@ export default function FilterBar({ filters, onChange }: Props) {
 
       {/* Active filter chips */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-subtle)] py-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-subtle)] px-3 py-3 sm:px-4">
           {activeFilters.map((key) => (
             <button
               key={key}
@@ -280,7 +280,7 @@ export default function FilterBar({ filters, onChange }: Props) {
       {open && (
         <form
           onSubmit={applyFilters}
-          className="border-t border-[var(--color-border-subtle)] py-5 space-y-4"
+          className="border-t border-[var(--color-border-subtle)] px-5 py-6 space-y-5 sm:px-6 lg:px-8"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <label className="space-y-1.5">
