@@ -84,9 +84,10 @@ export default function Faq() {
 
   const visibleFaqs = activeCat ? FAQS.filter((f) => f.category === activeCat) : FAQS;
 
-  // Un clic sur une catégorie filtre la liste ; un second clic la désélectionne.
-  function selectCategory(key: string) {
-    setActiveCat((cur) => (cur === key ? null : key));
+  // Sélection d'un filtre : « Tous » (null) réaffiche l'ensemble, une catégorie
+  // restreint la liste. On referme l'accordéon pour repartir d'un état propre.
+  function selectCategory(key: string | null) {
+    setActiveCat(key);
     setOpen(null);
   }
 
@@ -98,12 +99,12 @@ export default function Faq() {
     >
       <section className="not-prose w-full max-w-2xl">
         <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrer par catégorie">
-          {CATEGORIES.map((category) => {
+          {[{ key: null, label: "Tous" }, ...CATEGORIES].map((category) => {
             const active = activeCat === category.key;
 
             return (
               <button
-                key={category.key}
+                key={category.key ?? "all"}
                 type="button"
                 role="tab"
                 onClick={() => selectCategory(category.key)}
