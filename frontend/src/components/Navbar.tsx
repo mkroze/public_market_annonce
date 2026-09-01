@@ -80,6 +80,12 @@ export default function Navbar() {
                 <li className="px-2 py-1.5 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
                   {user.email}
                 </li>
+                <li>
+                  <Link to="/alerts" className="text-sm">
+                    <UserRound size={14} />
+                    Espace membre
+                  </Link>
+                </li>
                 {isAdmin && (
                   <li>
                     <Link to="/admin" className="text-sm font-semibold text-[var(--color-crimson)]">
@@ -128,6 +134,12 @@ export default function Navbar() {
                 <>
                   <li className="px-2 py-1 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
                     {user.email}
+                  </li>
+                  <li>
+                    <Link to="/alerts" className="text-sm">
+                      <UserRound size={14} />
+                      Espace membre
+                    </Link>
                   </li>
                   {isAdmin && (
                     <li>

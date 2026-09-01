@@ -23,7 +23,7 @@ const allowedRoutePaths = new Set([
   "/*",
   "*",
 ]);
-const allowedNavTargets = new Set(["/", "/tenders", "/about", "/faq", "/contact"]);
+const allowedNavTargets = new Set(["/", "/tenders", "/alerts", "/about", "/faq", "/contact"]);
 // Links to the retired public pages must not reappear. /admin, /login and
 // /register are deliberately absent: they are auth entry points, not retired
 // catalog pages. /alerts is likewise absent: the signed-in "Mes alertes"
@@ -96,4 +96,4 @@ if (forbiddenLinkUses.length > 0) {
   throw new Error(`Forbidden V1 in-app links exposed:\n${forbiddenLinkUses.join("\n")}`);
 }
 
-console.log("V1 frontend surface only exposes catalog routes.");
+console.log("V1 frontend surface only exposes catalog and authenticated member routes.");
