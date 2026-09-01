@@ -43,6 +43,15 @@
 - Modify `frontend/src/components/Navbar.tsx`: point account menu to `/member`.
 - Modify `frontend/src/index.css`: add theme preference selectors for light/dark user choice.
 
+Execution order:
+
+1. Task 1: Backend Account API
+2. Task 2: Frontend Account Types, API, And Theme Utility
+3. Task 4: Member Overview, Consultations, And Saved Searches
+4. Task 5: Member Account Page
+5. Task 3: Member Shell And Routing
+6. Task 6: Final Verification
+
 ---
 
 ### Task 1: Backend Account API
@@ -652,7 +661,7 @@ Run:
 cd frontend && npm run build
 ```
 
-Expected: TypeScript may fail because member pages do not exist yet, but the edited lib files should have no standalone type errors. If it fails only because routes/pages are missing, proceed to Task 3.
+Expected: build passes.
 
 - [ ] **Step 7: Commit frontend account primitives**
 
@@ -836,7 +845,7 @@ Run:
 cd frontend && npm run build
 ```
 
-Expected: build fails until the member page files are created in Task 4 and Task 5. Any errors in `MemberLayout`, `App`, `Navbar`, or `Alerts` should be fixed before moving on.
+Expected: build passes because Task 4 and Task 5 create the page components before this routing task runs.
 
 - [ ] **Step 6: Commit shell routing**
 
@@ -1139,7 +1148,7 @@ Run:
 cd frontend && npm run build
 ```
 
-Expected: build may still fail because `MemberAccount` is not created until Task 5. There should be no errors in the three files from this task.
+Expected: build passes or fails only because `MemberAccount` is not created until Task 5. There should be no errors in the three files from this task.
 
 - [ ] **Step 5: Commit member content templates**
 
