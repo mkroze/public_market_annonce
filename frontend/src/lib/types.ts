@@ -145,14 +145,30 @@ export interface TenderFilters {
 }
 
 // Auth
+export type ThemePreference = "system" | "light" | "dark";
+
 export interface User {
   id: number;
   email: string;
   name: string;
   plan: string;
   company?: string;
+  phone?: string;
   role?: string;
   status?: string;
+  theme?: ThemePreference;
+  created_at?: string | null;
+  last_login?: string | null;
+}
+
+export interface AccountProfile extends User {
+  theme: ThemePreference;
+  company: string;
+  phone: string;
+  role: string;
+  status: string;
+  created_at?: string | null;
+  last_login?: string | null;
 }
 
 export interface AuthResponse {

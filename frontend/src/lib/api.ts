@@ -5,8 +5,10 @@ import type {
   StatsResponse,
   FiltersResponse,
   TenderWithDetails,
+  AccountProfile,
   AuthResponse,
   User,
+  ThemePreference,
   CityStats,
   CityDetail,
   RegionStats,
@@ -67,6 +69,21 @@ async function fetchJSON<T>(
   if (res.status === 401 && options.redirectOnUnauthorized !== false) handleUnauthorized();
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+async function mutateJSON<T>(path: string, init: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...(init.headers || {}),
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw new Error(body.detail || `API error: ${res.status}`);
+  return body;
 }
 
 // ── Tenders ──
@@ -216,6 +233,27 @@ export async function login(email: string, password: string): Promise<AuthRespon
 
 export function getMe(): Promise<User> {
   return fetchJSON<User>(`${BASE}/auth/me`, undefined, { redirectOnUnauthorized: false });
+}
+
+export function getAccount(): Promise<AccountProfile> {
+  return fetchJSON<AccountProfile>(`${BASE}/account`);
+}
+
+export function updateAccountPreferences(data: { theme: ThemePreference }): Promise<AccountProfile> {
+  return mutateJSON<AccountProfile>(`${BASE}/account/preferences`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function changePassword(data: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ status: string }> {
+  return mutateJSON<{ status: string }>(`${BASE}/account/change-password`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 // ── Cities ──
