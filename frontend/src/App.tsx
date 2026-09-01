@@ -7,6 +7,11 @@ import TenderDetail from "./pages/TenderDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Alerts from "./pages/Alerts";
+import MemberLayout from "./components/MemberLayout";
+import MemberOverview from "./pages/member/MemberOverview";
+import MemberConsultations from "./pages/member/MemberConsultations";
+import MemberSavedSearches from "./pages/member/MemberSavedSearches";
+import MemberAccount from "./pages/member/MemberAccount";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Faq from "./pages/Faq";
@@ -63,6 +68,23 @@ function PublicLayout() {
               </RequireAuth>
             }
           />
+
+          {/* Espace membre : coquille protégée avec routes imbriquées. */}
+          <Route
+            path="/member"
+            element={
+              <RequireAuth>
+                <MemberLayout />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Navigate to="/member/overview" replace />} />
+            <Route path="overview" element={<MemberOverview />} />
+            <Route path="consultations" element={<MemberConsultations />} />
+            <Route path="alerts" element={<Alerts embedded />} />
+            <Route path="saved-searches" element={<MemberSavedSearches />} />
+            <Route path="account" element={<MemberAccount />} />
+          </Route>
 
           {/* Pages de contenu publiques (accessibles sans connexion) */}
           <Route path="/about" element={<About />} />

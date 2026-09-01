@@ -102,7 +102,7 @@ function matchSignature(draft: AlertDraft): string {
   ]);
 }
 
-export default function Alerts() {
+export default function Alerts({ embedded = false }: { embedded?: boolean }) {
   const [alerts, setAlerts] = useState<AlertPreference[]>([]);
   const [options, setOptions] = useState<FiltersResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -477,8 +477,8 @@ export default function Alerts() {
   );
 
   return (
-    <div className="px-4 sm:px-6 py-8">
-      <Breadcrumbs items={[{ label: "Compte" }, { label: "Mes alertes" }]} className="mb-6" />
+    <div className={embedded ? "space-y-6" : "px-4 sm:px-6 py-8"}>
+      {!embedded && <Breadcrumbs items={[{ label: "Compte" }, { label: "Mes alertes" }]} className="mb-6" />}
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <h1 className="flex items-center gap-2.5 text-2xl font-bold text-[var(--color-ink)]">

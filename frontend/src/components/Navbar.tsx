@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck } from "lucide-react";
+import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck, Settings } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { isAdminRole } from "../admin/permissions";
 import MotionToggle from "./MotionToggle";
@@ -81,9 +81,15 @@ export default function Navbar() {
                   {user.email}
                 </li>
                 <li>
-                  <Link to="/alerts" className="text-sm">
+                  <Link to="/member/overview" className="text-sm">
                     <UserRound size={14} />
                     Espace membre
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/member/account" className="text-sm">
+                    <Settings size={14} />
+                    Profil & préférences
                   </Link>
                 </li>
                 {isAdmin && (
@@ -136,9 +142,15 @@ export default function Navbar() {
                     {user.email}
                   </li>
                   <li>
-                    <Link to="/alerts" className="text-sm">
+                    <Link to="/member/overview" className="text-sm">
                       <UserRound size={14} />
                       Espace membre
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/account" className="text-sm">
+                      <Settings size={14} />
+                      Profil & préférences
                     </Link>
                   </li>
                   {isAdmin && (
