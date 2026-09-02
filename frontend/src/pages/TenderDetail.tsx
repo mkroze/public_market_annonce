@@ -29,6 +29,7 @@ import { CATEGORY_COLORS, CATEGORY_FALLBACK, TONE_PANEL } from "../lib/tone";
 import type { DisplayValue, TenderWithDetails } from "../lib/types";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useAuth } from "../lib/auth";
+import LegalTooltip from "../components/LegalTooltip";
 
 function rawOrMissing(value: string | undefined | null, missing = "Non détecté"): string {
   return value && value.trim() ? value : missing;
@@ -144,8 +145,9 @@ export default function TenderDetail() {
               {category}
             </span>
           )}
-          <span className="inline-block px-2.5 py-1 text-xs font-semibold font-sans rounded border border-[var(--color-border-subtle)] text-[var(--color-slate)]">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold font-sans rounded border border-[var(--color-border-subtle)] text-[var(--color-slate)]">
             {procedure}
+            <LegalTooltip field="procedure" />
           </span>
           {d?.annonce_type && (
             <span className="inline-block px-2.5 py-1 text-xs font-sans rounded bg-[var(--color-ivory-dim)] text-[var(--color-slate)]">
@@ -183,8 +185,8 @@ export default function TenderDetail() {
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <SignalCard icon={Calendar} title="Échéance" value={deadlineSignal} />
-        <SignalCard icon={Banknote} title="Budget estimé" value={signals?.estimation} />
-        <SignalCard icon={Shield} title="Caution" value={signals?.caution} />
+        <SignalCard icon={Banknote} title="Budget estimé" value={signals?.estimation} legalField="montant" />
+        <SignalCard icon={Shield} title="Caution" value={signals?.caution} legalField="caution-provisoire" />
         <SignalCard icon={Download} title="DCE" value={signals?.dce_available} />
         <SignalCard icon={Users} title="Candidatures" value={signals?.applications_count} />
         <SignalCard icon={Landmark} title="Prix marché" value={signals?.market_price} />
@@ -308,7 +310,7 @@ export default function TenderDetail() {
       {(d?.qualifications || d?.agrements || d?.allotissement || d?.reserved_pme) && (
         <Section icon={Users} title="Conditions de participation">
           {d?.allotissement && <Field label="Allotissement" value={d.allotissement} />}
-          {d?.qualifications && <Field label="Qualifications requises" value={d.qualifications} />}
+          {d?.qualifications && <Field label="Qualifications requises" value={d.qualifications} legalField="qualifications" />}
           {d?.agrements && <Field label="Agréments requis" value={d.agrements} />}
           {d?.reserved_pme && <Field label="Réservé TPE/PME" value={d.reserved_pme} />}
         </Section>
@@ -378,10 +380,11 @@ function InfoCard({ icon: Icon, title, value, highlight = false }: {
   );
 }
 
-function SignalCard({ icon: Icon, title, value }: {
+function SignalCard({ icon: Icon, title, value, legalField }: {
   icon: typeof Building2;
   title: string;
   value: DisplayValue | undefined;
+  legalField?: string;
 }) {
   const tone = signalTone(value);
   const label = sourceLabel(value);
@@ -396,7 +399,10 @@ function SignalCard({ icon: Icon, title, value }: {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Icon size={15} className={tone === "muted" ? "text-[var(--color-slate)]" : "text-[var(--color-crimson)]"} />
-          <p className="label-academic">{title}</p>
+          <p className="label-academic inline-flex items-center">
+            {title}
+            {legalField && <LegalTooltip field={legalField} />}
+          </p>
         </div>
         {label && <span className="text-[11px] font-sans text-[var(--color-slate)]">{label}</span>}
       </div>
@@ -408,10 +414,13 @@ function SignalCard({ icon: Icon, title, value }: {
 }
 
 /* ─── Field ─── */
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, legalField }: { label: string; value: string; legalField?: string }) {
   return (
     <div className="py-3">
-      <p className="label-academic mb-1">{label}</p>
+      <p className="label-academic mb-1 inline-flex items-center">
+        {label}
+        {legalField && <LegalTooltip field={legalField} />}
+      </p>
       <p className="text-sm leading-relaxed font-sans text-[var(--color-charcoal)]">{value}</p>
     </div>
   );
