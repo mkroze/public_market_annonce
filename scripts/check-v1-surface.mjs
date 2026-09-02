@@ -12,6 +12,25 @@ const allowedRoutePaths = new Set([
   "/alerts",
   "/login",
   "/register",
+  // Auth recovery / email verification (email security foundation).
+  "/verify-email",
+  "/forgot-password",
+  "/reset-password",
+  // Authenticated member space — nested under /member; children are relative
+  // paths as declared in App.tsx (<Route path="overview"> …).
+  "/member",
+  "overview",
+  "consultations",
+  "alerts",
+  "saved-searches",
+  "account",
+  // Epic 1 — legal & candidacy assistance (restored re-ship epic).
+  "/assistant",
+  "/guide",
+  "/procedures",
+  "/procedures/:slug",
+  "/eligibility",
+  "/recours",
   "/about",
   "/contact",
   "/faq",
@@ -23,23 +42,18 @@ const allowedRoutePaths = new Set([
   "/*",
   "*",
 ]);
-const allowedNavTargets = new Set(["/", "/tenders", "/alerts", "/about", "/faq", "/contact"]);
+const allowedNavTargets = new Set(["/", "/tenders", "/guide", "/alerts", "/about", "/faq", "/contact"]);
 // Links to the retired public pages must not reappear. /admin, /login and
 // /register are deliberately absent: they are auth entry points, not retired
 // catalog pages. /alerts is likewise absent: the signed-in "Mes alertes"
 // (triggers) page ships with the launch.
 const forbiddenInternalPrefixes = [
-  "/assistant",
   "/blog",
   "/calculator",
   "/cities",
-  "/eligibility",
   "/favorites",
-  "/guide",
   "/partenaires",
   "/pricing",
-  "/procedures",
-  "/recours",
   "/regions",
   "/sectors",
   "/stats",

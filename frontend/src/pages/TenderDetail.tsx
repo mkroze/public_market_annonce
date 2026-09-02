@@ -20,8 +20,9 @@ import {
   CheckCircle2,
   HelpCircle,
   LockKeyhole,
+  Heart,
 } from "lucide-react";
-import { getTender, downloadDce, downloadPdf } from "../lib/api";
+import { getTender, downloadDce, downloadPdf, getFavoriteIds, addFavorite, removeFavorite } from "../lib/api";
 import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
 import { getTenderDecisionChecklist } from "../lib/tenderGuidance";
 import { decodeTenderRouteId, getTenderUrgency } from "../lib/tenderUtils";
@@ -75,6 +76,9 @@ export default function TenderDetail() {
   const [dceError, setDceError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
+  const [favError, setFavError] = useState("");
   const { user } = useAuth();
   const isLoggedIn = Boolean(user);
   const returnPath = id ? `/tenders/${id}` : "/tenders";
@@ -87,6 +91,39 @@ export default function TenderDetail() {
       .catch(() => setError("Impossible de charger cette consultation"))
       .finally(() => setLoading(false));
   }, [tenderId]);
+
+  useEffect(() => {
+    if (!user || !tenderId) {
+      setIsFavorite(false);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteIds()
+      .then((res) => {
+        if (!cancelled) setIsFavorite(res.ids.includes(tenderId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, tenderId]);
+
+  async function toggleFavorite() {
+    if (!tenderId) return;
+    const wasFavorite = isFavorite;
+    setIsFavorite(!wasFavorite);
+    setFavLoading(true);
+    setFavError("");
+    try {
+      if (wasFavorite) await removeFavorite(tenderId);
+      else await addFavorite(tenderId);
+    } catch {
+      setIsFavorite(wasFavorite);
+      setFavError("Action impossible pour le moment. Réessayez.");
+    } finally {
+      setFavLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -224,14 +261,27 @@ export default function TenderDetail() {
       </section>
 
       {/* Actions */}
-      {(dceError || pdfError) && (
+      {(dceError || pdfError || favError) && (
         <div className="border border-[var(--color-crimson)] border-l-4 rounded px-4 py-3 text-[var(--color-crimson)] text-sm font-sans">
-          {dceError || pdfError}
+          {dceError || pdfError || favError}
         </div>
       )}
       <div className="space-y-3">
         {isLoggedIn ? (
           <div className="flex flex-wrap gap-3">
+            <button
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-sans font-medium rounded border transition-colors ${
+                isFavorite
+                  ? "border-[var(--color-crimson)] bg-[var(--color-crimson)] text-[var(--color-ivory)]"
+                  : "border-[var(--color-border-subtle)] text-[var(--color-charcoal)] hover:border-[var(--color-crimson)]"
+              }`}
+              disabled={favLoading}
+              onClick={toggleFavorite}
+              aria-pressed={isFavorite}
+            >
+              <Heart size={16} className={isFavorite ? "fill-current" : ""} />
+              {isFavorite ? "Consultation suivie" : "Suivre cette consultation"}
+            </button>
             {d?.dce_url && (
               <button
                 className="btn btn-primary font-sans font-semibold gap-2"

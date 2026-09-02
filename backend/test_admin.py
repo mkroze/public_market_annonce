@@ -9,6 +9,7 @@ import asyncio
 import os
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 # Point the app at a throwaway DB before importing modules that read config.
 _tmp_dir = tempfile.mkdtemp()
@@ -127,6 +128,10 @@ class RegisterBootstrapTest(unittest.TestCase):
     def setUp(self):
         run(_reset_db())
         self.client = TestClient(main.app)
+        # Registration now attempts a verification email; keep it off the network.
+        patcher = patch.object(main, "_send_email_best_effort", AsyncMock(return_value=False))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _role_in_db(self, email):
         async def q():

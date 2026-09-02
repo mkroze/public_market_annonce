@@ -4,19 +4,29 @@ import { getTenderGuidance } from "../lib/tenderGuidance";
 import { getTenderUrgency, toSentenceCase, toTenderPath } from "../lib/tenderUtils";
 import { TONE_BADGE } from "../lib/tone";
 import type { Tender } from "../lib/types";
+import FavoriteButton from "./FavoriteButton";
 
 interface TenderCardProps {
   tender: Tender;
   compact?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: (id: string) => void;
 }
 
-export default function TenderCard({ tender, compact = false }: TenderCardProps) {
+export default function TenderCard({ tender, compact = false, isFavorite, onToggleFavorite }: TenderCardProps) {
   const guidance = getTenderGuidance(tender);
   const urgency = getTenderUrgency(tender.deadline);
   const displayTitle = tender.title?.trim() ? toSentenceCase(tender.title) : tender.reference?.trim();
 
   return (
     <article className="hover-lift relative overflow-hidden rounded-[1.25rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_70%,transparent)] bg-[var(--color-surface)] shadow-card hover:border-[color-mix(in_srgb,var(--color-primary)_22%,transparent)] motion-reduce:transition-none">
+      {onToggleFavorite && (
+        <FavoriteButton
+          active={Boolean(isFavorite)}
+          onToggle={() => onToggleFavorite(tender.id)}
+          className="absolute right-3 top-3 z-10 h-8 w-8 rounded-full bg-[var(--color-surface)]/80 shadow-card backdrop-blur hover:bg-[var(--color-surface)]"
+        />
+      )}
       {/* Un seul lien couvre toute la carte : cible unique, clavier + lecteur d'écran. */}
       <Link to={toTenderPath(tender.id)} className="block p-5">
         <div className="mb-2 flex flex-wrap items-center gap-2">

@@ -185,8 +185,10 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
         await database.init_db()
 
         db = await database.get_db()
+        # Verified user: the digest only sends to verified addresses.
         await db.execute(
-            "INSERT INTO users (email, password_hash, name) VALUES ('u1@test.com', 'x', 'U1')"
+            "INSERT INTO users (email, password_hash, name, email_verified_at) "
+            "VALUES ('u1@test.com', 'x', 'U1', datetime('now'))"
         )
         await db.execute(
             """INSERT INTO alert_preferences (user_id, name, sectors, regions, keywords, enabled)
@@ -250,6 +252,22 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
 
         db = await database.get_db()
         await db.execute("UPDATE alert_preferences SET enabled = 0")
+        await db.commit()
+        await db.close()
+
+        with patch.object(digest, "resolve_email_config", AsyncMock(return_value=ENABLED_CFG)), patch.object(
+            digest, "send_email"
+        ) as mock_send:
+            result = await digest.run_digest(["T1"])
+        self.assertEqual(result["emails_sent"], 0)
+        mock_send.assert_not_called()
+
+    async def test_unverified_user_excluded_from_digest(self):
+        import database
+        import digest
+
+        db = await database.get_db()
+        await db.execute("UPDATE users SET email_verified_at = NULL WHERE id = 1")
         await db.commit()
         await db.close()
 

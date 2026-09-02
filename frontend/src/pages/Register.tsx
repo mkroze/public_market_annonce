@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { register } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import AuthCard from "../components/AuthCard";
 import logoFull from "../assets/logo-full.svg";
 import logoWhite from "../assets/logo-full-white.svg";
 
 export default function Register() {
   const { setAuth } = useAuth();
-  const navigate = useNavigate();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,6 +17,8 @@ export default function Register() {
   const [company, setCompany] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -29,13 +31,41 @@ export default function Register() {
         password,
         company: company || undefined,
       });
+      // Log the user in, then show a verification-pending confirmation rather
+      // than jumping straight to the catalog.
       setAuth(res.token, res.user);
-      navigate("/", { replace: true });
+      setVerificationSent(Boolean(res.verification_email_sent));
+      setDone(true);
     } catch (err: any) {
       setError(err.message || "Erreur lors de l'inscription");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (done) {
+    return (
+      <AuthCard title="Compte créé" subtitle={name ? `Bienvenue, ${name}.` : "Bienvenue."}>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-ink)]">
+            {verificationSent ? (
+              <>
+                Un email de vérification a été envoyé à <strong>{email}</strong>. Cliquez sur le lien
+                pour confirmer votre adresse.
+              </>
+            ) : (
+              <>
+                Votre compte est prêt. L'email de vérification n'a pas pu être envoyé pour le moment —
+                vous pourrez le renvoyer depuis le bandeau de votre espace.
+              </>
+            )}
+          </p>
+          <Link to="/tenders" className="btn btn-primary btn-sm rounded font-sans font-semibold">
+            Continuer vers le catalogue
+          </Link>
+        </div>
+      </AuthCard>
+    );
   }
 
   return (

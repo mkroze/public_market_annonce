@@ -190,6 +190,34 @@ async def init_db():
             updated_at TEXT DEFAULT (datetime('now')),
             updated_by TEXT
         );
+
+        -- Saved searches: a member's one-click recall of a past catalog query.
+        -- Unlike alerts, these never send email. The full filter set is stored
+        -- as a JSON blob so the frontend can round-trip any TenderFilters shape.
+        CREATE TABLE IF NOT EXISTS saved_searches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            criteria TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON saved_searches(user_id);
+
+        -- One-time email-action tokens (verify_email | password_reset). Only a
+        -- hash of the raw token is stored; the raw token travels in the email link.
+        CREATE TABLE IF NOT EXISTS email_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            purpose TEXT NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            target_email TEXT NOT NULL DEFAULT '',
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_tokens_lookup ON email_tokens(user_id, purpose);
     """)
 
     # ── Migrations for pre-existing tables ──────────────────────────────────
@@ -200,6 +228,8 @@ async def init_db():
     await _add_column_if_missing(db, "users", "invited_by", "invited_by INTEGER")
     await _add_column_if_missing(db, "users", "mfa_enabled", "mfa_enabled INTEGER DEFAULT 0")
     await _add_column_if_missing(db, "users", "theme", "theme TEXT DEFAULT 'system'")
+    # email verification: NULL until the user confirms their address
+    await _add_column_if_missing(db, "users", "email_verified_at", "email_verified_at TEXT")
 
     # tenders: admin moderation state
     await _add_column_if_missing(db, "tenders", "admin_status", "admin_status TEXT DEFAULT 'active'")

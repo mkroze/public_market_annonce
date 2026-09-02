@@ -3,12 +3,15 @@ import type { Tender } from "../lib/types";
 import { ExternalLink, ArrowUpDown, MapPin, Banknote } from "lucide-react";
 import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
 import { CATEGORY_COLORS, CATEGORY_FALLBACK } from "../lib/tone";
+import FavoriteButton from "./FavoriteButton";
 
 interface Props {
   tenders: Tender[];
   sort: string;
   order: string;
   onSort: (field: string) => void;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
 }
 
 const URGENCY_STYLES = {
@@ -18,7 +21,7 @@ const URGENCY_STYLES = {
   normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-muted)]" },
 };
 
-export default function TenderTable({ tenders, sort, order, onSort }: Props) {
+export default function TenderTable({ tenders, sort, order, onSort, favoriteIds, onToggleFavorite }: Props) {
   const navigate = useNavigate();
 
   function SortHeader({ field, label, highlight }: { field: string; label: string; highlight?: boolean }) {
@@ -135,6 +138,13 @@ export default function TenderTable({ tenders, sort, order, onSort }: Props) {
                 </td>
                 <td>
                   <div className="flex items-center gap-0.5">
+                    {onToggleFavorite && (
+                      <FavoriteButton
+                        active={favoriteIds?.has(t.id) ?? false}
+                        onToggle={() => onToggleFavorite(t.id)}
+                        className="btn btn-ghost btn-xs btn-square"
+                      />
+                    )}
                     {t.detail_url && (
                       <a
                         href={t.detail_url}

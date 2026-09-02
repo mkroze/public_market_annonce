@@ -18,6 +18,7 @@ import type {
   AlertPreference,
   AlertPreview,
   AlertMutationResult,
+  SavedSearch,
   BlogPost,
   Tender,
 } from "./types";
@@ -375,12 +376,72 @@ export async function testAlertEmail(): Promise<{ status: string }> {
   return body;
 }
 
+// ── Saved searches ──
+
+export function getSavedSearches(): Promise<{ data: SavedSearch[] }> {
+  return fetchJSON(`${BASE}/saved-searches`);
+}
+
+export function createSavedSearch(data: {
+  name: string;
+  criteria: Record<string, string>;
+}): Promise<SavedSearch> {
+  return mutateJSON<SavedSearch>(`${BASE}/saved-searches`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateSavedSearch(
+  id: number,
+  data: { name: string; criteria: Record<string, string> },
+): Promise<SavedSearch> {
+  return mutateJSON<SavedSearch>(`${BASE}/saved-searches/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSavedSearch(id: number): Promise<void> {
+  await mutateJSON(`${BASE}/saved-searches/${id}`, { method: "DELETE" });
+}
+
+// ── Auth: email verification & password reset ──
+
+export async function verifyEmail(token: string): Promise<{ email_verified: boolean }> {
+  return mutateJSON(`${BASE}/auth/verify-email`, {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function resendVerification(): Promise<{
+  already_verified: boolean;
+  verification_email_sent: boolean;
+}> {
+  return mutateJSON(`${BASE}/auth/resend-verification`, { method: "POST" });
+}
+
+export async function requestPasswordReset(email: string): Promise<{ status: string }> {
+  return mutateJSON(`${BASE}/auth/request-password-reset`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token: string, password: string): Promise<{ status: string }> {
+  return mutateJSON(`${BASE}/auth/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}
+
 // ── Assistant juridique ──
 
 export async function askAssistant(question: string, procedure?: string): Promise<{ answer: string }> {
   const res = await fetch(`${BASE}/assistant/ask`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ question, procedure: procedure || "" }),
   });
   if (!res.ok) {

@@ -306,9 +306,13 @@ async def run_digest(new_ids: list[str]) -> dict:
     for tender in tenders:
         tender["region"] = normalize_location(tender.get("location") or "")["region"]
 
+    # Only send to verified addresses: the digest is automated bulk mail, so
+    # unverified recipients would hurt deliverability (bounces/spam complaints).
+    # User-initiated confirmation/test emails are unaffected by this gate.
     cursor = await db.execute(
         """SELECT a.*, u.email AS user_email FROM alert_preferences a
-           JOIN users u ON u.id = a.user_id WHERE a.enabled = 1"""
+           JOIN users u ON u.id = a.user_id
+           WHERE a.enabled = 1 AND u.email_verified_at IS NOT NULL"""
     )
     alerts = [dict(r) for r in await cursor.fetchall()]
 

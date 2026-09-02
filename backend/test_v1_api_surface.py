@@ -23,7 +23,6 @@ class V1ApiSurfaceTest(unittest.TestCase):
             "/api/regions",
             "/api/sectors",
             "/api/blog",
-            "/api/assistant/ask",
             "/api/scrape/status",
         ]
 
@@ -51,6 +50,9 @@ class V1ApiSurfaceTest(unittest.TestCase):
             "/api/tenders/A/B/dce",
             "/api/alerts",
             "/api/favorites",
+            "/api/saved-searches",
+            "/api/assistant/ask",
+            "/api/auth/resend-verification",
         ]
 
         for path in gated_paths:
@@ -70,7 +72,14 @@ class V1ApiSurfaceTest(unittest.TestCase):
         # Login and registration must be reachable without a session so users
         # can obtain one. They are POST endpoints, so a GET resolves the route
         # (405) rather than being blocked (404) or gated (401).
-        for path in ("/api/auth/login", "/api/auth/register"):
+        public_auth_paths = (
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/verify-email",
+            "/api/auth/request-password-reset",
+            "/api/auth/reset-password",
+        )
+        for path in public_auth_paths:
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertNotIn(response.status_code, (401, 404))

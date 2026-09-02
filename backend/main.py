@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 import unicodedata
@@ -22,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import anthropic
+import aiosqlite
 
 from database import init_db, get_db
 from legal_context import SYSTEM_PROMPT
@@ -34,6 +36,11 @@ from emailer import email_is_configured, send_email
 from settings import resolve_email_config
 from admin import router as admin_router, bootstrap_admins, is_bootstrap_admin_email
 from tender_display import build_tender_display
+from tokens import (
+    issue_token, consume_token, last_unused_token_age,
+    VERIFY_EMAIL, PASSWORD_RESET, VERIFY_TTL, RESET_TTL, RESEND_COOLDOWN,
+)
+from email_templates import render_verify_email, render_password_reset
 
 
 scrape_lock = asyncio.Lock()
@@ -92,11 +99,21 @@ app.include_router(admin_router)
 # ── V1 catalog surface guard ─────────────────────────────────────────────────
 
 # Auth entry points stay public so visitors can obtain a session.
-V1_PUBLIC_API_PATHS = {"/api/auth/login", "/api/auth/register"}
+V1_PUBLIC_API_PATHS = {
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/verify-email",
+    "/api/auth/request-password-reset",
+    "/api/auth/reset-password",
+}
 
 # The launch API surface is intentionally narrow. Some paths are public reads;
 # actions and account data are authenticated below.
-V1_ALLOWED_API_PATHS = V1_PUBLIC_API_PATHS | {"/api/filters", "/api/auth/me"}
+V1_ALLOWED_API_PATHS = V1_PUBLIC_API_PATHS | {
+    "/api/filters",
+    "/api/auth/me",
+    "/api/auth/resend-verification",
+}
 
 
 def is_tender_action_path(path: str) -> bool:
@@ -138,6 +155,10 @@ def is_v1_catalog_api_path(path: str) -> bool:
         or path.startswith("/api/account/")
         or path == "/api/favorites"
         or path.startswith("/api/favorites/")
+        or path == "/api/saved-searches"
+        or path.startswith("/api/saved-searches/")
+        or path == "/api/assistant/ask"
+        or path.startswith("/api/assistant/")
         or path == "/api/admin"
         or path.startswith("/api/admin/")
     )
@@ -205,10 +226,25 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+async def _send_email_best_effort(recipient: str, subject: str, html: str, text: str) -> bool:
+    """Send a transactional email, swallowing config/delivery errors. Returns
+    whether it was actually delivered so callers can phrase their UX."""
+    config = await resolve_email_config()
+    if not email_is_configured(config):
+        return False
+    try:
+        await asyncio.to_thread(send_email, config, recipient, subject, html, text)
+        return True
+    except Exception as e:
+        print(f"[email] send failed for {recipient}: {e}")
+        return False
+
+
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest):
+    email = req.email.strip().lower()
     db = await get_db()
-    existing = await db.execute("SELECT id FROM users WHERE email = ?", (req.email,))
+    existing = await db.execute("SELECT id FROM users WHERE email = ?", (email,))
     if await existing.fetchone():
         await db.close()
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -216,7 +252,7 @@ async def register(req: RegisterRequest):
     pw_hash = hash_password(req.password)
     cursor = await db.execute(
         "INSERT INTO users (email, password_hash, name, company, phone) VALUES (?, ?, ?, ?, ?)",
-        (req.email, pw_hash, req.name, req.company, req.phone),
+        (email, pw_hash, req.name, req.company, req.phone),
     )
     user_id = cursor.lastrowid
 
@@ -224,21 +260,33 @@ async def register(req: RegisterRequest):
     # first admin can trigger an import without a server restart. bootstrap_admins()
     # still runs at startup as the fallback for accounts created before this ran.
     role = "user"
-    if is_bootstrap_admin_email(req.email):
+    if is_bootstrap_admin_email(email):
         await db.execute("UPDATE users SET role = 'owner' WHERE id = ?", (user_id,))
         role = "owner"
 
+    # New accounts start unverified; issue the verification token in the same
+    # transaction as the user so they commit together.
+    raw_token = await issue_token(db, user_id, VERIFY_EMAIL, VERIFY_TTL, target_email=email)
     await db.commit()
     await db.close()
 
-    token = create_token(user_id, req.email)
-    return {"token": token, "user": {"id": user_id, "email": req.email, "name": req.name, "plan": "free", "role": role, "status": "active", "theme": "system"}}
+    subject, html, text = render_verify_email(raw_token)
+    verification_email_sent = await _send_email_best_effort(email, subject, html, text)
+
+    token = create_token(user_id, email)
+    return {
+        "token": token,
+        "user": {"id": user_id, "email": email, "name": req.name, "plan": "free",
+                 "role": role, "status": "active", "theme": "system", "email_verified": False},
+        "verification_email_sent": verification_email_sent,
+    }
 
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
+    email = req.email.strip().lower()
     db = await get_db()
-    cursor = await db.execute("SELECT * FROM users WHERE email = ?", (req.email,))
+    cursor = await db.execute("SELECT * FROM users WHERE email = ?", (email,))
     user = await cursor.fetchone()
     await db.close()
 
@@ -266,6 +314,7 @@ async def login(req: LoginRequest):
             "role": user.get("role", "user"),
             "status": user.get("status", "active"),
             "theme": user.get("theme", "system") or "system",
+            "email_verified": user.get("email_verified_at") is not None,
         },
     }
 
@@ -282,6 +331,7 @@ async def me(authorization: str | None = Header(None)):
         "role": user.get("role", "user"),
         "status": user.get("status", "active"),
         "theme": user.get("theme", "system") or "system",
+        "email_verified": user.get("email_verified_at") is not None,
     }
 
 
@@ -299,6 +349,7 @@ def account_view(user: dict) -> dict:
         "role": user.get("role", "user"),
         "status": user.get("status", "active"),
         "theme": user.get("theme", "system") or "system",
+        "email_verified": user.get("email_verified_at") is not None,
         "created_at": user.get("created_at"),
         "last_login": user.get("last_login"),
     }
@@ -353,6 +404,100 @@ async def change_account_password(
     finally:
         await db.close()
     return {"status": "updated"}
+
+
+# ── Email verification & password reset ──────────────────────────────────────
+
+class TokenRequest(BaseModel):
+    token: str
+
+
+class RequestPasswordReset(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/api/auth/verify-email")
+async def verify_email(req: TokenRequest):
+    db = await get_db()
+    try:
+        row = await consume_token(db, req.token, VERIFY_EMAIL)
+        if not row:
+            raise HTTPException(status_code=400, detail="Lien de verification invalide ou expire.")
+        await db.execute(
+            "UPDATE users SET email_verified_at = datetime('now') WHERE id = ?",
+            (row["user_id"],),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return {"status": "verified", "email_verified": True}
+
+
+@app.post("/api/auth/resend-verification")
+async def resend_verification(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    if user.get("email_verified_at") is not None:
+        return {"already_verified": True, "verification_email_sent": False}
+    db = await get_db()
+    try:
+        age = await last_unused_token_age(db, user["id"], VERIFY_EMAIL)
+        if age is not None and age < RESEND_COOLDOWN:
+            raise HTTPException(
+                status_code=429,
+                detail="Veuillez patienter avant de renvoyer l'email de verification.",
+            )
+        raw_token = await issue_token(db, user["id"], VERIFY_EMAIL, VERIFY_TTL, target_email=user["email"])
+        await db.commit()
+    finally:
+        await db.close()
+    subject, html, text = render_verify_email(raw_token)
+    sent = await _send_email_best_effort(user["email"], subject, html, text)
+    return {"already_verified": False, "verification_email_sent": sent}
+
+
+@app.post("/api/auth/request-password-reset")
+async def request_password_reset(req: RequestPasswordReset):
+    # Always return the same response whether or not the email exists — no
+    # account enumeration. Only active accounts actually receive a reset email.
+    email = req.email.strip().lower()
+    db = await get_db()
+    raw_token = None
+    try:
+        cursor = await db.execute("SELECT id, status FROM users WHERE email = ?", (email,))
+        user = await cursor.fetchone()
+        if user and (user["status"] or "active") == "active":
+            raw_token = await issue_token(db, user["id"], PASSWORD_RESET, RESET_TTL, target_email=email)
+            await db.commit()
+    finally:
+        await db.close()
+    if raw_token:
+        subject, html, text = render_password_reset(raw_token)
+        await _send_email_best_effort(email, subject, html, text)
+    return {"status": "ok"}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 8 caracteres.")
+    db = await get_db()
+    try:
+        row = await consume_token(db, req.token, PASSWORD_RESET)
+        if not row:
+            raise HTTPException(status_code=400, detail="Lien de reinitialisation invalide ou expire.")
+        await db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(req.password), row["user_id"]),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return {"status": "ok"}
 
 
 # ── Tenders ──────────────────────────────────────────────────────────────────
@@ -1288,6 +1433,106 @@ async def test_alert_email(authorization: str | None = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Echec d'envoi: {e}")
     return {"status": "sent"}
+
+
+# ── Saved searches ──────────────────────────────────────────────────────────
+# A member's one-click recall of a past catalog query. Unlike alerts these never
+# send email; the full filter set is stored as a JSON blob.
+
+class SavedSearchRequest(BaseModel):
+    name: str
+    criteria: dict = {}
+
+
+def saved_search_view(row: dict) -> dict:
+    try:
+        criteria = json.loads(row.get("criteria") or "{}")
+    except (ValueError, TypeError):
+        criteria = {}
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "criteria": criteria,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+@app.get("/api/saved-searches")
+async def list_saved_searches(authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM saved_searches WHERE user_id = ? ORDER BY created_at DESC",
+        (user["id"],),
+    )
+    rows = [saved_search_view(dict(r)) for r in await cursor.fetchall()]
+    await db.close()
+    return {"data": rows}
+
+
+@app.post("/api/saved-searches")
+async def create_saved_search(req: SavedSearchRequest, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Le nom de la recherche est requis.")
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO saved_searches (user_id, name, criteria) VALUES (?, ?, ?)",
+            (user["id"], name, json.dumps(req.criteria or {})),
+        )
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM saved_searches WHERE id = ?", (cursor.lastrowid,))
+        row = dict(await cursor.fetchone())
+    except aiosqlite.IntegrityError:
+        raise HTTPException(status_code=409, detail="Une recherche porte deja ce nom.")
+    finally:
+        await db.close()
+    return saved_search_view(row)
+
+
+@app.put("/api/saved-searches/{search_id}")
+async def update_saved_search(search_id: int, req: SavedSearchRequest, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Le nom de la recherche est requis.")
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM saved_searches WHERE id = ? AND user_id = ?",
+            (search_id, user["id"]),
+        )
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Recherche introuvable.")
+        await db.execute(
+            "UPDATE saved_searches SET name = ?, criteria = ?, updated_at = datetime('now') "
+            "WHERE id = ? AND user_id = ?",
+            (name, json.dumps(req.criteria or {}), search_id, user["id"]),
+        )
+        await db.commit()
+        cursor = await db.execute("SELECT * FROM saved_searches WHERE id = ?", (search_id,))
+        row = dict(await cursor.fetchone())
+    except aiosqlite.IntegrityError:
+        raise HTTPException(status_code=409, detail="Une recherche porte deja ce nom.")
+    finally:
+        await db.close()
+    return saved_search_view(row)
+
+
+@app.delete("/api/saved-searches/{search_id}")
+async def delete_saved_search(search_id: int, authorization: str | None = Header(None)):
+    user = await require_user(authorization)
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM saved_searches WHERE id = ? AND user_id = ?",
+        (search_id, user["id"]),
+    )
+    await db.commit()
+    await db.close()
+    return {"status": "deleted"}
 
 
 # ── PDF Export ───────────────────────────────────────────────────────────────

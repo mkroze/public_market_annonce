@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { LockKeyhole, Inbox, SearchX } from "lucide-react";
-import { getTenders, exportTenders } from "../lib/api";
+import {
+  getTenders,
+  exportTenders,
+  getFavoriteIds,
+  addFavorite,
+  removeFavorite,
+  createSavedSearch,
+} from "../lib/api";
 import type { TenderListResponse, TenderFilters } from "../lib/types";
 import FilterBar from "../components/FilterBar";
 import TenderCard from "../components/TenderCard";
@@ -54,6 +61,10 @@ export default function Tenders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [savingSearch, setSavingSearch] = useState(false);
   const { user } = useAuth();
 
   const filters: Partial<TenderFilters> = useMemo(
@@ -79,6 +90,81 @@ export default function Tenders() {
 
   function dismissToast(id: string) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  // Charge l'ensemble des consultations suivies pour refléter l'état du cœur.
+  useEffect(() => {
+    if (!user) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    getFavoriteIds()
+      .then((res) => {
+        if (!cancelled) setFavoriteIds(new Set(res.ids));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  async function toggleFavorite(id: string) {
+    if (!user) {
+      addToast("Connectez-vous pour suivre une consultation.", "info");
+      return;
+    }
+    const wasFavorite = favoriteIds.has(id);
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (wasFavorite) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    try {
+      if (wasFavorite) await removeFavorite(id);
+      else await addFavorite(id);
+      addToast(
+        wasFavorite ? "Retiré de vos consultations suivies." : "Ajouté à vos consultations suivies.",
+        "success",
+      );
+    } catch {
+      // Rollback optimiste en cas d'échec réseau.
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasFavorite) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      addToast("Action impossible pour le moment. Réessayez.", "error");
+    }
+  }
+
+  // Critères de la recherche courante = paramètres d'URL, sauf l'affichage et la
+  // pagination, pour qu'une recherche enregistrée reproduise exactement la vue.
+  function activeCriteria(): Record<string, string> {
+    const criteria: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      if (key === "view" || key === "page" || key === "per_page") return;
+      if (value) criteria[key] = value;
+    });
+    return criteria;
+  }
+
+  async function handleSaveSearch() {
+    const name = saveName.trim();
+    if (!name) return;
+    setSavingSearch(true);
+    try {
+      await createSavedSearch({ name, criteria: activeCriteria() });
+      addToast("Recherche enregistrée.", "success");
+      setSaveOpen(false);
+      setSaveName("");
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : "Enregistrement impossible.", "error");
+    } finally {
+      setSavingSearch(false);
+    }
   }
 
   useEffect(() => {
@@ -217,6 +303,15 @@ export default function Tenders() {
           user ? (
             <div className="flex flex-wrap items-center gap-2">
               {filtersActive && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm font-sans font-semibold"
+                  onClick={() => setSaveOpen((v) => !v)}
+                >
+                  Enregistrer cette recherche
+                </button>
+              )}
+              {filtersActive && (
                 <Link
                   to={`/alerts?${searchParams.toString()}`}
                   className="btn btn-outline btn-sm font-sans font-semibold"
@@ -238,6 +333,47 @@ export default function Tenders() {
           )
         )}
       </section>
+
+      {user && saveOpen && filtersActive && (
+        <div className="institutional-panel flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label htmlFor="save-search-name" className="text-xs font-semibold text-[var(--color-muted)]">
+              Nom de la recherche
+            </label>
+            <input
+              id="save-search-name"
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Ex. Travaux électriques à Casablanca"
+              className="input input-sm input-bordered mt-1 w-full"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveSearch();
+              }}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={savingSearch || !saveName.trim()}
+              onClick={handleSaveSearch}
+            >
+              Enregistrer
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSaveOpen(false);
+                setSaveName("");
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       {result && !loading && !catalogEmpty && (
         <section className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -333,6 +469,8 @@ export default function Tenders() {
                   key={tender.id}
                   tender={tender}
                   compact
+                  isFavorite={favoriteIds.has(tender.id)}
+                  onToggleFavorite={toggleFavorite}
                 />
               ))}
             </div>
@@ -342,6 +480,8 @@ export default function Tenders() {
               sort={filters.sort || "deadline"}
               order={filters.order || "asc"}
               onSort={handleSort}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
             />
           )}
           {/* La segmentation « Urgentes » filtre la page courante côté client :

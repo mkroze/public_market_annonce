@@ -2,10 +2,14 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import Navbar from "./components/Navbar";
+import VerificationBanner from "./components/VerificationBanner";
 import Tenders from "./pages/Tenders";
 import TenderDetail from "./pages/TenderDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Alerts from "./pages/Alerts";
 import MemberLayout from "./components/MemberLayout";
 import MemberOverview from "./pages/member/MemberOverview";
@@ -60,10 +64,14 @@ function PublicLayout() {
         Aller au contenu
       </a>
       <Navbar />
+      <VerificationBanner />
       <main id="main-content" className="relative z-10 flex-1 w-full max-w-[1440px] mx-auto">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/tenders" element={<Tenders />} />
           <Route path="/tenders/:id" element={<TenderDetail />} />
           <Route

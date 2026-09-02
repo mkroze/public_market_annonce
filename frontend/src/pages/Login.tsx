@@ -142,6 +142,12 @@ export default function Login() {
                   </div>
                 </div>
 
+                <div className="-mt-2 text-right">
+                  <Link to="/forgot-password" className="text-sm text-[var(--color-crimson)] hover:underline">
+                    Mot de passe oublié ?
+                  </Link>
+                </div>
+
                 <button
                   type="submit"
                   className="btn btn-primary mt-2 w-full rounded font-sans font-semibold gap-2"

@@ -157,6 +157,7 @@ export interface User {
   role?: string;
   status?: string;
   theme?: ThemePreference;
+  email_verified?: boolean;
   created_at?: string | null;
   last_login?: string | null;
 }
@@ -174,6 +175,7 @@ export interface AccountProfile extends User {
 export interface AuthResponse {
   token: string;
   user: User;
+  verification_email_sent?: boolean;
 }
 
 // Cities
@@ -266,6 +268,16 @@ export interface AlertMutationResult {
   id?: number;
   status: string;
   email: EmailDeliveryStatus;
+}
+
+// Saved searches — a one-click recall of a past catalog query (no email). The
+// criteria mirror the tender-catalog URL params (q, sector, location, …).
+export interface SavedSearch {
+  id: number;
+  name: string;
+  criteria: Record<string, string>;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 // Blog
