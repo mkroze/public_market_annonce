@@ -48,7 +48,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-[var(--color-crimson)] text-[var(--color-ivory)] font-sans text-sm font-semibold shadow-lg hover:opacity-90 transition-opacity"
+        className="fixed bottom-6 right-6 z-40 flex min-h-11 items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-3 font-sans text-sm font-semibold text-[var(--color-on-primary)] shadow-lg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none"
       >
         <Scale size={16} />
         Assistant juridique
@@ -57,7 +57,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 w-[min(24rem,calc(100vw-2rem))] flex flex-col rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] shadow-xl">
+    <div className="fixed bottom-6 right-4 z-40 flex max-h-[calc(100vh-3rem)] w-[min(24rem,calc(100vw-2rem))] flex-col rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-pop sm:right-6">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] rounded-t">
         <Scale size={16} className="text-[var(--color-crimson)]" />
@@ -69,7 +69,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
           type="button"
           onClick={() => setOpen(false)}
           aria-label="Fermer l'assistant"
-          className="ml-auto text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+        className="ml-auto rounded-full p-2 text-[var(--color-slate)] hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
         >
           <X size={16} />
         </button>
@@ -88,7 +88,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
                 key={s}
                 type="button"
                 onClick={() => send(s)}
-                className="block w-full text-left px-3 py-2 rounded border border-[var(--color-border-subtle)] font-sans text-xs text-[var(--color-charcoal)] hover:border-[var(--color-crimson)] transition-colors"
+                className="block min-h-11 w-full rounded border border-[var(--color-border-subtle)] px-3 py-2 text-left font-sans text-xs text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-crimson)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
               >
                 {s}
               </button>
@@ -143,7 +143,7 @@ export default function LegalAssistantSidebar({ procedureName }: { procedureName
           type="submit"
           disabled={loading || !input.trim()}
           aria-label="Envoyer"
-          className="text-[var(--color-crimson)] disabled:opacity-40"
+          className="rounded-full p-2 text-[var(--color-crimson)] disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
         >
           <Send size={16} />
         </button>

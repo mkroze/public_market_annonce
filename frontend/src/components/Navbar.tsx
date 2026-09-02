@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck, Settings } from "lucide-react";
+import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck, Settings, Scale } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { isAdminRole } from "../admin/permissions";
 import MotionToggle from "./MotionToggle";
@@ -17,6 +17,7 @@ export default function Navbar() {
 
   const navLinks = [
     { to: "/tenders", label: "Consultations", icon: Search, public: true },
+    { to: "/guide", label: "Préparer", icon: Scale, public: true },
     { to: "/alerts", label: "Alertes", icon: Bell, public: false },
   ].filter((link) => link.public || user);
 

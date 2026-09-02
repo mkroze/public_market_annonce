@@ -23,6 +23,12 @@ import Footer from "./components/Footer";
 import Ambiance from "./components/Ambiance";
 import AdminGuard from "./admin/AdminGuard";
 
+const CandidacyAssistant = lazy(() => import("./pages/CandidacyAssistant"));
+const Guide = lazy(() => import("./pages/Guide"));
+const Procedures = lazy(() => import("./pages/Procedures"));
+const ProcedureDetail = lazy(() => import("./pages/ProcedureDetail"));
+const Eligibility = lazy(() => import("./pages/Eligibility"));
+const Recours = lazy(() => import("./pages/Recours"));
 // L'espace admin est isolé et chargé à la demande (bundle séparé).
 const AdminApp = lazy(() => import("./admin/AdminApp"));
 
@@ -60,6 +66,56 @@ function PublicLayout() {
           <Route path="/register" element={<Register />} />
           <Route path="/tenders" element={<Tenders />} />
           <Route path="/tenders/:id" element={<TenderDetail />} />
+          <Route
+            path="/assistant"
+            element={
+              <RequireAuth>
+                <Suspense fallback={authSpinner}>
+                  <CandidacyAssistant />
+                </Suspense>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/guide"
+            element={
+              <Suspense fallback={authSpinner}>
+                <Guide />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/procedures"
+            element={
+              <Suspense fallback={authSpinner}>
+                <Procedures />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/procedures/:slug"
+            element={
+              <Suspense fallback={authSpinner}>
+                <ProcedureDetail />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/eligibility"
+            element={
+              <Suspense fallback={authSpinner}>
+                <Eligibility />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/recours"
+            element={
+              <Suspense fallback={authSpinner}>
+                <Recours />
+              </Suspense>
+            }
+          />
           <Route
             path="/alerts"
             element={

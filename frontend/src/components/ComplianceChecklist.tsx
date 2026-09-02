@@ -25,7 +25,7 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
-    <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)]">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] shadow-card">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-[var(--color-border-subtle)]">
         <ListChecks size={16} className="text-[var(--color-crimson)]" />
         <h2 className="font-display text-base font-bold text-[var(--color-charcoal)]">
@@ -68,7 +68,7 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
                       <button
                         type="button"
                         onClick={() => onToggle(item.label)}
-                        className="w-full flex items-start gap-2 text-left group"
+                        className="group flex min-h-11 w-full items-start gap-2 rounded-lg px-1 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
                       >
                         {isChecked ? (
                           <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-green-600" />
