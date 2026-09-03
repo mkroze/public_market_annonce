@@ -124,6 +124,23 @@ def is_tender_action_path(path: str) -> bool:
     )
 
 
+def is_public_data_directory_path(path: str) -> bool:
+    """Aggregate, read-only statistics & directory endpoints (Epic 2).
+
+    These expose only derived counts and distributions (stats, overview,
+    cities/regions/sectors and their details) — never private tender data or
+    actions — so they are public GET reads, mirroring the public /api/tenders
+    catalog read.
+    """
+    if path in ("/api/stats", "/api/overview", "/api/cities", "/api/regions", "/api/sectors"):
+        return True
+    return (
+        path.startswith("/api/cities/")
+        or path.startswith("/api/regions/")
+        or path.startswith("/api/sectors/")
+    )
+
+
 def is_public_v1_api_path(path: str, method: str) -> bool:
     if path in V1_PUBLIC_API_PATHS:
         return True
@@ -134,6 +151,8 @@ def is_public_v1_api_path(path: str, method: str) -> bool:
     if path == "/api/tenders":
         return True
     if path.startswith("/api/tenders/") and not is_tender_action_path(path):
+        return True
+    if is_public_data_directory_path(path):
         return True
     return False
 
@@ -147,6 +166,7 @@ def requires_v1_auth(path: str, method: str) -> bool:
 def is_v1_catalog_api_path(path: str) -> bool:
     return (
         path in V1_ALLOWED_API_PATHS
+        or is_public_data_directory_path(path)
         or path == "/api/tenders"
         or path.startswith("/api/tenders/")
         or path == "/api/alerts"

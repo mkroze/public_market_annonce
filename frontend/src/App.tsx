@@ -33,6 +33,14 @@ const Procedures = lazy(() => import("./pages/Procedures"));
 const ProcedureDetail = lazy(() => import("./pages/ProcedureDetail"));
 const Eligibility = lazy(() => import("./pages/Eligibility"));
 const Recours = lazy(() => import("./pages/Recours"));
+// Statistiques & annuaires de données publiques (Epic 2) — chargés à la demande.
+const Stats = lazy(() => import("./pages/Stats"));
+const Cities = lazy(() => import("./pages/Cities"));
+const CityDetail = lazy(() => import("./pages/CityDetail"));
+const Regions = lazy(() => import("./pages/Regions"));
+const RegionDetail = lazy(() => import("./pages/RegionDetail"));
+const Sectors = lazy(() => import("./pages/Sectors"));
+const SectorDetail = lazy(() => import("./pages/SectorDetail"));
 // L'espace admin est isolé et chargé à la demande (bundle séparé).
 const AdminApp = lazy(() => import("./admin/AdminApp"));
 
@@ -149,6 +157,16 @@ function PublicLayout() {
             <Route path="saved-searches" element={<MemberSavedSearches />} />
             <Route path="account" element={<MemberAccount />} />
           </Route>
+
+          {/* Statistiques & annuaires publics (Epic 2) — données agrégées, sans connexion.
+              La racine reste inchangée : pas de page d'accueil déconnectée ici (Epic 4). */}
+          <Route path="/stats" element={<Suspense fallback={authSpinner}><Stats /></Suspense>} />
+          <Route path="/cities" element={<Suspense fallback={authSpinner}><Cities /></Suspense>} />
+          <Route path="/cities/:name" element={<Suspense fallback={authSpinner}><CityDetail /></Suspense>} />
+          <Route path="/regions" element={<Suspense fallback={authSpinner}><Regions /></Suspense>} />
+          <Route path="/regions/:name" element={<Suspense fallback={authSpinner}><RegionDetail /></Suspense>} />
+          <Route path="/sectors" element={<Suspense fallback={authSpinner}><Sectors /></Suspense>} />
+          <Route path="/sectors/:code" element={<Suspense fallback={authSpinner}><SectorDetail /></Suspense>} />
 
           {/* Pages de contenu publiques (accessibles sans connexion) */}
           <Route path="/about" element={<About />} />

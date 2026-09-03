@@ -17,11 +17,9 @@ class V1ApiSurfaceTest(unittest.TestCase):
 
     def test_retired_public_routes_are_not_accessible(self):
         # Retired public features stay removed from the surface (404).
+        # Stats & data directories were re-admitted as public reads in Epic 2
+        # (see test_catalog_read_routes_are_public), so they are no longer here.
         blocked_paths = [
-            "/api/stats",
-            "/api/cities",
-            "/api/regions",
-            "/api/sectors",
             "/api/blog",
             "/api/scrape/status",
         ]
@@ -32,9 +30,18 @@ class V1ApiSurfaceTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 404)
 
     def test_catalog_read_routes_are_public(self):
+        # Public reads: the catalog plus the Epic 2 stats & data-directory
+        # endpoints, which expose only aggregate counts (no private data).
+        # /api/overview is public too, but it does a live homepage scrape, so it
+        # is exercised via the surface helper test below rather than an HTTP call.
         public_read_paths = [
             "/api/tenders",
             "/api/filters",
+            "/api/stats",
+            "/api/cities",
+            "/api/cities/Casablanca",
+            "/api/regions",
+            "/api/sectors",
         ]
 
         for path in public_read_paths:
@@ -59,6 +66,25 @@ class V1ApiSurfaceTest(unittest.TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 401)
+
+    def test_data_directory_routes_are_public_reads(self):
+        import main
+
+        for path in (
+            "/api/stats",
+            "/api/overview",
+            "/api/cities",
+            "/api/cities/Casablanca",
+            "/api/regions",
+            "/api/regions/Oriental",
+            "/api/sectors",
+            "/api/sectors/1.10",
+        ):
+            with self.subTest(path=path):
+                # Reachable (not 404'd by the catalog guard) and public on GET.
+                self.assertTrue(main.is_v1_catalog_api_path(path))
+                self.assertTrue(main.is_public_v1_api_path(path, "GET"))
+                self.assertFalse(main.requires_v1_auth(path, "GET"))
 
     def test_slash_bearing_tender_detail_is_public_read_path(self):
         import main

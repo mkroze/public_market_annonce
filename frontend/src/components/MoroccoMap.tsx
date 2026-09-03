@@ -1,16 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { LatLngBounds } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import type { CityStats } from "../lib/types";
-
-const VIEW_SIZE = 600;
-const BOUNDS = { latMin: 20.5, latMax: 36, lngMin: -17, lngMax: -1 };
-
-// Stylized outline of Morocco (including the southern provinces), expressed
-// directly in viewBox coordinates produced by the same linear projection below.
-const MOROCCO_OUTLINE =
-  "M416,4 L555,35 L574,50 L592,156 L499,194 L431,252 L311,310 L312,387 " +
-  "L150,565 L2,588 L41,476 L94,383 L135,344 L214,290 L259,252 L278,217 " +
-  "L270,174 L289,143 L319,106 L353,93 L383,77 L407,31 Z";
 
 // [lat, lng] for major Moroccan cities. Keys are matched against API city
 // names after accent/case normalization, so "Fes" and "Fès" both resolve.
@@ -102,12 +95,6 @@ const MOROCCO_CITY_COORDS: Record<string, [number, number]> = {
   Tarfaya: [27.94, -12.93],
 };
 
-function project(lat: number, lng: number): [number, number] {
-  const x = ((lng - BOUNDS.lngMin) / (BOUNDS.lngMax - BOUNDS.lngMin)) * VIEW_SIZE;
-  const y = ((BOUNDS.latMax - lat) / (BOUNDS.latMax - BOUNDS.latMin)) * VIEW_SIZE;
-  return [x, y];
-}
-
 function normalizeCityName(name: string): string {
   return name
     .normalize("NFD")
@@ -121,15 +108,83 @@ const COORD_LOOKUP = new Map(
   Object.entries(MOROCCO_CITY_COORDS).map(([name, coords]) => [normalizeCityName(name), coords]),
 );
 
+// Marker palette per effective theme. Navy in light, lighter navy in dark to
+// stay legible over the CARTO Dark Matter basemap.
+const MARKER_COLORS = {
+  light: { fill: "#00236f", stroke: "#001a52" },
+  dark: { fill: "#b6c4ff", stroke: "#dce1ff" },
+} as const;
+
+const TILE_URLS = {
+  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+} as const;
+
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+type EffectiveTheme = "light" | "dark";
+
+// Resolve the effective theme: honor an explicit light/dark preference on the
+// <html> element, and fall back to the OS setting when the preference is
+// "system" (the real-world default) or unset.
+function resolveEffectiveTheme(): EffectiveTheme {
+  if (typeof document === "undefined") return "light";
+  const preference = document.documentElement.dataset.themePreference;
+  if (preference === "light") return "light";
+  if (preference === "dark") return "dark";
+  const prefersDark =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return prefersDark ? "dark" : "light";
+}
+
+// Live effective-theme hook. Re-resolves on OS scheme changes and on
+// data-theme-preference mutations of <html> so the basemap follows the app.
+function useEffectiveTheme(): EffectiveTheme {
+  const [theme, setTheme] = useState<EffectiveTheme>(resolveEffectiveTheme);
+
+  useEffect(() => {
+    const update = () => setTheme(resolveEffectiveTheme());
+    update();
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", update);
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme-preference"],
+    });
+
+    return () => {
+      media.removeEventListener("change", update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return theme;
+}
+
 interface CityDot {
   city: CityStats;
-  x: number;
-  y: number;
+  lat: number;
+  lng: number;
   r: number;
+}
+
+// Fits the map to the plotted markers whenever the set of coordinates changes.
+function FitBounds({ bounds }: { bounds: LatLngBounds }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds, { padding: [28, 28] });
+  }, [map, bounds]);
+  return null;
 }
 
 export default function MoroccoMap({ cities }: { cities: CityStats[] }) {
   const navigate = useNavigate();
+  const theme = useEffectiveTheme();
   const [hoveredName, setHoveredName] = useState<string | null>(null);
 
   const dots = useMemo<CityDot[]>(() => {
@@ -138,106 +193,116 @@ export default function MoroccoMap({ cities }: { cities: CityStats[] }) {
       .flatMap((city) => {
         const coords = COORD_LOOKUP.get(normalizeCityName(city.name));
         if (!coords) return [];
-        const [x, y] = project(coords[0], coords[1]);
         const r = 4 + 14 * Math.sqrt(city.total / maxTotal);
-        return [{ city, x, y, r }];
+        return [{ city, lat: coords[0], lng: coords[1], r }];
       })
+      // Biggest markers first so smaller dots paint on top and stay clickable
+      // even where they overlap a large one.
       .sort((a, b) => b.r - a.r);
   }, [cities]);
 
-  // dots is sorted by radius (= total) descending, so the first 6 are the
-  // biggest cities; they get permanent labels, the rest are tooltip-only.
-  const labeledNames = useMemo(
-    () => new Set(dots.slice(0, 6).map((dot) => dot.city.name)),
-    [dots],
-  );
-
-  const hoveredDot = dots.find((dot) => dot.city.name === hoveredName) ?? null;
+  const bounds = useMemo(() => {
+    if (dots.length === 0) return null;
+    return new LatLngBounds(dots.map((dot) => [dot.lat, dot.lng] as [number, number]));
+  }, [dots]);
 
   const goToCity = (name: string) =>
     navigate(`/tenders?location=${encodeURIComponent(name)}`);
 
-  if (dots.length === 0) return null;
+  const colors = MARKER_COLORS[theme];
+
+  if (dots.length === 0 || !bounds) return null;
 
   return (
-    <div className="relative mx-auto w-full max-w-xl">
-      <svg
-        viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
-        className="block w-full h-auto"
-        role="img"
+    <div className="mx-auto w-full max-w-xl">
+      <MapContainer
+        bounds={bounds}
+        boundsOptions={{ padding: [28, 28] }}
+        scrollWheelZoom={false}
+        minZoom={4}
+        maxZoom={10}
+        className="h-[420px] w-full rounded border border-[var(--color-border-subtle)]"
         aria-label="Carte du Maroc : consultations par ville"
       >
-        <path
-          d={MOROCCO_OUTLINE}
-          fill="var(--color-ivory-dim)"
-          stroke="var(--color-border-subtle)"
-          strokeWidth={2}
-          strokeLinejoin="round"
+        <TileLayer
+          key={theme}
+          url={TILE_URLS[theme]}
+          attribution={TILE_ATTRIBUTION}
+          subdomains="abcd"
+          maxZoom={20}
         />
-        {dots.map((dot, index) => (
-          <g key={`${dot.city.name}-${index}`}>
-            {labeledNames.has(dot.city.name) && (
-              <text
-                // Anchor eastern labels on the left so they stay inside the viewBox.
-                x={dot.x > VIEW_SIZE * 0.78 ? dot.x - dot.r - 5 : dot.x + dot.r + 5}
-                y={dot.y + 4}
-                textAnchor={dot.x > VIEW_SIZE * 0.78 ? "end" : "start"}
-                fontSize={15}
-                fill="var(--color-slate)"
-                className="pointer-events-none select-none font-sans"
-              >
-                {dot.city.name}
-              </text>
-            )}
-            <circle
-              cx={dot.x}
-              cy={dot.y}
-              r={dot.r}
-              fill="var(--color-crimson)"
-              role="link"
-              tabIndex={0}
-              aria-label={`${dot.city.name} — ${dot.city.total} consultations, ${dot.city.active} actives`}
-              className="cursor-pointer focus:outline-none"
-              style={{
-                opacity: hoveredName === dot.city.name ? 1 : 0.55,
-                transform: hoveredName === dot.city.name ? "scale(1.4)" : "scale(1)",
-                transformBox: "fill-box",
-                transformOrigin: "center",
-                transition: "transform 150ms ease, opacity 150ms ease",
+        <FitBounds bounds={bounds} />
+        {dots.map((dot) => {
+          const isActive = hoveredName === dot.city.name;
+          return (
+            <CircleMarker
+              key={dot.city.name}
+              center={[dot.lat, dot.lng]}
+              radius={isActive ? dot.r * 1.35 : dot.r}
+              pathOptions={{
+                color: colors.stroke,
+                weight: isActive ? 2 : 1,
+                fillColor: colors.fill,
+                fillOpacity: isActive ? 1 : 0.7,
               }}
-              onMouseEnter={() => setHoveredName(dot.city.name)}
-              onMouseLeave={() => setHoveredName(null)}
-              onFocus={() => setHoveredName(dot.city.name)}
-              onBlur={() => setHoveredName(null)}
-              onClick={() => goToCity(dot.city.name)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  goToCity(dot.city.name);
-                }
+              // Leaflet renders each CircleMarker as an SVG element. We promote it
+              // to a keyboard-reachable link (tabindex + aria-label) and wire
+              // focus/blur/keydown as native DOM listeners, since Leaflet's typed
+              // event map only covers mouse/pointer events.
+              interactive
+              bubblingMouseEvents={false}
+              eventHandlers={{
+                mouseover: (event) => {
+                  setHoveredName(dot.city.name);
+                  event.target.openTooltip();
+                },
+                mouseout: (event) => {
+                  setHoveredName(null);
+                  event.target.closeTooltip();
+                },
+                click: () => goToCity(dot.city.name),
+                add: (event) => {
+                  const marker = event.target;
+                  const el = marker.getElement() as SVGElement | null;
+                  if (!el) return;
+                  el.setAttribute("role", "link");
+                  el.setAttribute("tabindex", "0");
+                  el.setAttribute(
+                    "aria-label",
+                    `${dot.city.name} — ${dot.city.total} consultations, ${dot.city.active} actives`,
+                  );
+                  el.style.cursor = "pointer";
+                  el.addEventListener("focus", () => {
+                    setHoveredName(dot.city.name);
+                    marker.openTooltip();
+                  });
+                  el.addEventListener("blur", () => {
+                    setHoveredName(null);
+                    marker.closeTooltip();
+                  });
+                  el.addEventListener("keydown", (nativeEvent) => {
+                    const key = (nativeEvent as KeyboardEvent).key;
+                    if (key === "Enter" || key === " ") {
+                      nativeEvent.preventDefault();
+                      goToCity(dot.city.name);
+                    }
+                  });
+                },
               }}
-            />
-          </g>
-        ))}
-      </svg>
-      {hoveredDot && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-3 py-2 shadow-sm font-sans text-xs"
-          style={{
-            left: `${(hoveredDot.x / VIEW_SIZE) * 100}%`,
-            top: `${(hoveredDot.y / VIEW_SIZE) * 100}%`,
-            marginTop: "-3rem",
-          }}
-        >
-          <div className="font-semibold text-[var(--color-charcoal)] whitespace-nowrap">
-            {hoveredDot.city.name}
-          </div>
-          <div className="text-[var(--color-slate)] whitespace-nowrap">
-            {hoveredDot.city.total.toLocaleString("fr-FR")} consultations ·{" "}
-            {hoveredDot.city.active.toLocaleString("fr-FR")} actives
-          </div>
-        </div>
-      )}
+            >
+              <Tooltip direction="top" offset={[0, -4]} opacity={1}>
+                <div className="font-sans">
+                  <div className="font-semibold">{dot.city.name}</div>
+                  <div>
+                    {dot.city.total.toLocaleString("fr-FR")} consultations ·{" "}
+                    {dot.city.active.toLocaleString("fr-FR")} actives
+                  </div>
+                </div>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
+      </MapContainer>
     </div>
   );
 }
