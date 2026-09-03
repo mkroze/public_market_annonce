@@ -1,16 +1,17 @@
 """Transactional email templates for auth events (verify email, password reset).
 
 Renders both HTML and plain text. The transport stays
-`send_email(config, to, subject, html, text)` in emailer.py. Style mirrors the
-digest/confirmation emails (Georgia serif, navy-red accent) for a consistent
-brand. No tracking pixels, no remote images — plain-text fallback carries the
-full URL.
+`send_email(config, to, subject, html, text)` in emailer.py. All visual styling
+comes from `brand.py`, the single source of truth that mirrors the frontend
+design system (navy primary, amber accent, Inter/system-sans). No tracking
+pixels, no remote images — the plain-text fallback carries the full URL.
 """
 
 import os
 
-BRAND = "Marches Publics Maroc"
-ACCENT = "#a51c30"
+import brand
+
+BRAND = brand.BRAND_NAME
 
 
 def _frontend() -> str:
@@ -18,18 +19,13 @@ def _frontend() -> str:
 
 
 def _base_html(intro: str, button_label: str, url: str, note: str, footer: str) -> str:
-    return (
-        '<div style="font-family:Georgia,serif;background:#faf7f0;padding:24px;color:#2b2b2b;">'
-        f'<h1 style="font-size:20px;border-bottom:2px solid {ACCENT};padding-bottom:8px;">{BRAND}</h1>'
-        f'<p style="font-size:14px;">{intro}</p>'
-        f'<p style="margin:20px 0;"><a href="{url}" '
-        f'style="background:{ACCENT};color:#ffffff;text-decoration:none;padding:10px 18px;'
-        f'border-radius:4px;font-size:14px;display:inline-block;">{button_label}</a></p>'
-        f'<p style="font-size:13px;color:#5b5b52;">{note}</p>'
-        '<p style="font-size:12px;color:#5b5b52;margin-top:24px;word-break:break-all;">'
-        f'Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>{url}</p>'
-        f'<p style="font-size:12px;color:#5b5b52;margin-top:16px;">{footer}</p></div>'
+    body = (
+        brand.paragraph(intro)
+        + brand.button(button_label, url)
+        + brand.paragraph(note, color=brand.MUTED, size=13)
+        + brand.fallback_link(url)
     )
+    return brand.shell(body, footer, preheader=intro)
 
 
 def render_verify_email(token: str) -> tuple[str, str, str]:

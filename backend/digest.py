@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import datetime
 
+import brand
 from database import get_db
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config
@@ -150,13 +151,18 @@ def _tender_card_html(tender: dict, frontend: str) -> str:
     estimation = (tender.get("estimation") or "").strip() or "Estimation non communiquee"
     link = f"{frontend}/tenders/{tender['id']}"
     return (
-        '<div style="border:1px solid #e3ddcf;border-radius:4px;background:#fffdf7;'
-        'padding:12px;margin:8px 0;">'
-        f'<a href="{link}" style="font-weight:bold;color:#a51c30;text-decoration:none;">'
-        f'{tender.get("title", "")}</a>'
-        f'<div style="font-size:13px;color:#5b5b52;margin-top:4px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="margin:10px 0;background:{brand.SURFACE_MUTED};'
+        f'border:1px solid {brand.BORDER_SUBTLE};border-radius:12px;">'
+        '<tr><td style="padding:14px 16px;">'
+        f'<a href="{link}" style="font-family:{brand.FONT_STACK};font-size:15px;'
+        f'font-weight:700;line-height:1.4;color:{brand.PRIMARY};'
+        f'text-decoration:none;">{tender.get("title", "")}</a>'
+        f'<div style="margin-top:6px;font-family:{brand.FONT_STACK};font-size:13px;'
+        f'line-height:1.5;color:{brand.MUTED};">'
         f'{tender.get("entity", "")} — {tender.get("location", "")}<br>'
-        f'Date limite : {tender.get("deadline", "")} · {estimation}</div></div>'
+        f'Date limite : {tender.get("deadline", "")} · {estimation}</div>'
+        '</td></tr></table>'
     )
 
 
@@ -184,12 +190,11 @@ def render_digest(new_matches: list[dict], urgent: list[dict]) -> tuple[str, str
     else:
         subject = "1 nouvel appel d'offres pour votre alerte"
 
-    html_parts = [
-        '<div style="font-family:Georgia,serif;background:#faf7f0;padding:24px;color:#2b2b2b;">',
-        '<h1 style="font-size:20px;border-bottom:2px solid #a51c30;padding-bottom:8px;">Marches Publics Maroc</h1>',
-        f'<p style="font-size:14px;">{new_count} nouvelle{"s" if new_count > 1 else ""} '
-        f'consultation{"s" if new_count > 1 else ""} correspondent a votre alerte.</p>',
-    ]
+    intro = (
+        f'{new_count} nouvelle{"s" if new_count > 1 else ""} '
+        f'consultation{"s" if new_count > 1 else ""} correspondent a votre alerte.'
+    )
+    html_parts = [brand.paragraph(intro)]
     text_parts = [
         f"{new_count} nouvelle(s) consultation(s) correspondent a votre alerte.",
         "",
@@ -197,7 +202,8 @@ def render_digest(new_matches: list[dict], urgent: list[dict]) -> tuple[str, str
 
     # Block 1 — new matches, visually emphasized.
     html_parts.append(
-        '<h2 style="font-size:16px;color:#a51c30;margin-top:20px;">Nouveaux appels d\'offres</h2>'
+        f'<h2 style="margin:22px 0 8px;font-family:{brand.FONT_STACK};font-size:16px;'
+        f"font-weight:700;color:{brand.PRIMARY};\">Nouveaux appels d'offres</h2>"
     )
     text_parts.append("== Nouveaux appels d'offres ==")
     for tender in new_matches:
@@ -208,8 +214,10 @@ def render_digest(new_matches: list[dict], urgent: list[dict]) -> tuple[str, str
     # Block 2 — urgent open shortlist (only when there is something to remind about).
     if urgent:
         html_parts.append(
-            '<h2 style="font-size:15px;color:#5b5b52;margin-top:24px;'
-            'border-top:1px solid #e3ddcf;padding-top:12px;">A traiter bientot</h2>'
+            f'<h2 style="margin:26px 0 8px;padding-top:16px;'
+            f'border-top:1px solid {brand.BORDER_SUBTLE};'
+            f'font-family:{brand.FONT_STACK};font-size:15px;font-weight:700;'
+            f'color:{brand.MUTED};">A traiter bientot</h2>'
         )
         text_parts.append("== A traiter bientot ==")
         for tender in urgent:
@@ -218,12 +226,18 @@ def render_digest(new_matches: list[dict], urgent: list[dict]) -> tuple[str, str
         text_parts.append("")
 
     html_parts.append(
-        f'<p style="font-size:12px;color:#5b5b52;margin-top:24px;">'
-        f'Voir toutes vos opportunites : <a href="{frontend}/alerts" style="color:#a51c30;">{frontend}/alerts</a></p></div>'
+        brand.paragraph(
+            "Voir toutes vos opportunites : "
+            + brand.link(f"{frontend}/alerts", f"{frontend}/alerts"),
+            color=brand.MUTED,
+            size=13,
+        )
     )
     text_parts.append(f"Voir toutes vos opportunites : {frontend}/alerts")
 
-    return subject, "".join(html_parts), "\n".join(text_parts)
+    footer = "Vous recevez cet email car une de vos alertes est active."
+    html = brand.shell("".join(html_parts), footer, preheader=intro)
+    return subject, html, "\n".join(text_parts)
 
 
 def render_confirmation(alert: dict) -> tuple[str, str, str]:
@@ -257,20 +271,33 @@ def render_confirmation(alert: dict) -> tuple[str, str, str]:
     subject = f"Votre alerte est active : {name}"
 
     html_rows = "".join(
-        f'<tr><td style="padding:4px 12px 4px 0;color:#5b5b52;font-size:13px;">{label}</td>'
-        f'<td style="padding:4px 0;font-size:13px;">{value}</td></tr>'
+        f'<tr>'
+        f'<td style="padding:6px 14px 6px 0;font-family:{brand.FONT_STACK};'
+        f'font-size:13px;color:{brand.MUTED_LIGHT};vertical-align:top;'
+        f'white-space:nowrap;">{label}</td>'
+        f'<td style="padding:6px 0;font-family:{brand.FONT_STACK};font-size:13px;'
+        f'color:{brand.INK};">{value}</td></tr>'
         for label, value in criteria
     )
-    html = (
-        '<div style="font-family:Georgia,serif;background:#faf7f0;padding:24px;color:#2b2b2b;">'
-        '<h1 style="font-size:20px;border-bottom:2px solid #a51c30;padding-bottom:8px;">Marches Publics Maroc</h1>'
-        f'<p style="font-size:14px;">Votre alerte <strong>{name}</strong> est active.</p>'
-        f'<table style="margin:12px 0;border-collapse:collapse;">{html_rows}</table>'
-        f'<p style="font-size:13px;">Prochaine synthese quotidienne a {DIGEST_TIME_LABEL}, '
-        "uniquement s'il y a de nouveaux appels d'offres correspondants.</p>"
-        f'<p style="font-size:12px;color:#5b5b52;margin-top:24px;">'
-        f'Gerer votre alerte : <a href="{frontend}/alerts" style="color:#a51c30;">{frontend}/alerts</a></p></div>'
+    intro = f"Votre alerte <strong>{name}</strong> est active."
+    body = (
+        brand.paragraph(intro)
+        + f'<table role="presentation" cellpadding="0" cellspacing="0" '
+        f'style="margin:12px 0 18px;border-collapse:collapse;">{html_rows}</table>'
+        + brand.paragraph(
+            f"Prochaine synthese quotidienne a {DIGEST_TIME_LABEL}, "
+            "uniquement s'il y a de nouveaux appels d'offres correspondants.",
+            size=13,
+        )
+        + brand.paragraph(
+            "Gerer votre alerte : "
+            + brand.link(f"{frontend}/alerts", f"{frontend}/alerts"),
+            color=brand.MUTED,
+            size=13,
+        )
     )
+    footer = "Vous recevez cet email car vous avez cree ou modifie une alerte."
+    html = brand.shell(body, footer, preheader=f"Votre alerte {name} est active.")
 
     text_lines = [
         f"Votre alerte '{name}' est active.",
