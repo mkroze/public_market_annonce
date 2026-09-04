@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowRight,
   ExternalLink,
   MapPin,
   Building2,
@@ -21,6 +22,7 @@ import {
   HelpCircle,
   LockKeyhole,
   Heart,
+  Sparkles,
 } from "lucide-react";
 import { getTender, downloadDce, downloadPdf, getFavoriteIds, addFavorite, removeFavorite } from "../lib/api";
 import { displayText, isHighConfidenceDetected, requiresVerification, signalTone } from "../lib/displayValues";
@@ -164,6 +166,7 @@ export default function TenderDetail() {
   const deadline = displayText(deadlineSignal, "");
   const urgency = getTenderUrgency(deadline);
   const checklist = getTenderDecisionChecklist(tender);
+  const assistantHref = tenderId ? `/assistant?tender=${encodeURIComponent(tenderId)}` : "/assistant";
 
   return (
     <div className="px-4 sm:px-6 py-8 space-y-8 max-w-4xl mx-auto">
@@ -257,6 +260,49 @@ export default function TenderDetail() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Préparer ma candidature — passerelle vers l'atelier guidé */}
+      <section className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-primary-soft)] p-4 shadow-card sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="shrink-0 rounded-lg bg-[var(--color-primary)] p-2 text-[var(--color-on-primary)]">
+              <Sparkles size={18} aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-display text-lg font-bold text-[var(--color-ink)]">Préparer ma candidature</h2>
+              <p className="mt-1 font-sans text-sm text-[var(--color-slate)]">
+                L'assistant reprend cette consultation pour établir votre plan : procédure, seuils, pièces exigées, délais et questions juridiques.
+              </p>
+            </div>
+          </div>
+          {isLoggedIn ? (
+            <Link
+              to={assistantHref}
+              className="btn btn-primary shrink-0 gap-2 font-sans font-semibold normal-case"
+            >
+              Préparer ma candidature
+              <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          ) : (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link
+                to="/login"
+                state={{ from: assistantHref }}
+                className="btn btn-primary gap-2 font-sans font-semibold normal-case"
+              >
+                Se connecter pour préparer
+              </Link>
+              <Link
+                to="/register"
+                state={{ from: assistantHref }}
+                className="btn btn-outline font-sans normal-case"
+              >
+                Créer un compte
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

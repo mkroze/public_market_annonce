@@ -25,15 +25,15 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] shadow-card">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-[var(--color-border-subtle)]">
-        <ListChecks size={16} className="text-[var(--color-crimson)]" />
-        <h2 className="font-display text-base font-bold text-[var(--color-charcoal)]">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)]">
+        <ListChecks size={16} className="text-[var(--color-primary)]" aria-hidden="true" />
+        <h2 className="font-display text-base font-bold text-[var(--color-ink)]">
           Pièces exigées — {procedure.shortName}
         </h2>
         <span
           className={`ml-auto text-xs font-sans font-semibold tabular-nums ${
-            done === total ? "text-green-700" : "text-[var(--color-crimson)]"
+            done === total ? "text-[var(--color-success)]" : "text-[var(--color-primary)]"
           }`}
         >
           {done}/{total}
@@ -41,10 +41,10 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
       </div>
 
       <div className="px-5 pt-3">
-        <div className="h-1.5 rounded-full bg-[var(--color-ivory)] overflow-hidden">
+        <div className="h-1.5 rounded-full bg-[var(--color-surface-strong)] overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              done === total ? "bg-green-600" : "bg-[var(--color-crimson)]"
+            className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${
+              done === total ? "bg-[var(--color-success)]" : "bg-[var(--color-primary)]"
             }`}
             style={{ width: `${pct}%` }}
           />
@@ -57,7 +57,7 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
           if (items.length === 0) return null;
           return (
             <div key={phase}>
-              <p className="label-academic font-sans text-xs uppercase tracking-wider text-[var(--color-slate)] mb-2">
+              <p className="label-academic font-sans text-xs uppercase tracking-wider text-[var(--color-muted)] mb-2">
                 {PHASE_LABELS[phase]}
               </p>
               <ul className="space-y-1.5">
@@ -71,20 +71,20 @@ export default function ComplianceChecklist({ procedure, checked, onToggle }: Pr
                         className="group flex min-h-11 w-full items-start gap-2 rounded-lg px-1 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
                       >
                         {isChecked ? (
-                          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-green-600" />
+                          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-[var(--color-success)]" aria-hidden="true" />
                         ) : (
-                          <Circle size={16} className="shrink-0 mt-0.5 text-[var(--color-crimson)] opacity-70 group-hover:opacity-100" />
+                          <Circle size={16} className="shrink-0 mt-0.5 text-[var(--color-primary)] opacity-70 group-hover:opacity-100" aria-hidden="true" />
                         )}
                         <span
                           className={`font-sans text-sm leading-snug ${
                             isChecked
-                              ? "text-[var(--color-slate)] line-through decoration-1"
-                              : "text-[var(--color-charcoal)]"
+                              ? "text-[var(--color-muted)] line-through decoration-1"
+                              : "text-[var(--color-ink)]"
                           }`}
                         >
                           {item.label}
                           {item.note && (
-                            <span className="block text-xs text-[var(--color-slate)] no-underline">
+                            <span className="block text-xs text-[var(--color-muted)] no-underline">
                               {item.note}
                             </span>
                           )}

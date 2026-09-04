@@ -82,4 +82,22 @@ describe("CandidacyAssistant", () => {
 
     expect(screen.getByRole("alert", { name: /offre excessive/i })).toBeInTheDocument();
   });
+
+  it("summarizes progress and risks in the preparation plan", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CandidacyAssistant />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: /plan de préparation/i })).toBeInTheDocument();
+    expect(screen.getByText(/points de vigilance/i)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/estimation du coût/i), "1000000");
+    await user.type(screen.getByLabelText(/votre offre/i), "1250000");
+
+    // The excessive offer is surfaced both as an inline alert and in the plan's risk list.
+    expect(screen.getAllByText(/offre excessive/i).length).toBeGreaterThan(1);
+  });
 });

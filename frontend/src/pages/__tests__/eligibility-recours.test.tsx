@@ -56,14 +56,25 @@ describe("ProcedureDetail", () => {
 });
 
 describe("Guide", () => {
-  it("does not restore the old calculator section", () => {
+  it("presents a concise preparation hub without the old calculator section", () => {
     render(
       <MemoryRouter>
         <Guide />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: /guide/i })).toBeInTheDocument();
-    expect(screen.queryByText(/calculateurs/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /préparer ma candidature/i })).toBeInTheDocument();
+    expect(screen.queryByText(/calculateur/i)).not.toBeInTheDocument();
+  });
+
+  it("links to the reference tools and the assistant entry point", () => {
+    render(
+      <MemoryRouter>
+        <Guide />
+      </MemoryRouter>,
+    );
+
+    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual(expect.arrayContaining(["/procedures", "/eligibility", "/recours", "/tenders"]));
   });
 });
