@@ -68,6 +68,58 @@ async def _audit_count(action=None):
     return n
 
 
+class TenderLifecycleHelperTest(unittest.TestCase):
+    def test_parse_deadline_date_accepts_date_time(self):
+        from tender_lifecycle import parse_deadline_date
+
+        self.assertEqual(parse_deadline_date("31/12/2026 10:30"), "2026-12-31")
+
+    def test_parse_deadline_date_accepts_date_only(self):
+        from tender_lifecycle import parse_deadline_date
+
+        self.assertEqual(parse_deadline_date("05/01/2027"), "2027-01-05")
+
+    def test_parse_deadline_date_returns_none_for_unknown(self):
+        from tender_lifecycle import parse_deadline_date
+
+        self.assertIsNone(parse_deadline_date(""))
+        self.assertIsNone(parse_deadline_date("not a date"))
+
+
+class TenderLifecycleMigrationTest(unittest.TestCase):
+    def test_init_db_adds_lifecycle_columns_and_backfills_deadline_date(self):
+        run(_reset_db())
+
+        async def seed_without_lifecycle_backfill():
+            db = await database.get_db()
+            await db.execute(
+                "INSERT INTO tenders (id, reference, title, entity, deadline) VALUES (?, ?, ?, ?, ?)",
+                ("T-LIFE", "REF-LIFE", "Lifecycle", "Entity", "31/12/2026 10:30"),
+            )
+            await db.commit()
+            await db.close()
+
+        run(seed_without_lifecycle_backfill())
+        run(database.init_db())
+
+        async def read_row():
+            db = await database.get_db()
+            row = await (await db.execute(
+                "SELECT deadline_date, source_last_seen_at, last_seen_import_id, archived_at, archived_reason "
+                "FROM tenders WHERE id = ?",
+                ("T-LIFE",),
+            )).fetchone()
+            await db.close()
+            return dict(row)
+
+        row = run(read_row())
+        self.assertEqual(row["deadline_date"], "2026-12-31")
+        self.assertIn("source_last_seen_at", row)
+        self.assertIn("last_seen_import_id", row)
+        self.assertIn("archived_at", row)
+        self.assertIn("archived_reason", row)
+
+
 class AdminAccessTest(unittest.TestCase):
     def setUp(self):
         run(_reset_db())

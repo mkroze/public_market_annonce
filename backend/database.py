@@ -236,6 +236,25 @@ async def init_db():
     await _add_column_if_missing(db, "tenders", "review_status", "review_status TEXT DEFAULT 'unreviewed'")
     await _add_column_if_missing(db, "tenders", "flag_note", "flag_note TEXT")
 
+    # tenders: lifecycle and source freshness metadata
+    await _add_column_if_missing(db, "tenders", "deadline_date", "deadline_date TEXT")
+    await _add_column_if_missing(db, "tenders", "source_last_seen_at", "source_last_seen_at TEXT")
+    await _add_column_if_missing(db, "tenders", "last_seen_import_id", "last_seen_import_id INTEGER")
+    await _add_column_if_missing(db, "tenders", "archived_at", "archived_at TEXT")
+    await _add_column_if_missing(db, "tenders", "archived_reason", "archived_reason TEXT")
+
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_deadline_date ON tenders(deadline_date)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_admin_status ON tenders(admin_status)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_last_seen_import ON tenders(last_seen_import_id)")
+
+    await db.execute(
+        """UPDATE tenders
+           SET deadline_date = substr(deadline, 7, 4) || '-' || substr(deadline, 4, 2) || '-' || substr(deadline, 1, 2)
+           WHERE (deadline_date IS NULL OR deadline_date = '')
+             AND deadline IS NOT NULL
+             AND length(deadline) >= 10"""
+    )
+
     # scrape_log: attribution + richer import outcome
     await _add_column_if_missing(db, "scrape_log", "actor_email", "actor_email TEXT")
     await _add_column_if_missing(db, "scrape_log", "trigger", "trigger TEXT DEFAULT 'scheduled'")
