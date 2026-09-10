@@ -419,6 +419,28 @@ class BatchTest(unittest.TestCase):
         await db.commit()
         await db.close()
 
+    async def _seed_lifecycle_tender(self, tid, deadline, *, admin_status="active", archived_reason=None):
+        from tender_lifecycle import parse_deadline_date
+
+        db = await database.get_db()
+        await db.execute(
+            """INSERT INTO tenders
+               (id, reference, title, entity, deadline, deadline_date, admin_status, archived_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                tid,
+                "REF-" + tid,
+                "Title " + tid,
+                "Entity",
+                deadline,
+                parse_deadline_date(deadline),
+                admin_status,
+                archived_reason,
+            ),
+        )
+        await db.commit()
+        await db.close()
+
     def test_batch_partial_success(self):
         r = self.client.post(
             "/api/admin/tenders/batch",
@@ -447,6 +469,76 @@ class BatchTest(unittest.TestCase):
             json={"action": "nuke", "ids": ["T1"]},
         )
         self.assertEqual(r.status_code, 422)
+
+    def test_overview_counts_expired_active_tenders(self):
+        run(self._seed_lifecycle_tender("OLD-ACTIVE", "01/01/2020 10:00"))
+        run(self._seed_lifecycle_tender("OLD-ARCHIVED", "01/01/2020 10:00", admin_status="archived"))
+        run(self._seed_lifecycle_tender("FUTURE", "01/01/2099 10:00"))
+
+        r = self.client.get("/api/admin/overview", headers=self.headers)
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["failure_queues"]["stale_records"], 1)
+
+    def test_admin_tenders_filters_by_deadline_state_and_returns_lifecycle_fields(self):
+        run(self._seed_lifecycle_tender("OLD-FILTER", "01/01/2020 10:00"))
+        run(self._seed_lifecycle_tender("FUTURE-FILTER", "01/01/2099 10:00"))
+
+        r = self.client.get(
+            "/api/admin/tenders?deadline_state=expired",
+            headers=self.headers,
+        )
+
+        self.assertEqual(r.status_code, 200)
+        ids = [row["id"] for row in r.json()["data"]]
+        self.assertIn("OLD-FILTER", ids)
+        self.assertNotIn("FUTURE-FILTER", ids)
+        first = r.json()["data"][0]
+        self.assertIn("deadline_state", first)
+        self.assertIn("public_visible", first)
+        self.assertIn("archived_at", first)
+        self.assertIn("archived_reason", first)
+
+    def test_cleanup_expired_archives_only_active_expired_tenders(self):
+        run(self._seed_lifecycle_tender("OLD-CLEAN", "01/01/2020 10:00"))
+        run(self._seed_lifecycle_tender("OLD-DONE", "01/01/2020 10:00", admin_status="archived"))
+        run(self._seed_lifecycle_tender("FUTURE-CLEAN", "01/01/2099 10:00"))
+        run(self._seed_lifecycle_tender("UNKNOWN-CLEAN", ""))
+
+        r = self.client.post(
+            "/api/admin/tenders/cleanup-expired?clear_dce_cache=false",
+            headers=self.headers,
+        )
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["matched"], 1)
+        self.assertEqual(r.json()["archived"], 1)
+
+        async def states():
+            db = await database.get_db()
+            rows = await (await db.execute(
+                "SELECT id, admin_status, archived_reason FROM tenders "
+                "WHERE id IN ('OLD-CLEAN', 'OLD-DONE', 'FUTURE-CLEAN', 'UNKNOWN-CLEAN')"
+            )).fetchall()
+            await db.close()
+            return {row["id"]: dict(row) for row in rows}
+
+        rows = run(states())
+        self.assertEqual(rows["OLD-CLEAN"]["admin_status"], "archived")
+        self.assertEqual(rows["OLD-CLEAN"]["archived_reason"], "expired_deadline")
+        self.assertEqual(rows["OLD-DONE"]["admin_status"], "archived")
+        self.assertEqual(rows["FUTURE-CLEAN"]["admin_status"], "active")
+        self.assertEqual(rows["UNKNOWN-CLEAN"]["admin_status"], "active")
+        self.assertGreaterEqual(run(_audit_count("tender.cleanup.expired_archive")), 1)
+
+    def test_cleanup_expired_requires_moderation_permission(self):
+        auditor = run(_make_user("aud-clean@x.com", role="auditor"))
+        r = self.client.post(
+            "/api/admin/tenders/cleanup-expired",
+            headers=_auth(auditor, "aud-clean@x.com"),
+        )
+
+        self.assertEqual(r.status_code, 403)
 
 
 if __name__ == "__main__":

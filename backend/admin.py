@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from database import get_db
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config, set_email_settings
+from tender_lifecycle import deadline_state_expr, public_visible_condition
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -223,7 +224,10 @@ async def admin_overview(request: Request, user=Depends(require_admin("overview.
         flagged = await scalar("SELECT COUNT(*) FROM tenders WHERE review_status = 'flagged'")
         archived = await scalar("SELECT COUNT(*) FROM tenders WHERE admin_status = 'archived'")
         stale = await scalar(
-            "SELECT COUNT(*) FROM tenders WHERE deadline != '' AND deadline < date('now') AND status != 'cloture'"
+            "SELECT COUNT(*) FROM tenders "
+            "WHERE COALESCE(admin_status, 'active') != 'archived' "
+            "AND COALESCE(deadline_date, '') != '' "
+            "AND deadline_date < date('now')"
         )
 
         gov_rows = await (await db.execute(
@@ -278,6 +282,7 @@ async def admin_tenders(
     status: str = Query(""),
     review_status: str = Query(""),
     admin_status: str = Query(""),
+    deadline_state: str = Query("", description="'expired', 'open', or 'unknown'"),
     detail: str = Query("", description="'yes' or 'no' for detail availability"),
     sort: str = Query("scraped_at"),
     order: str = Query("desc"),
@@ -309,6 +314,12 @@ async def admin_tenders(
             conditions.append("td.tender_id IS NOT NULL")
         elif detail == "no":
             conditions.append("td.tender_id IS NULL")
+        deadline_state_sql = deadline_state_expr("t")
+        if deadline_state:
+            if deadline_state not in {"expired", "open", "unknown"}:
+                raise HTTPException(status_code=422, detail="deadline_state must be expired, open, or unknown")
+            conditions.append(f"{deadline_state_sql} = ?")
+            params.append(deadline_state)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -326,7 +337,9 @@ async def admin_tenders(
         offset = (page - 1) * per_page
         rows = await (await db.execute(
             f"""SELECT t.*, td.estimation,
-                       CASE WHEN td.tender_id IS NOT NULL THEN 1 ELSE 0 END AS detail_available
+                       CASE WHEN td.tender_id IS NOT NULL THEN 1 ELSE 0 END AS detail_available,
+                       {deadline_state_sql} AS deadline_state,
+                       CASE WHEN {public_visible_condition("t")} THEN 1 ELSE 0 END AS public_visible
                 {base_from} {where}
                 ORDER BY {sort_col} {sort_dir}
                 LIMIT ? OFFSET ?""",
@@ -384,9 +397,23 @@ async def admin_tenders_batch(
                         (req.note or "", tid),
                     )
                 elif req.action == "archive":
-                    await db.execute("UPDATE tenders SET admin_status = 'archived' WHERE id = ?", (tid,))
+                    await db.execute(
+                        """UPDATE tenders
+                           SET admin_status = 'archived',
+                               archived_at = datetime('now'),
+                               archived_reason = 'manual'
+                           WHERE id = ?""",
+                        (tid,),
+                    )
                 elif req.action == "restore":
-                    await db.execute("UPDATE tenders SET admin_status = 'active' WHERE id = ?", (tid,))
+                    await db.execute(
+                        """UPDATE tenders
+                           SET admin_status = 'active',
+                               archived_at = NULL,
+                               archived_reason = NULL
+                           WHERE id = ?""",
+                        (tid,),
+                    )
                 elif req.action == "retry_detail":
                     await db.execute("DELETE FROM tender_details WHERE tender_id = ?", (tid,))
                     await db.commit()
@@ -413,6 +440,81 @@ async def admin_tenders_batch(
             after={"updated": len(updated), "failed": len(failed)},
         )
         return {"action": req.action, "updated": updated, "failed": failed, "result": result}
+    finally:
+        await db.close()
+
+
+class CleanupExpiredResponse(BaseModel):
+    matched: int
+    archived: int
+    dce_removed: int = 0
+    dce_freed_bytes: int = 0
+    dce_error: str | None = None
+
+
+@router.post("/tenders/cleanup-expired")
+async def admin_cleanup_expired_tenders(
+    request: Request,
+    clear_dce_cache: bool = Query(False),
+    user=Depends(require_admin("tenders.moderate")),
+):
+    db = await get_db()
+    dce_removed = 0
+    dce_freed = 0
+    dce_error = None
+    try:
+        matched = (await (await db.execute(
+            """SELECT COUNT(*) FROM tenders
+               WHERE COALESCE(admin_status, 'active') != 'archived'
+                 AND COALESCE(deadline_date, '') != ''
+                 AND deadline_date < date('now')"""
+        )).fetchone())[0]
+        cur = await db.execute(
+            """UPDATE tenders
+               SET admin_status = 'archived',
+                   archived_at = datetime('now'),
+                   archived_reason = 'expired_deadline'
+               WHERE COALESCE(admin_status, 'active') != 'archived'
+                 AND COALESCE(deadline_date, '') != ''
+                 AND deadline_date < date('now')"""
+        )
+        archived = cur.rowcount if cur.rowcount is not None else matched
+        await db.commit()
+
+        if clear_dce_cache:
+            try:
+                from dce_cache import clear_dce_cache as clear_cache
+
+                dce_result = await clear_cache(db, mode="outdated")
+                dce_removed = int(dce_result.get("removed", 0))
+                dce_freed = int(dce_result.get("freed_bytes", 0))
+            except Exception as e:  # noqa: BLE001 - return partial cleanup outcome
+                dce_error = str(e)[:200]
+
+        await log_audit(
+            db,
+            actor=user,
+            action="tender.cleanup.expired_archive",
+            target_type="tender",
+            target_id=f"{archived}/{matched}",
+            result="partial" if dce_error else "success",
+            request=request,
+            after={
+                "matched": matched,
+                "archived": archived,
+                "clear_dce_cache": clear_dce_cache,
+                "dce_removed": dce_removed,
+                "dce_freed_bytes": dce_freed,
+                "dce_error": dce_error,
+            },
+        )
+        return CleanupExpiredResponse(
+            matched=matched,
+            archived=archived,
+            dce_removed=dce_removed,
+            dce_freed_bytes=dce_freed,
+            dce_error=dce_error,
+        ).model_dump()
     finally:
         await db.close()
 
