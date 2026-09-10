@@ -462,6 +462,31 @@ class BatchTest(unittest.TestCase):
         )
         self.assertEqual(r.json()["result"], "success")
 
+        async def archived_row():
+            db = await database.get_db()
+            row = await (await db.execute(
+                "SELECT admin_status, archived_at, archived_reason FROM tenders WHERE id = 'T1'"
+            )).fetchone()
+            await db.close()
+            return dict(row)
+
+        row = run(archived_row())
+        self.assertEqual(row["admin_status"], "archived")
+        self.assertIsNotNone(row["archived_at"])
+        self.assertEqual(row["archived_reason"], "manual")
+
+        r = self.client.post(
+            "/api/admin/tenders/batch",
+            headers=self.headers,
+            json={"action": "restore", "ids": ["T1"]},
+        )
+        self.assertEqual(r.json()["result"], "success")
+
+        row = run(archived_row())
+        self.assertEqual(row["admin_status"], "active")
+        self.assertIsNone(row["archived_at"])
+        self.assertIsNone(row["archived_reason"])
+
     def test_batch_unknown_action_rejected(self):
         r = self.client.post(
             "/api/admin/tenders/batch",
@@ -483,6 +508,7 @@ class BatchTest(unittest.TestCase):
     def test_admin_tenders_filters_by_deadline_state_and_returns_lifecycle_fields(self):
         run(self._seed_lifecycle_tender("OLD-FILTER", "01/01/2020 10:00"))
         run(self._seed_lifecycle_tender("FUTURE-FILTER", "01/01/2099 10:00"))
+        run(self._seed_lifecycle_tender("UNKNOWN-FILTER", ""))
 
         r = self.client.get(
             "/api/admin/tenders?deadline_state=expired",
@@ -499,6 +525,17 @@ class BatchTest(unittest.TestCase):
         self.assertIn("archived_at", first)
         self.assertIn("archived_reason", first)
 
+        r = self.client.get("/api/admin/tenders?deadline_state=open", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("FUTURE-FILTER", [row["id"] for row in r.json()["data"]])
+
+        r = self.client.get("/api/admin/tenders?deadline_state=unknown", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("UNKNOWN-FILTER", [row["id"] for row in r.json()["data"]])
+
+        r = self.client.get("/api/admin/tenders?deadline_state=invalid", headers=self.headers)
+        self.assertEqual(r.status_code, 422)
+
     def test_cleanup_expired_archives_only_active_expired_tenders(self):
         run(self._seed_lifecycle_tender("OLD-CLEAN", "01/01/2020 10:00"))
         run(self._seed_lifecycle_tender("OLD-DONE", "01/01/2020 10:00", admin_status="archived"))
@@ -508,6 +545,7 @@ class BatchTest(unittest.TestCase):
         r = self.client.post(
             "/api/admin/tenders/cleanup-expired?clear_dce_cache=false",
             headers=self.headers,
+            json={"confirmation": "ARCHIVE EXPIRED"},
         )
 
         self.assertEqual(r.status_code, 200)
@@ -530,6 +568,65 @@ class BatchTest(unittest.TestCase):
         self.assertEqual(rows["FUTURE-CLEAN"]["admin_status"], "active")
         self.assertEqual(rows["UNKNOWN-CLEAN"]["admin_status"], "active")
         self.assertGreaterEqual(run(_audit_count("tender.cleanup.expired_archive")), 1)
+
+    def test_cleanup_expired_requires_exact_confirmation(self):
+        run(self._seed_lifecycle_tender("OLD-NO-CONFIRM", "01/01/2020 10:00"))
+
+        r = self.client.post(
+            "/api/admin/tenders/cleanup-expired",
+            headers=self.headers,
+            json={"confirmation": "archive expired"},
+        )
+
+        self.assertEqual(r.status_code, 422)
+
+        async def status():
+            db = await database.get_db()
+            row = await (await db.execute(
+                "SELECT admin_status FROM tenders WHERE id = 'OLD-NO-CONFIRM'"
+            )).fetchone()
+            await db.close()
+            return row["admin_status"]
+
+        self.assertEqual(run(status()), "active")
+
+    def test_cleanup_expired_clears_dce_cache_when_requested(self):
+        with patch("dce_cache.clear_dce_cache", new_callable=AsyncMock) as clear_cache:
+            clear_cache.return_value = {"removed": 3, "freed_bytes": 2048}
+            r = self.client.post(
+                "/api/admin/tenders/cleanup-expired?clear_dce_cache=true",
+                headers=self.headers,
+                json={"confirmation": "ARCHIVE EXPIRED"},
+            )
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["dce_removed"], 3)
+        self.assertEqual(r.json()["dce_freed_bytes"], 2048)
+        self.assertIsNone(r.json()["dce_error"])
+        clear_cache.assert_awaited_once()
+        self.assertEqual(clear_cache.await_args.kwargs["mode"], "outdated")
+
+    def test_cleanup_expired_returns_partial_audit_when_dce_cleanup_fails(self):
+        with patch("dce_cache.clear_dce_cache", new_callable=AsyncMock) as clear_cache:
+            clear_cache.side_effect = RuntimeError("DCE storage unavailable")
+            r = self.client.post(
+                "/api/admin/tenders/cleanup-expired?clear_dce_cache=true",
+                headers=self.headers,
+                json={"confirmation": "ARCHIVE EXPIRED"},
+            )
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["dce_error"], "DCE storage unavailable")
+
+        async def audit_result():
+            db = await database.get_db()
+            row = await (await db.execute(
+                "SELECT result FROM admin_audit_logs WHERE action = 'tender.cleanup.expired_archive'"
+            )).fetchone()
+            await db.close()
+            return row["result"]
+
+        self.assertEqual(run(audit_result()), "partial")
 
     def test_cleanup_expired_requires_moderation_permission(self):
         auditor = run(_make_user("aud-clean@x.com", role="auditor"))

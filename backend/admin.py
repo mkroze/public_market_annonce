@@ -11,6 +11,7 @@ import csv
 import json
 import os
 from io import StringIO
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -444,6 +445,10 @@ async def admin_tenders_batch(
         await db.close()
 
 
+class CleanupExpiredRequest(BaseModel):
+    confirmation: Literal["ARCHIVE EXPIRED"]
+
+
 class CleanupExpiredResponse(BaseModel):
     matched: int
     archived: int
@@ -455,6 +460,7 @@ class CleanupExpiredResponse(BaseModel):
 @router.post("/tenders/cleanup-expired")
 async def admin_cleanup_expired_tenders(
     request: Request,
+    cleanup: CleanupExpiredRequest,
     clear_dce_cache: bool = Query(False),
     user=Depends(require_admin("tenders.moderate")),
 ):
