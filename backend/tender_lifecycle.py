@@ -21,9 +21,26 @@ def parse_deadline_date(deadline: str | None) -> str | None:
 
 
 def deadline_date_expr(column: str = "deadline") -> str:
+    raw = f"trim({column})"
+    iso_date = (
+        f"substr({raw}, 7, 4) || '-' || substr({raw}, 4, 2) || '-' || substr({raw}, 1, 2)"
+    )
+    iso_datetime = f"{iso_date} || substr({raw}, 11, 6)"
+    date_only = (
+        f"length({raw}) = 10 "
+        f"AND {raw} GLOB '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]' "
+        f"AND substr({raw}, 7, 4) != '0000' "
+        f"AND date({iso_date}, '+0 days') = {iso_date}"
+    )
+    date_time = (
+        f"length({raw}) = 16 "
+        f"AND {raw} GLOB '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9] [0-9][0-9]:[0-9][0-9]' "
+        f"AND substr({raw}, 7, 4) != '0000' "
+        f"AND datetime({iso_datetime}, '+0 seconds') = {iso_datetime} || ':00'"
+    )
     return (
-        f"CASE WHEN {column} IS NOT NULL AND length({column}) >= 10 "
-        f"THEN substr({column}, 7, 4) || '-' || substr({column}, 4, 2) || '-' || substr({column}, 1, 2) "
+        f"CASE WHEN {column} IS NOT NULL AND ({date_only} OR {date_time}) "
+        f"THEN {iso_date} "
         "ELSE NULL END"
     )
 

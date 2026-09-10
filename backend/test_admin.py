@@ -84,6 +84,48 @@ class TenderLifecycleHelperTest(unittest.TestCase):
 
         self.assertIsNone(parse_deadline_date(""))
         self.assertIsNone(parse_deadline_date("not a date"))
+        self.assertIsNone(parse_deadline_date("31/02/2020"))
+        self.assertIsNone(parse_deadline_date("2020-02-31"))
+        self.assertIsNone(parse_deadline_date("31/12/2026 24:00"))
+        self.assertIsNone(parse_deadline_date("01/01/0000"))
+
+    def test_sql_deadline_expressions_leave_invalid_dates_unknown(self):
+        from tender_lifecycle import deadline_date_expr, deadline_state_expr
+
+        run(_reset_db())
+
+        async def read_states():
+            db = await database.get_db()
+            await db.executemany(
+                "INSERT INTO tenders (id, reference, title, entity, deadline) VALUES (?, ?, ?, ?, ?)",
+                [
+                    ("T-VALID", "REF-VALID", "Valid", "Entity", "31/12/2999"),
+                    ("T-IMPOSSIBLE", "REF-IMPOSSIBLE", "Impossible", "Entity", "31/02/2020"),
+                    ("T-MALFORMED", "REF-MALFORMED", "Malformed", "Entity", "2020-02-31"),
+                    ("T-BAD-TIME", "REF-BAD-TIME", "Bad time", "Entity", "31/12/2026 24:00"),
+                    ("T-ZERO-YEAR", "REF-ZERO-YEAR", "Zero year", "Entity", "01/01/0000"),
+                ],
+            )
+            rows = await (await db.execute(
+                "SELECT id, "
+                f"{deadline_date_expr('deadline')} AS normalized, "
+                f"{deadline_state_expr('t')} AS state "
+                "FROM tenders t ORDER BY id"
+            )).fetchall()
+            await db.close()
+            return {row["id"]: dict(row) for row in rows}
+
+        rows = run(read_states())
+        self.assertEqual(rows["T-VALID"]["normalized"], "2999-12-31")
+        self.assertEqual(rows["T-VALID"]["state"], "open")
+        self.assertIsNone(rows["T-IMPOSSIBLE"]["normalized"])
+        self.assertEqual(rows["T-IMPOSSIBLE"]["state"], "unknown")
+        self.assertIsNone(rows["T-MALFORMED"]["normalized"])
+        self.assertEqual(rows["T-MALFORMED"]["state"], "unknown")
+        self.assertIsNone(rows["T-BAD-TIME"]["normalized"])
+        self.assertEqual(rows["T-BAD-TIME"]["state"], "unknown")
+        self.assertIsNone(rows["T-ZERO-YEAR"]["normalized"])
+        self.assertEqual(rows["T-ZERO-YEAR"]["state"], "unknown")
 
 
 class TenderLifecycleMigrationTest(unittest.TestCase):
@@ -92,9 +134,13 @@ class TenderLifecycleMigrationTest(unittest.TestCase):
 
         async def seed_without_lifecycle_backfill():
             db = await database.get_db()
-            await db.execute(
+            await db.executemany(
                 "INSERT INTO tenders (id, reference, title, entity, deadline) VALUES (?, ?, ?, ?, ?)",
-                ("T-LIFE", "REF-LIFE", "Lifecycle", "Entity", "31/12/2026 10:30"),
+                [
+                    ("T-LIFE", "REF-LIFE", "Lifecycle", "Entity", "31/12/2026 10:30"),
+                    ("T-INVALID", "REF-INVALID", "Invalid", "Entity", "31/02/2020"),
+                    ("T-MALFORMED", "REF-MALFORMED", "Malformed", "Entity", "2020-02-31"),
+                ],
             )
             await db.commit()
             await db.close()
@@ -104,20 +150,21 @@ class TenderLifecycleMigrationTest(unittest.TestCase):
 
         async def read_row():
             db = await database.get_db()
-            row = await (await db.execute(
-                "SELECT deadline_date, source_last_seen_at, last_seen_import_id, archived_at, archived_reason "
-                "FROM tenders WHERE id = ?",
-                ("T-LIFE",),
-            )).fetchone()
+            rows = await (await db.execute(
+                "SELECT id, deadline_date, source_last_seen_at, last_seen_import_id, archived_at, archived_reason "
+                "FROM tenders ORDER BY id"
+            )).fetchall()
             await db.close()
-            return dict(row)
+            return {row["id"]: dict(row) for row in rows}
 
-        row = run(read_row())
-        self.assertEqual(row["deadline_date"], "2026-12-31")
-        self.assertIn("source_last_seen_at", row)
-        self.assertIn("last_seen_import_id", row)
-        self.assertIn("archived_at", row)
-        self.assertIn("archived_reason", row)
+        rows = run(read_row())
+        self.assertEqual(rows["T-LIFE"]["deadline_date"], "2026-12-31")
+        self.assertIsNone(rows["T-INVALID"]["deadline_date"])
+        self.assertIsNone(rows["T-MALFORMED"]["deadline_date"])
+        self.assertIn("source_last_seen_at", rows["T-LIFE"])
+        self.assertIn("last_seen_import_id", rows["T-LIFE"])
+        self.assertIn("archived_at", rows["T-LIFE"])
+        self.assertIn("archived_reason", rows["T-LIFE"])
 
 
 class AdminAccessTest(unittest.TestCase):

@@ -1,6 +1,7 @@
 import aiosqlite
 import os
 from config import DB_PATH
+from tender_lifecycle import deadline_date_expr
 
 async def get_db() -> aiosqlite.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -248,11 +249,10 @@ async def init_db():
     await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_last_seen_import ON tenders(last_seen_import_id)")
 
     await db.execute(
-        """UPDATE tenders
-           SET deadline_date = substr(deadline, 7, 4) || '-' || substr(deadline, 4, 2) || '-' || substr(deadline, 1, 2)
+        f"""UPDATE tenders
+           SET deadline_date = {deadline_date_expr("deadline")}
            WHERE (deadline_date IS NULL OR deadline_date = '')
-             AND deadline IS NOT NULL
-             AND length(deadline) >= 10"""
+             AND {deadline_date_expr("deadline")} IS NOT NULL"""
     )
 
     # scrape_log: attribution + richer import outcome
