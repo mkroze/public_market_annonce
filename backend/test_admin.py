@@ -166,6 +166,38 @@ class TenderLifecycleMigrationTest(unittest.TestCase):
         self.assertIn("archived_at", rows["T-LIFE"])
         self.assertIn("archived_reason", rows["T-LIFE"])
 
+    def test_init_db_repairs_populated_invalid_deadline_dates(self):
+        run(_reset_db())
+
+        async def seed_prior_bad_backfill():
+            db = await database.get_db()
+            await db.executemany(
+                "INSERT INTO tenders (id, reference, title, entity, deadline, deadline_date) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    ("T-FAKE", "REF-FAKE", "Fake", "Entity", "31/02/2020", "2020-02-31"),
+                    ("T-STALE", "REF-STALE", "Stale", "Entity", "31/12/2026", "2020-02-31"),
+                ],
+            )
+            await db.commit()
+            await db.close()
+
+        run(seed_prior_bad_backfill())
+        run(database.init_db())
+
+        async def read_rows():
+            db = await database.get_db()
+            rows = await (await db.execute(
+                "SELECT id, deadline_date FROM tenders WHERE id IN (?, ?) ORDER BY id",
+                ("T-FAKE", "T-STALE"),
+            )).fetchall()
+            await db.close()
+            return {row["id"]: row["deadline_date"] for row in rows}
+
+        rows = run(read_rows())
+        self.assertIsNone(rows["T-FAKE"])
+        self.assertEqual(rows["T-STALE"], "2026-12-31")
+
 
 class AdminAccessTest(unittest.TestCase):
     def setUp(self):

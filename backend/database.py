@@ -248,11 +248,11 @@ async def init_db():
     await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_admin_status ON tenders(admin_status)")
     await db.execute("CREATE INDEX IF NOT EXISTS idx_tenders_last_seen_import ON tenders(last_seen_import_id)")
 
+    normalized_deadline = deadline_date_expr("deadline")
     await db.execute(
         f"""UPDATE tenders
-           SET deadline_date = {deadline_date_expr("deadline")}
-           WHERE (deadline_date IS NULL OR deadline_date = '')
-             AND {deadline_date_expr("deadline")} IS NOT NULL"""
+           SET deadline_date = {normalized_deadline}
+           WHERE deadline_date IS NOT {normalized_deadline}"""
     )
 
     # scrape_log: attribution + richer import outcome
