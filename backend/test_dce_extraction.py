@@ -122,5 +122,33 @@ class StorageTest(unittest.TestCase):
             os.remove(path)
 
 
+class SigningTest(unittest.TestCase):
+    def setUp(self):
+        import config
+        config.DCE_EXTRACTION_SECRET = "test-secret"
+        config.DCE_EXTRACT_SIGNING_TTL = 900
+
+    def test_sign_then_verify_ok(self):
+        import dce_signing
+        tok = dce_signing.sign_zip_token("T/1", now=1000)
+        self.assertTrue(dce_signing.verify_zip_token("T/1", tok, now=1100))
+
+    def test_expired_token_rejected(self):
+        import dce_signing
+        tok = dce_signing.sign_zip_token("T/1", now=1000)
+        self.assertFalse(dce_signing.verify_zip_token("T/1", tok, now=1000 + 901))
+
+    def test_wrong_tender_rejected(self):
+        import dce_signing
+        tok = dce_signing.sign_zip_token("T/1", now=1000)
+        self.assertFalse(dce_signing.verify_zip_token("OTHER", tok, now=1100))
+
+    def test_tampered_signature_rejected(self):
+        import dce_signing
+        tok = dce_signing.sign_zip_token("T/1", now=1000)
+        expiry, _sig = tok.split(".", 1)
+        self.assertFalse(dce_signing.verify_zip_token("T/1", f"{expiry}.deadbeef", now=1100))
+
+
 if __name__ == "__main__":
     unittest.main()
