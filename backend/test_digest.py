@@ -1,9 +1,18 @@
+import asyncio
 import os
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from datetime import datetime
+
+
+def run(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 # A resolved email config with a host set — digest.email_is_configured() treats
 # this as "configured" without touching real SMTP.
@@ -342,6 +351,46 @@ class RunDigestTest(unittest.IsolatedAsyncioTestCase):
             result = await digest.run_digest(["T1"])
         self.assertEqual(result["emails_sent"], 0)
         mock_send.assert_not_called()
+
+
+class OpenMatchesVisibilityTest(unittest.TestCase):
+    def setUp(self):
+        import database
+
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_path = database.DB_PATH
+        database.DB_PATH = self.tmp.name
+        run(database.init_db())
+
+    def tearDown(self):
+        import database
+
+        database.DB_PATH = self._old_path
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+
+    def test_open_matches_excludes_archived_tenders(self):
+        import database
+        import digest
+
+        async def scenario():
+            db = await database.get_db()
+            await db.execute(
+                """INSERT INTO tenders
+                   (id, reference, title, entity, sector_code, deadline, deadline_date, status, admin_status)
+                   VALUES
+                   ('VISIBLE-DIGEST', 'R1', 'Visible', 'Entity', '1.1', '01/01/2099 10:00', '2099-01-01', 'en_cours', 'active'),
+                   ('HIDDEN-DIGEST', 'R2', 'Hidden', 'Entity', '1.1', '01/01/2099 10:00', '2099-01-01', 'en_cours', 'archived')"""
+            )
+            await db.commit()
+            rows = await digest.open_matches_for_alert(db, {"sectors": "1.1"}, limit=None)
+            await db.close()
+            return [row["id"] for row in rows]
+
+        ids = run(scenario())
+        self.assertIn("VISIBLE-DIGEST", ids)
+        self.assertNotIn("HIDDEN-DIGEST", ids)
 
 
 if __name__ == "__main__":

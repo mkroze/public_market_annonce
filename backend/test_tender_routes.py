@@ -1,9 +1,20 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from starlette.routing import Match
+from starlette.testclient import TestClient
 
+import main
 from main import app
+
+
+def run(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 class TenderRouteTest(unittest.TestCase):
@@ -55,7 +66,7 @@ class TenderDetailApiTest(unittest.IsolatedAsyncioTestCase):
 
             async def execute(self, query, params=()):
                 self.calls.append((query, params))
-                if "FROM tenders WHERE id" in query:
+                if "FROM tenders t WHERE t.id" in query:
                     return Cursor({
                         "id": "T1",
                         "reference": "REF-1",
@@ -109,7 +120,7 @@ class TenderDetailApiTest(unittest.IsolatedAsyncioTestCase):
 
         class Db:
             async def execute(self, query, params=()):
-                if "FROM tenders WHERE id" in query:
+                if "FROM tenders t WHERE t.id" in query:
                     return Cursor({
                         "id": "T2",
                         "reference": "REF-2",
@@ -147,7 +158,7 @@ class TenderDetailApiTest(unittest.IsolatedAsyncioTestCase):
 
         class Db:
             async def execute(self, query, params=()):
-                if "FROM tenders WHERE id" in query:
+                if "FROM tenders t WHERE t.id" in query:
                     return Cursor({
                         "id": "T3",
                         "reference": "REF-3",
@@ -237,6 +248,65 @@ class DceDownloadRouteTest(unittest.IsolatedAsyncioTestCase):
              patch.object(main, "ensure_dce_cached", AsyncMock(return_value=None)):
             resp = await main.download_tender_dce("T9")
         self.assertEqual(resp.status_code, 502)
+
+
+class ArchivedTenderVisibilityTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        import config
+        import database
+
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        # database.py binds DB_PATH into its own namespace at import time, so
+        # get_db()/init_db() read database.DB_PATH — set both to be safe.
+        config.DB_PATH = self.tmp.name
+        database.DB_PATH = self.tmp.name
+        run(database.init_db())
+        self.client = TestClient(main.app)
+
+    def tearDown(self):
+        import os
+        import config
+        import database
+
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+
+    async def _seed_tender(self, tid, admin_status="active"):
+        import database
+
+        db = await database.get_db()
+        await db.execute(
+            """INSERT INTO tenders
+               (id, reference, title, entity, deadline, deadline_date, admin_status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (tid, "REF-" + tid, "Title " + tid, "Entity", "01/01/2099 10:00", "2099-01-01", admin_status),
+        )
+        await db.commit()
+        await db.close()
+
+    def test_public_list_excludes_archived_tenders(self):
+        run(self._seed_tender("VISIBLE", "active"))
+        run(self._seed_tender("HIDDEN", "archived"))
+
+        r = self.client.get("/api/tenders")
+
+        self.assertEqual(r.status_code, 200)
+        ids = [row["id"] for row in r.json()["data"]]
+        self.assertIn("VISIBLE", ids)
+        self.assertNotIn("HIDDEN", ids)
+
+    def test_public_detail_returns_404_for_archived_tender(self):
+        run(self._seed_tender("HIDDEN-DETAIL", "archived"))
+
+        r = self.client.get("/api/tenders/HIDDEN-DETAIL")
+
+        self.assertEqual(r.status_code, 404)
 
 
 if __name__ == "__main__":

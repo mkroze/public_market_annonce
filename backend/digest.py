@@ -8,6 +8,7 @@ import brand
 from database import get_db
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config
+from tender_lifecycle import public_visible_condition
 
 # Wall-clock time (Morocco) the daily digest is expected to go out. Displayed in
 # emails; the scheduler in main.py owns the actual firing.
@@ -130,9 +131,10 @@ async def open_matches_for_alert(
 
     exclude = exclude_ids or set()
     cursor = await db.execute(
-        """SELECT t.*, td.estimation FROM tenders t
+        f"""SELECT t.*, td.estimation FROM tenders t
            LEFT JOIN tender_details td ON td.tender_id = t.id
-           WHERE t.status = 'en_cours'"""
+           WHERE t.status = 'en_cours'
+             AND {public_visible_condition('t')}"""
     )
     matches = []
     for row in await cursor.fetchall():
@@ -326,7 +328,8 @@ async def run_digest(new_ids: list[str]) -> dict:
     cursor = await db.execute(
         f"""SELECT t.*, td.estimation FROM tenders t
             LEFT JOIN tender_details td ON td.tender_id = t.id
-            WHERE t.id IN ({placeholders})""",
+            WHERE t.id IN ({placeholders})
+              AND {public_visible_condition('t')}""",
         new_ids,
     )
     tenders = [dict(r) for r in await cursor.fetchall()]

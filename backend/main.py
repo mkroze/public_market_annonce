@@ -36,6 +36,7 @@ from emailer import email_is_configured, send_email
 from settings import resolve_email_config
 from admin import router as admin_router, bootstrap_admins, is_bootstrap_admin_email
 from tender_display import build_tender_display
+from tender_lifecycle import public_visible_condition
 from tokens import (
     issue_token, consume_token, last_unused_token_age,
     VERIFY_EMAIL, PASSWORD_RESET, VERIFY_TTL, RESET_TTL, RESEND_COOLDOWN,
@@ -537,32 +538,30 @@ async def list_tenders(
     per_page: int = Query(20, ge=1, le=100),
 ):
     db = await get_db()
-    conditions = []
+    conditions = [public_visible_condition("t")]
     params = []
 
     if q:
-        conditions.append("(title LIKE ? OR reference LIKE ? OR entity LIKE ?)")
+        conditions.append("(t.title LIKE ? OR t.reference LIKE ? OR t.entity LIKE ?)")
         params.extend([f"%{q}%"] * 3)
     if category:
-        conditions.append("category = ?")
+        conditions.append("t.category = ?")
         params.append(category)
     if sector:
-        conditions.append("sector_code = ?")
+        conditions.append("t.sector_code = ?")
         params.append(sector)
     if entity:
-        conditions.append("entity LIKE ?")
+        conditions.append("t.entity LIKE ?")
         params.append(f"%{entity}%")
     if location:
-        conditions.append("location LIKE ?")
+        conditions.append("t.location LIKE ?")
         params.append(f"%{location}%")
     if status:
-        conditions.append("status = ?")
+        conditions.append("t.status = ?")
         params.append(status)
     if procedure_type:
-        conditions.append("procedure_type = ?")
+        conditions.append("t.procedure_type = ?")
         params.append(procedure_type)
-
-    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     allowed_sort = {"deadline", "publication_date", "title", "entity", "location", "scraped_at", "estimation"}
     sort_col = sort if sort in allowed_sort else "deadline"
@@ -574,7 +573,7 @@ async def list_tenders(
     else:
         order_clause = f"t.{sort_col} {sort_dir}"
 
-    where_prefixed = where.replace("WHERE ", "WHERE ").replace("title", "t.title").replace("reference", "t.reference").replace("entity", "t.entity").replace("category", "t.category").replace("sector_code", "t.sector_code").replace("location", "t.location").replace("status", "t.status").replace("procedure_type", "t.procedure_type") if where else ""
+    where_prefixed = f"WHERE {' AND '.join(conditions)}"
 
     count_row = await db.execute(f"SELECT COUNT(*) as total FROM tenders t {where_prefixed}", params)
     total = (await count_row.fetchone())[0]
@@ -615,7 +614,7 @@ async def export_tenders(
 ):
     """Export all matching tenders (no pagination) as CSV, JSON, or Excel."""
     db = await get_db()
-    conditions = []
+    conditions = [public_visible_condition("t")]
     params = []
 
     if q:
@@ -647,7 +646,7 @@ async def export_tenders(
     sort_dir = "DESC" if order.lower() == "desc" else "ASC"
 
     cursor = await db.execute(
-        f"SELECT * FROM tenders {where} ORDER BY {sort_col} {sort_dir} LIMIT 10000",
+        f"SELECT * FROM tenders t {where} ORDER BY {sort_col} {sort_dir} LIMIT 10000",
         params,
     )
     rows = await cursor.fetchall()
@@ -706,7 +705,10 @@ async def export_tenders(
 
 async def get_tender(tender_id: str):
     db = await get_db()
-    cursor = await db.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
+    cursor = await db.execute(
+        f"SELECT * FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
+        (tender_id,),
+    )
     row = await cursor.fetchone()
 
     if not row:
@@ -746,35 +748,37 @@ async def overview():
 @app.get("/api/stats")
 async def stats():
     db = await get_db()
+    visible = public_visible_condition("t")
 
-    total = (await (await db.execute("SELECT COUNT(*) FROM tenders")).fetchone())[0]
+    total = (await (await db.execute(f"SELECT COUNT(*) FROM tenders t WHERE {visible}")).fetchone())[0]
 
     cat_cursor = await db.execute(
-        "SELECT category, COUNT(*) as count FROM tenders GROUP BY category ORDER BY count DESC"
+        f"SELECT category, COUNT(*) as count FROM tenders t WHERE {visible} GROUP BY category ORDER BY count DESC"
     )
     by_category = [dict(r) for r in await cat_cursor.fetchall()]
 
     sector_cursor = await db.execute(
-        """SELECT sector_code, sector_name, category, COUNT(*) as count
-           FROM tenders GROUP BY sector_code ORDER BY count DESC LIMIT 20"""
+        f"""SELECT sector_code, sector_name, category, COUNT(*) as count
+           FROM tenders t WHERE {visible} GROUP BY sector_code ORDER BY count DESC LIMIT 20"""
     )
     top_sectors = [dict(r) for r in await sector_cursor.fetchall()]
 
     entity_cursor = await db.execute(
-        "SELECT entity, COUNT(*) as count FROM tenders GROUP BY entity ORDER BY count DESC LIMIT 20"
+        f"SELECT entity, COUNT(*) as count FROM tenders t WHERE {visible} GROUP BY entity ORDER BY count DESC LIMIT 20"
     )
     top_entities = [dict(r) for r in await entity_cursor.fetchall()]
 
     active = (
-        await (await db.execute("SELECT COUNT(*) FROM tenders WHERE status = 'en_cours'")).fetchone()
+        await (await db.execute(f"SELECT COUNT(*) FROM tenders t WHERE status = 'en_cours' AND {visible}")).fetchone()
     )[0]
 
     # deadline is stored as 'DD/MM/YYYY HH:MM' — rebuild an ISO date for comparison
     closing_7d = (
         await (
             await db.execute(
-                """SELECT COUNT(*) FROM tenders
+                f"""SELECT COUNT(*) FROM tenders t
                    WHERE status = 'en_cours'
+                     AND {visible}
                      AND length(deadline) >= 10
                      AND substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' || substr(deadline,1,2)
                          BETWEEN date('now') AND date('now', '+7 day')"""
@@ -785,17 +789,17 @@ async def stats():
     new_7d = (
         await (
             await db.execute(
-                "SELECT COUNT(*) FROM tenders WHERE scraped_at >= datetime('now', '-7 day')"
+                f"SELECT COUNT(*) FROM tenders t WHERE scraped_at >= datetime('now', '-7 day') AND {visible}"
             )
         ).fetchone()
     )[0]
 
     distinct_buyers = (
-        await (await db.execute("SELECT COUNT(DISTINCT entity) FROM tenders")).fetchone()
+        await (await db.execute(f"SELECT COUNT(DISTINCT entity) FROM tenders t WHERE {visible}")).fetchone()
     )[0]
 
     proc_cursor = await db.execute(
-        "SELECT procedure_type, COUNT(*) as count FROM tenders GROUP BY procedure_type ORDER BY count DESC"
+        f"SELECT procedure_type, COUNT(*) as count FROM tenders t WHERE {visible} GROUP BY procedure_type ORDER BY count DESC"
     )
     by_procedure = [dict(r) for r in await proc_cursor.fetchall()]
 
@@ -819,29 +823,30 @@ async def stats():
 @app.get("/api/filters")
 async def get_filters():
     db = await get_db()
+    visible = public_visible_condition("t")
 
     entities = await db.execute(
-        "SELECT DISTINCT entity FROM tenders WHERE entity != '' ORDER BY entity"
+        f"SELECT DISTINCT entity FROM tenders t WHERE entity != '' AND {visible} ORDER BY entity"
     )
     entity_list = [r[0] for r in await entities.fetchall()]
 
     sectors = await db.execute(
-        "SELECT DISTINCT sector_code, sector_name FROM tenders ORDER BY sector_code"
+        f"SELECT DISTINCT sector_code, sector_name FROM tenders t WHERE {visible} ORDER BY sector_code"
     )
     sector_list = [{"code": r[0], "name": r[1]} for r in await sectors.fetchall()]
 
     locations = await db.execute(
-        "SELECT DISTINCT location FROM tenders WHERE location != '' ORDER BY location"
+        f"SELECT DISTINCT location FROM tenders t WHERE location != '' AND {visible} ORDER BY location"
     )
     location_list = [r[0] for r in await locations.fetchall()]
 
     statuses = await db.execute(
-        "SELECT DISTINCT status FROM tenders WHERE status != '' ORDER BY status"
+        f"SELECT DISTINCT status FROM tenders t WHERE status != '' AND {visible} ORDER BY status"
     )
     status_list = [r[0] for r in await statuses.fetchall()]
 
     procedures = await db.execute(
-        "SELECT DISTINCT procedure_type FROM tenders WHERE procedure_type != '' ORDER BY procedure_type"
+        f"SELECT DISTINCT procedure_type FROM tenders t WHERE procedure_type != '' AND {visible} ORDER BY procedure_type"
     )
     procedure_list = [r[0] for r in await procedures.fetchall()]
 
@@ -990,13 +995,14 @@ DEADLINE_DATE_SQL = "substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' 
 @app.get("/api/cities")
 async def list_cities():
     db = await get_db()
+    visible = public_visible_condition("t")
     cursor = await db.execute(
-        """SELECT location, COUNT(*) as total,
+        f"""SELECT location, COUNT(*) as total,
            SUM(CASE WHEN status = 'en_cours'
                     AND length(deadline) >= 10
                     AND substr(deadline,7,4) || '-' || substr(deadline,4,2) || '-' || substr(deadline,1,2) >= date('now')
                     THEN 1 ELSE 0 END) as active
-           FROM tenders WHERE location != ''
+           FROM tenders t WHERE location != '' AND {visible}
            GROUP BY location ORDER BY total DESC"""
     )
     rows = await cursor.fetchall()
@@ -1023,13 +1029,14 @@ async def list_cities():
 @app.get("/api/cities/{city_name}")
 async def city_detail(city_name: str):
     db = await get_db()
+    visible = public_visible_condition("t")
     cursor = await db.execute(
         f"""SELECT location, category, sector_code, sector_name, status, deadline,
                    CASE WHEN status = 'en_cours'
                          AND length(deadline) >= 10
                          AND {DEADLINE_DATE_SQL} >= date('now')
                         THEN 1 ELSE 0 END as is_active
-            FROM tenders WHERE location != ''"""
+            FROM tenders t WHERE location != '' AND {visible}"""
     )
     rows = await cursor.fetchall()
     await db.close()
@@ -1081,13 +1088,14 @@ async def city_detail(city_name: str):
 @app.get("/api/regions")
 async def list_regions():
     db = await get_db()
+    visible = public_visible_condition("t")
     cursor = await db.execute(
         f"""SELECT location, COUNT(*) as total,
             SUM(CASE WHEN status = 'en_cours'
                      AND length(deadline) >= 10
                      AND {DEADLINE_DATE_SQL} >= date('now')
                      THEN 1 ELSE 0 END) as active
-            FROM tenders WHERE location != '' GROUP BY location"""
+            FROM tenders t WHERE location != '' AND {visible} GROUP BY location"""
     )
     rows = await cursor.fetchall()
     await db.close()
@@ -1111,13 +1119,14 @@ async def list_regions():
 @app.get("/api/regions/{region_name}")
 async def region_detail(region_name: str):
     db = await get_db()
+    visible = public_visible_condition("t")
     cursor = await db.execute(
         f"""SELECT location, category, sector_code, sector_name, status, deadline,
                    CASE WHEN status = 'en_cours'
                          AND length(deadline) >= 10
                          AND {DEADLINE_DATE_SQL} >= date('now')
                         THEN 1 ELSE 0 END as is_active
-            FROM tenders WHERE location != ''"""
+            FROM tenders t WHERE location != '' AND {visible}"""
     )
     rows = await cursor.fetchall()
     await db.close()
@@ -1175,9 +1184,10 @@ async def region_detail(region_name: str):
 @app.get("/api/sectors")
 async def list_sectors():
     db = await get_db()
+    visible = public_visible_condition("t")
     cursor = await db.execute(
-        """SELECT sector_code, sector_name, category, COUNT(*) as count
-           FROM tenders GROUP BY sector_code ORDER BY category, count DESC"""
+        f"""SELECT sector_code, sector_name, category, COUNT(*) as count
+           FROM tenders t WHERE {visible} GROUP BY sector_code ORDER BY category, count DESC"""
     )
     rows = [dict(r) for r in await cursor.fetchall()]
     await db.close()
@@ -1198,28 +1208,29 @@ async def sector_detail(sector_code: str):
     db = await get_db()
 
     name = SECTORS.get(sector_code, sector_code)
+    visible = public_visible_condition("t")
 
     total_cursor = await db.execute(
-        "SELECT COUNT(*) FROM tenders WHERE sector_code = ?", (sector_code,)
+        f"SELECT COUNT(*) FROM tenders t WHERE sector_code = ? AND {visible}", (sector_code,)
     )
     total = (await total_cursor.fetchone())[0]
 
     active_cursor = await db.execute(
-        "SELECT COUNT(*) FROM tenders WHERE sector_code = ? AND deadline >= date('now')",
+        f"SELECT COUNT(*) FROM tenders t WHERE sector_code = ? AND deadline >= date('now') AND {visible}",
         (sector_code,),
     )
     active = (await active_cursor.fetchone())[0]
 
     entity_cursor = await db.execute(
-        """SELECT entity, COUNT(*) as count FROM tenders
-           WHERE sector_code = ? GROUP BY entity ORDER BY count DESC LIMIT 10""",
+        f"""SELECT entity, COUNT(*) as count FROM tenders t
+           WHERE sector_code = ? AND {visible} GROUP BY entity ORDER BY count DESC LIMIT 10""",
         (sector_code,),
     )
     top_entities = [dict(r) for r in await entity_cursor.fetchall()]
 
     location_cursor = await db.execute(
-        """SELECT location, COUNT(*) as count FROM tenders
-           WHERE sector_code = ? AND location != '' GROUP BY location ORDER BY count DESC LIMIT 10""",
+        f"""SELECT location, COUNT(*) as count FROM tenders t
+           WHERE sector_code = ? AND location != '' AND {visible} GROUP BY location ORDER BY count DESC LIMIT 10""",
         (sector_code,),
     )
     top_locations = [dict(r) for r in await location_cursor.fetchall()]
@@ -1243,9 +1254,10 @@ async def list_favorites(authorization: str | None = Header(None)):
     user = await require_user(authorization)
     db = await get_db()
     cursor = await db.execute(
-        """SELECT t.* FROM tenders t
+        f"""SELECT t.* FROM tenders t
            JOIN favorites f ON f.tender_id = t.id
-           WHERE f.user_id = ? ORDER BY f.created_at DESC""",
+           WHERE f.user_id = ? AND {public_visible_condition('t')}
+           ORDER BY f.created_at DESC""",
         (user["id"],),
     )
     rows = [dict(r) for r in await cursor.fetchall()]
@@ -1258,7 +1270,10 @@ async def list_favorite_ids(authorization: str | None = Header(None)):
     user = await require_user(authorization)
     db = await get_db()
     cursor = await db.execute(
-        "SELECT tender_id FROM favorites WHERE user_id = ?", (user["id"],)
+        f"""SELECT f.tender_id FROM favorites f
+            JOIN tenders t ON t.id = f.tender_id
+            WHERE f.user_id = ? AND {public_visible_condition('t')}""",
+        (user["id"],),
     )
     ids = [r[0] for r in await cursor.fetchall()]
     await db.close()
@@ -1270,6 +1285,12 @@ async def add_favorite(tender_id: str, authorization: str | None = Header(None))
     user = await require_user(authorization)
     db = await get_db()
     try:
+        visible = await (await db.execute(
+            f"SELECT id FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
+            (tender_id,),
+        )).fetchone()
+        if not visible:
+            raise HTTPException(status_code=404, detail="Tender not found")
         await db.execute(
             "INSERT OR IGNORE INTO favorites (user_id, tender_id) VALUES (?, ?)",
             (user["id"], tender_id),
@@ -1560,7 +1581,10 @@ async def delete_saved_search(search_id: int, authorization: str | None = Header
 @app.get("/api/tenders/{tender_id:path}/pdf")
 async def export_tender_pdf(tender_id: str):
     db = await get_db()
-    cursor = await db.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
+    cursor = await db.execute(
+        f"SELECT * FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
+        (tender_id,),
+    )
     row = await cursor.fetchone()
     if not row:
         await db.close()
@@ -1654,7 +1678,10 @@ async def export_tender_pdf(tender_id: str):
 async def download_tender_dce(tender_id: str):
     db = await get_db()
     det_cursor = await db.execute(
-        "SELECT dce_url FROM tender_details WHERE tender_id = ?", (tender_id,)
+        f"""SELECT td.dce_url FROM tender_details td
+            JOIN tenders t ON t.id = td.tender_id
+            WHERE td.tender_id = ? AND {public_visible_condition('t')}""",
+        (tender_id,),
     )
     detail = await det_cursor.fetchone()
 
