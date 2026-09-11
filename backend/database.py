@@ -219,6 +219,36 @@ async def init_db():
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_email_tokens_lookup ON email_tokens(user_id, purpose);
+
+        -- Per-tender DCE extraction result (company-agnostic). One row per tender.
+        CREATE TABLE IF NOT EXISTS dce_extraction (
+            tender_id TEXT PRIMARY KEY REFERENCES tenders(id),
+            zip_hash TEXT DEFAULT '',
+            status TEXT DEFAULT 'ok',        -- ok | partial | failed
+            ocr_lang TEXT DEFAULT '',
+            model TEXT DEFAULT '',
+            core_json TEXT DEFAULT '{}',
+            key_points_json TEXT DEFAULT '[]',
+            tags_json TEXT DEFAULT '[]',
+            doc_types_json TEXT DEFAULT '{}',
+            redaction_stats TEXT DEFAULT '{}',
+            error TEXT,
+            extracted_at TEXT DEFAULT (datetime('now'))
+        );
+
+        -- History of admin "extract all DCEs" enqueue sweeps.
+        CREATE TABLE IF NOT EXISTS dce_extraction_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT,
+            total INTEGER DEFAULT 0,
+            enqueued INTEGER DEFAULT 0,
+            skipped INTEGER DEFAULT 0,
+            failed INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'running',   -- running | done | failed
+            actor_email TEXT,
+            error TEXT
+        );
     """)
 
     # ── Migrations for pre-existing tables ──────────────────────────────────

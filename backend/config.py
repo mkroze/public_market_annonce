@@ -41,6 +41,15 @@ DCE_WARM_PAUSE_SECONDS = float(os.getenv("DCE_WARM_PAUSE_SECONDS", "60"))
 DCE_WARM_BACKOFF_STEP = int(os.getenv("DCE_WARM_BACKOFF_STEP", "1"))
 DCE_WARM_MIN_THREADS = int(os.getenv("DCE_WARM_MIN_THREADS", "1"))
 
+# DCE extraction pipeline. Recap markdown lives next to the ZIP cache on /app/data.
+DCE_CONTEXT_DIR = os.getenv("DCE_CONTEXT_DIR", "data/dce_context")
+# n8n webhook the backend calls to enqueue one tender for OCR→redact→extract.
+N8N_EXTRACT_WEBHOOK_URL = os.getenv("N8N_EXTRACT_WEBHOOK_URL", "")
+# Shared secret the n8n callback must present, and HMAC key for signed ZIP URLs.
+DCE_EXTRACTION_SECRET = os.getenv("DCE_EXTRACTION_SECRET", "")
+# Signed ZIP-fetch URL lifetime (seconds) handed to the OCR box.
+DCE_EXTRACT_SIGNING_TTL = int(os.getenv("DCE_EXTRACT_SIGNING_TTL", "900"))  # 15 min
+
 SECTORS = {
     "1.10": "Terrassements",
     "1.11": "Fondations, injections, parois moulées, sondages et forages",
