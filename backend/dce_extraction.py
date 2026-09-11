@@ -9,13 +9,13 @@ import hashlib
 import json
 import os
 
-from config import DCE_CONTEXT_DIR
+import config
 
 
 def context_md_path(tender_id: str) -> str:
     # tender_id may contain slashes; hash it for a safe filename (mirrors dce_cache).
     digest = hashlib.sha1(tender_id.encode("utf-8")).hexdigest()
-    return os.path.join(DCE_CONTEXT_DIR, f"context-{digest}.md")
+    return os.path.join(config.DCE_CONTEXT_DIR, f"context-{digest}.md")
 
 
 def zip_content_hash(path: str) -> str:
@@ -50,7 +50,7 @@ def _render_context_md(tender_id: str, payload: dict) -> str:
 
 async def store_extraction(db, tender_id: str, payload: dict) -> None:
     """Upsert the extraction row and (re)write the recap markdown. Commits."""
-    os.makedirs(DCE_CONTEXT_DIR, exist_ok=True)
+    os.makedirs(config.DCE_CONTEXT_DIR, exist_ok=True)
     await db.execute(
         """INSERT OR REPLACE INTO dce_extraction
            (tender_id, zip_hash, status, ocr_lang, model,
@@ -87,4 +87,5 @@ async def get_extraction(db, tender_id: str) -> dict | None:
     row["key_points"] = json.loads(row.pop("key_points_json") or "[]")
     row["tags"] = json.loads(row.pop("tags_json") or "[]")
     row["doc_types"] = json.loads(row.pop("doc_types_json") or "{}")
+    row["redaction_stats"] = json.loads(row.get("redaction_stats") or "{}")
     return row

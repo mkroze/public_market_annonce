@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 import tempfile
 import unittest
@@ -96,12 +97,29 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(row["status"], "ok")
         self.assertEqual(row["core"]["object"]["value"], "Voirie")
         self.assertEqual(row["tags"], ["voirie"])
+        self.assertEqual(row["key_points"], ["Caution 2%"])
+        self.assertEqual(row["doc_types"], {"cps.pdf": "CPS"})
+        self.assertEqual(row["redaction_stats"], {"names": 2})
         md_path = dce_extraction.context_md_path("T1")
         self.assertTrue(os.path.exists(md_path))
         with open(md_path, encoding="utf-8") as f:
             body = f.read()
         self.assertIn("Voirie", body)
         self.assertIn("voirie", body)
+
+    def test_zip_content_hash(self):
+        import dce_extraction
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            test_content = b"test data for hashing"
+            f.write(test_content)
+            f.flush()
+            path = f.name
+        try:
+            expected_hash = hashlib.sha256(test_content).hexdigest()
+            actual_hash = dce_extraction.zip_content_hash(path)
+            self.assertEqual(actual_hash, expected_hash)
+        finally:
+            os.remove(path)
 
 
 if __name__ == "__main__":
