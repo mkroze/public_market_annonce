@@ -117,6 +117,16 @@ class V1ApiSurfaceTest(unittest.TestCase):
         self.assertNotEqual(response.status_code, 404)
         self.assertIn(response.status_code, (401, 403))
 
+    def test_dce_archive_is_public_surface(self):
+        # allowlisted + auth-exempt: reaches the handler (401 for bad token), not surface 404
+        import main
+        self.assertTrue(main.is_v1_catalog_api_path("/api/dce/T1/archive"))
+        self.assertTrue(main.is_public_v1_api_path("/api/dce/T1/archive", "GET"))
+        self.assertFalse(main.requires_v1_auth("/api/dce/T1/archive", "GET"))
+        # HTTP call: handler-level 401 (bad token), not surface 404
+        response = self.client.get("/api/dce/T1/archive?token=bad.sig")
+        self.assertEqual(response.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

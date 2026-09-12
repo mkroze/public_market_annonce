@@ -155,6 +155,10 @@ def is_public_v1_api_path(path: str, method: str) -> bool:
         return True
     if is_public_data_directory_path(path):
         return True
+    if path.startswith("/api/dce/") and path.endswith("/archive"):
+        return True
+    if path == "/api/dce/extraction-callback":
+        return True
     return False
 
 
@@ -182,6 +186,7 @@ def is_v1_catalog_api_path(path: str) -> bool:
         or path.startswith("/api/assistant/")
         or path == "/api/admin"
         or path.startswith("/api/admin/")
+        or path.startswith("/api/dce/")
     )
 
 
@@ -1705,6 +1710,23 @@ async def download_tender_dce(tender_id: str):
 
 # Register the catch-all detail route after the download routes so their suffixes win.
 app.add_api_route("/api/tenders/{tender_id:path}", get_tender, methods=["GET"])
+
+
+# ── DCE archive (machine endpoint, HMAC-token authenticated) ─────────────────
+
+@app.get("/api/dce/{tender_id:path}/archive")
+async def fetch_dce_archive(tender_id: str, token: str = ""):
+    import dce_signing
+    import dce_cache
+    if not dce_signing.verify_zip_token(tender_id, token):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    db = await get_db()
+    cached = await dce_cache.get_cached(db, tender_id)
+    await db.close()
+    if not cached:
+        raise HTTPException(status_code=404, detail="DCE not cached")
+    path, filename = cached
+    return FileResponse(path, media_type="application/zip", filename=filename)
 
 
 # ── Scrape ───────────────────────────────────────────────────────────────────

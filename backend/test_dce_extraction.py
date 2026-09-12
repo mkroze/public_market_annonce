@@ -150,5 +150,61 @@ class SigningTest(unittest.TestCase):
         self.assertFalse(dce_signing.verify_zip_token("T/1", f"{expiry}.deadbeef", now=1100))
 
 
+class ZipFetchApiTest(unittest.TestCase):
+    def setUp(self):
+        import config, database, dce_cache
+        from fastapi.testclient import TestClient
+        import main
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        config.DB_PATH = self.tmp.name
+        database.DB_PATH = self.tmp.name
+        config.DCE_EXTRACTION_SECRET = "test-secret"
+        config.DCE_EXTRACT_SIGNING_TTL = 900
+        self.cachedir = tempfile.mkdtemp()
+        config.DCE_CACHE_DIR = self.cachedir
+        dce_cache.DCE_CACHE_DIR = self.cachedir
+        run(database.init_db())
+        self.client = TestClient(main.app)
+
+    def tearDown(self):
+        import shutil
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+        shutil.rmtree(self.cachedir, ignore_errors=True)
+
+    def _seed_with_zip(self, tid):
+        import database, dce_cache
+        async def s():
+            db = await database.get_db()
+            await db.execute("INSERT INTO tenders (id, reference, title, entity) VALUES (?,?,?,?)",
+                             (tid, "R", "T", "E"))
+            await db.commit()
+            path = dce_cache._disk_path(tid)
+            os.makedirs(self.cachedir, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(b"PK\x03\x04zipbytes")
+            await db.execute(
+                "INSERT INTO dce_cache (tender_id, filename, size, status) VALUES (?,?,?, 'ok')",
+                (tid, "dce.zip", 9),
+            )
+            await db.commit()
+            await db.close()
+        run(s())
+
+    def test_valid_token_returns_zip(self):
+        import dce_signing
+        self._seed_with_zip("T1")
+        tok = dce_signing.sign_zip_token("T1")
+        r = self.client.get(f"/api/dce/T1/archive?token={tok}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b"zipbytes", r.content)
+
+    def test_bad_token_is_401(self):
+        self._seed_with_zip("T1")
+        r = self.client.get("/api/dce/T1/archive?token=nope.deadbeef")
+        self.assertEqual(r.status_code, 401)
+
+
 if __name__ == "__main__":
     unittest.main()
