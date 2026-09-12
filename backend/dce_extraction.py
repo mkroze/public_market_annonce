@@ -5,6 +5,7 @@ by the (external) OCR/redaction + n8n pipeline via the callback endpoint, and
 renders a deterministic ``context-{id}.md`` recap from each stored payload.
 """
 
+import asyncio
 import hashlib
 import json
 import os
@@ -91,6 +92,9 @@ async def get_extraction(db, tender_id: str) -> dict | None:
     return row
 
 
+# Only one extraction sweep at a time (mirrors dce_cache_lock in dce_cache.py).
+dce_extraction_lock = asyncio.Lock()
+
 # ── Enqueue + warm-all sweep ─────────────────────────────────────────────────
 
 import httpx  # noqa: E402
@@ -130,49 +134,50 @@ async def _already_extracted(db, tender_id: str, zip_hash: str) -> bool:
 async def extract_all_dces(base_url: str, actor_email: str | None = None) -> dict:
     """Enqueue every tender that has a cached DCE and isn't already extracted
     for the current ZIP. Records the sweep in dce_extraction_log."""
-    from database import get_db
-    from dce_cache import get_cached
+    async with dce_extraction_lock:
+        from database import get_db
+        from dce_cache import get_cached
 
-    db = await get_db()
-    cur = await db.execute(
-        "INSERT INTO dce_extraction_log (status, actor_email) VALUES ('running', ?)",
-        (actor_email,),
-    )
-    log_id = cur.lastrowid
-    await db.commit()
-
-    total = enqueued = skipped = failed = 0
-    final_status = "done"
-    err = None
-    try:
-        rows = await (await db.execute(
-            "SELECT tender_id FROM dce_cache WHERE status = 'ok'"
-        )).fetchall()
-        total = len(rows)
-        for r in rows:
-            tid = r["tender_id"]
-            cached = await get_cached(db, tid)
-            if not cached:
-                skipped += 1
-                continue
-            zh = zip_content_hash(cached[0])
-            if await _already_extracted(db, tid, zh):
-                skipped += 1
-                continue
-            if await enqueue_extraction(db, tid, base_url):
-                enqueued += 1
-            else:
-                failed += 1
-    except Exception as e:  # noqa: BLE001
-        final_status = "failed"
-        err = str(e)[:500]
-    finally:
-        await db.execute(
-            """UPDATE dce_extraction_log
-               SET finished_at = datetime('now'), total=?, enqueued=?, skipped=?, failed=?, status=?, error=?
-               WHERE id=?""",
-            (total, enqueued, skipped, failed, final_status, err, log_id),
+        db = await get_db()
+        cur = await db.execute(
+            "INSERT INTO dce_extraction_log (status, actor_email) VALUES ('running', ?)",
+            (actor_email,),
         )
+        log_id = cur.lastrowid
         await db.commit()
-        await db.close()
-    return {"total": total, "enqueued": enqueued, "skipped": skipped, "failed": failed, "status": final_status}
+
+        total = enqueued = skipped = failed = 0
+        final_status = "done"
+        err = None
+        try:
+            rows = await (await db.execute(
+                "SELECT tender_id FROM dce_cache WHERE status = 'ok'"
+            )).fetchall()
+            total = len(rows)
+            for r in rows:
+                tid = r["tender_id"]
+                cached = await get_cached(db, tid)
+                if not cached:
+                    skipped += 1
+                    continue
+                zh = zip_content_hash(cached[0])
+                if await _already_extracted(db, tid, zh):
+                    skipped += 1
+                    continue
+                if await enqueue_extraction(db, tid, base_url):
+                    enqueued += 1
+                else:
+                    failed += 1
+        except Exception as e:  # noqa: BLE001
+            final_status = "failed"
+            err = str(e)[:500]
+        finally:
+            await db.execute(
+                """UPDATE dce_extraction_log
+                   SET finished_at = datetime('now'), total=?, enqueued=?, skipped=?, failed=?, status=?, error=?
+                   WHERE id=?""",
+                (total, enqueued, skipped, failed, final_status, err, log_id),
+            )
+            await db.commit()
+            await db.close()
+        return {"total": total, "enqueued": enqueued, "skipped": skipped, "failed": failed, "status": final_status}
