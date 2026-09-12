@@ -102,7 +102,7 @@ import httpx  # noqa: E402
 from dce_signing import sign_zip_token  # noqa: E402
 
 
-async def enqueue_extraction(db, tender_id: str, base_url: str, client=None) -> bool:
+async def enqueue_extraction(tender_id: str, base_url: str, client=None) -> bool:
     """POST a signed ZIP URL + tender_id to the n8n webhook. Returns success.
 
     ``client`` is injectable for tests; defaults to a real httpx.AsyncClient.
@@ -164,7 +164,7 @@ async def extract_all_dces(base_url: str, actor_email: str | None = None) -> dic
                 if await _already_extracted(db, tid, zh):
                     skipped += 1
                     continue
-                if await enqueue_extraction(db, tid, base_url):
+                if await enqueue_extraction(tid, base_url):
                     enqueued += 1
                 else:
                     failed += 1

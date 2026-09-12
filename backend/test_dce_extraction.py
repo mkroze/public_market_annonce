@@ -50,7 +50,7 @@ class SchemaTest(unittest.TestCase):
         )
         self.assertLessEqual(
             {"id", "started_at", "finished_at", "total", "enqueued",
-             "skipped", "failed", "status", "actor_email"},
+             "skipped", "failed", "status", "actor_email", "error"},
             log_cols,
         )
 
@@ -288,6 +288,17 @@ class CallbackApiTest(unittest.TestCase):
                              headers={"X-Extraction-Secret": "wrong"})
         self.assertEqual(r.status_code, 401)
 
+    def test_empty_secret_config_is_401(self):
+        """An unset DCE_EXTRACTION_SECRET must fail-closed (reject all requests)."""
+        import config
+        config.DCE_EXTRACTION_SECRET = ""
+        try:
+            r = self.client.post("/api/dce/extraction-callback", json=self._body(),
+                                 headers={"X-Extraction-Secret": ""})
+            self.assertEqual(r.status_code, 401)
+        finally:
+            config.DCE_EXTRACTION_SECRET = self._old_secret
+
     def test_unknown_tender_is_404(self):
         b = self._body(); b["tender_id"] = "MISSING"
         r = self.client.post("/api/dce/extraction-callback", json=b,
@@ -310,7 +321,7 @@ class CallbackApiTest(unittest.TestCase):
 
 class ReadApiTest(unittest.TestCase):
     def setUp(self):
-        import config, database
+        import config, database, auth
         from fastapi.testclient import TestClient
         import main
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -324,6 +335,20 @@ class ReadApiTest(unittest.TestCase):
         config.DCE_CONTEXT_DIR = self.ctxdir
         run(database.init_db())
         self.client = TestClient(main.app)
+
+        async def _create_user():
+            db = await database.get_db()
+            c = await db.execute(
+                "INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)",
+                ("reader@test.com", "x", "Reader"),
+            )
+            uid = c.lastrowid
+            await db.commit()
+            await db.close()
+            return uid
+
+        uid = run(_create_user())
+        self.auth_header = {"Authorization": f"Bearer {auth.create_token(uid, 'reader@test.com')}"}
 
     def tearDown(self):
         import shutil, config, database
@@ -348,19 +373,24 @@ class ReadApiTest(unittest.TestCase):
 
     def test_returns_extraction(self):
         self._seed("T1")
-        r = self.client.get("/api/tenders/T1/dce-extraction")
+        r = self.client.get("/api/tenders/T1/dce-extraction", headers=self.auth_header)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["core"]["object"]["value"], "V")
 
     def test_missing_extraction_is_404(self):
         self._seed("T2", store=False)
-        r = self.client.get("/api/tenders/T2/dce-extraction")
+        r = self.client.get("/api/tenders/T2/dce-extraction", headers=self.auth_header)
         self.assertEqual(r.status_code, 404)
 
     def test_archived_tender_is_404(self):
         self._seed("T3", admin_status="archived")
-        r = self.client.get("/api/tenders/T3/dce-extraction")
+        r = self.client.get("/api/tenders/T3/dce-extraction", headers=self.auth_header)
         self.assertEqual(r.status_code, 404)
+
+    def test_no_token_is_401(self):
+        self._seed("T4")
+        r = self.client.get("/api/tenders/T4/dce-extraction")
+        self.assertEqual(r.status_code, 401)
 
 
 class EnqueueTest(unittest.TestCase):
@@ -412,7 +442,7 @@ class EnqueueTest(unittest.TestCase):
             await db.execute("INSERT INTO tenders (id, reference, title, entity) VALUES (?,?,?,?)",
                              ("T1", "R", "T", "E"))
             await db.commit()
-            ok = await dce_extraction.enqueue_extraction(db, "T1", "https://app.example", client=FakeClient())
+            ok = await dce_extraction.enqueue_extraction("T1", "https://app.example", client=FakeClient())
             await db.close()
             return ok
 

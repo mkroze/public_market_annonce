@@ -123,6 +123,7 @@ def is_tender_action_path(path: str) -> bool:
         path == "/api/tenders/export"
         or path.endswith("/pdf")
         or path.endswith("/dce")
+        or path.endswith("/dce-extraction")
     )
 
 

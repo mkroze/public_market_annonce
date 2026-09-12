@@ -55,6 +55,7 @@ class V1ApiSurfaceTest(unittest.TestCase):
             "/api/tenders/export",
             "/api/tenders/A/B/pdf",
             "/api/tenders/A/B/dce",
+            "/api/tenders/A/B/dce-extraction",
             "/api/alerts",
             "/api/favorites",
             "/api/saved-searches",
