@@ -127,6 +127,12 @@ class V1ApiSurfaceTest(unittest.TestCase):
         response = self.client.get("/api/dce/T1/archive?token=bad.sig")
         self.assertEqual(response.status_code, 401)
 
+    def test_extraction_callback_is_public_surface(self):
+        # no Bearer, wrong secret -> handler-level 401, proving it isn't surface-404'd
+        r = self.client.post("/api/dce/extraction-callback", json={"tender_id": "x"},
+                             headers={"X-Extraction-Secret": "wrong"})
+        self.assertEqual(r.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

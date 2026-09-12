@@ -240,5 +240,73 @@ class ZipFetchApiTest(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
 
 
+class CallbackApiTest(unittest.TestCase):
+    def setUp(self):
+        import config, database
+        from fastapi.testclient import TestClient
+        import main
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        self._old_secret = config.DCE_EXTRACTION_SECRET
+        self._old_ctx_dir = config.DCE_CONTEXT_DIR
+        config.DB_PATH = self.tmp.name
+        database.DB_PATH = self.tmp.name
+        config.DCE_EXTRACTION_SECRET = "test-secret"
+        self.ctxdir = tempfile.mkdtemp()
+        config.DCE_CONTEXT_DIR = self.ctxdir
+        run(database.init_db())
+        self.client = TestClient(main.app)
+        run(self._seed("T1"))
+
+    def tearDown(self):
+        import shutil, config, database
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        config.DCE_EXTRACTION_SECRET = self._old_secret
+        config.DCE_CONTEXT_DIR = self._old_ctx_dir
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+        shutil.rmtree(self.ctxdir, ignore_errors=True)
+
+    async def _seed(self, tid):
+        import database
+        db = await database.get_db()
+        await db.execute("INSERT INTO tenders (id, reference, title, entity) VALUES (?,?,?,?)",
+                         (tid, "R", "T", "E"))
+        await db.commit()
+        await db.close()
+
+    def _body(self):
+        return {"tender_id": "T1", "zip_hash": "abc", "status": "ok", "ocr_lang": "fr",
+                "model": "m", "core": {"object": {"value": "Voirie", "confidence": "high"}},
+                "key_points": [], "tags": ["voirie"], "doc_types": {}, "redaction_stats": {}, "error": None}
+
+    def test_bad_secret_is_401(self):
+        r = self.client.post("/api/dce/extraction-callback", json=self._body(),
+                             headers={"X-Extraction-Secret": "wrong"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_unknown_tender_is_404(self):
+        b = self._body(); b["tender_id"] = "MISSING"
+        r = self.client.post("/api/dce/extraction-callback", json=b,
+                             headers={"X-Extraction-Secret": "test-secret"})
+        self.assertEqual(r.status_code, 404)
+
+    def test_valid_callback_stores(self):
+        r = self.client.post("/api/dce/extraction-callback", json=self._body(),
+                             headers={"X-Extraction-Secret": "test-secret"})
+        self.assertEqual(r.status_code, 200)
+        import database, dce_extraction
+        async def check():
+            db = await database.get_db()
+            row = await dce_extraction.get_extraction(db, "T1")
+            await db.close()
+            return row
+        row = run(check())
+        self.assertEqual(row["core"]["object"]["value"], "Voirie")
+
+
 if __name__ == "__main__":
     unittest.main()

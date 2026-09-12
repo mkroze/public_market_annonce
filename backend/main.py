@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -145,6 +146,9 @@ def is_public_data_directory_path(path: str) -> bool:
 def is_public_v1_api_path(path: str, method: str) -> bool:
     if path in V1_PUBLIC_API_PATHS:
         return True
+    # POST endpoints that are public (no bearer token required)
+    if path == "/api/dce/extraction-callback":
+        return True
     if method != "GET":
         return False
     if path == "/api/filters":
@@ -156,8 +160,6 @@ def is_public_v1_api_path(path: str, method: str) -> bool:
     if is_public_data_directory_path(path):
         return True
     if path.startswith("/api/dce/") and path.endswith("/archive"):
-        return True
-    if path == "/api/dce/extraction-callback":
         return True
     return False
 
@@ -2038,6 +2040,42 @@ async def assistant_ask(req: AssistantRequest):
     if not answer:
         raise HTTPException(status_code=502, detail="Réponse vide de l'assistant.")
     return {"answer": answer}
+
+
+# ── DCE extraction callback (n8n → backend) ──────────────────────────────────
+
+class ExtractionCallback(BaseModel):
+    tender_id: str
+    zip_hash: str = ""
+    status: str = "ok"
+    ocr_lang: str = ""
+    model: str = ""
+    core: dict = {}
+    key_points: list = []
+    tags: list = []
+    doc_types: dict = {}
+    redaction_stats: dict = {}
+    error: str | None = None
+
+
+@app.post("/api/dce/extraction-callback")
+async def dce_extraction_callback(
+    payload: ExtractionCallback,
+    x_extraction_secret: str = Header(default=""),
+):
+    import dce_extraction
+    import config as _config
+    DCE_EXTRACTION_SECRET = _config.DCE_EXTRACTION_SECRET
+    if not DCE_EXTRACTION_SECRET or not hmac.compare_digest(x_extraction_secret, DCE_EXTRACTION_SECRET):
+        raise HTTPException(status_code=401, detail="Invalid extraction secret")
+    db = await get_db()
+    exists = await (await db.execute("SELECT id FROM tenders WHERE id = ?", (payload.tender_id,))).fetchone()
+    if not exists:
+        await db.close()
+        raise HTTPException(status_code=404, detail="Tender not found")
+    await dce_extraction.store_extraction(db, payload.tender_id, payload.model_dump())
+    await db.close()
+    return {"stored": True}
 
 
 # ── Serve frontend (Docker production) ───────────────────────────────────────
