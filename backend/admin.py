@@ -670,6 +670,54 @@ async def admin_run_dce_cache(request: Request, user=Depends(require_admin("impo
     return {"status": "started"}
 
 
+# ── DCE extraction sweep ─────────────────────────────────────────────────────
+
+def _launch_dce_extraction(base_url: str, actor_email: str):
+    from dce_extraction import extract_all_dces
+
+    async def runner():
+        try:
+            await extract_all_dces(base_url, actor_email=actor_email)
+        except Exception as e:  # noqa: BLE001
+            db = await get_db()
+            try:
+                await db.execute(
+                    "UPDATE dce_extraction_log SET status = 'failed', finished_at = datetime('now'), error = ? WHERE status = 'running'",
+                    (str(e)[:500],),
+                )
+                await db.commit()
+            finally:
+                await db.close()
+
+    asyncio.create_task(runner())
+
+
+@router.post("/dce-extraction/run")
+async def admin_run_dce_extraction(request: Request, user=Depends(require_admin("imports.run"))):
+    _launch_dce_extraction(str(request.base_url), user["email"])
+    db = await get_db()
+    try:
+        await log_audit(db, actor=user, action="dce_extraction.run", target_type="dce_extraction", request=request)
+    finally:
+        await db.close()
+    return {"status": "started"}
+
+
+@router.get("/dce-extraction/status")
+async def admin_dce_extraction_status(user=Depends(require_admin("imports.view"))):
+    db = await get_db()
+    try:
+        row = await (await db.execute(
+            "SELECT * FROM dce_extraction_log ORDER BY id DESC LIMIT 1"
+        )).fetchone()
+        done = await (await db.execute(
+            "SELECT COUNT(*) AS n FROM dce_extraction WHERE status != 'failed'"
+        )).fetchone()
+        return {"last_run": dict(row) if row else None, "extracted_count": done["n"]}
+    finally:
+        await db.close()
+
+
 # ── Users ────────────────────────────────────────────────────────────────────
 
 @router.get("/users")

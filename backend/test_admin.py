@@ -638,5 +638,59 @@ class BatchTest(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
 
 
+class ExtractionSweepTest(unittest.TestCase):
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("sweep-owner@x.com", role="owner"))
+        self.owner_headers = _auth(self.owner_id, "sweep-owner@x.com")
+
+    def test_run_extraction_requires_permission(self):
+        # auditor lacks imports.run -> 403
+        uid = run(_make_user("sweep-aud@x.com", role="auditor"))
+        r = self.client.post("/api/admin/dce-extraction/run",
+                             headers=_auth(uid, "sweep-aud@x.com"))
+        self.assertEqual(r.status_code, 403)
+
+    def test_run_extraction_enqueues_and_returns_200(self):
+        launched = []
+
+        import admin as admin_module
+
+        def fake_launch(base_url, actor_email):
+            launched.append((base_url, actor_email))
+
+        orig = getattr(admin_module, "_launch_dce_extraction", None)
+        admin_module._launch_dce_extraction = fake_launch
+        try:
+            r = self.client.post("/api/admin/dce-extraction/run",
+                                 headers=self.owner_headers)
+        finally:
+            if orig is None:
+                del admin_module._launch_dce_extraction
+            else:
+                admin_module._launch_dce_extraction = orig
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "started")
+        self.assertEqual(len(launched), 1)
+        self.assertEqual(launched[0][1], "sweep-owner@x.com")
+
+    def test_status_requires_permission(self):
+        uid = run(_make_user("sweep-plain@x.com", role="user"))
+        r = self.client.get("/api/admin/dce-extraction/status",
+                            headers=_auth(uid, "sweep-plain@x.com"))
+        # plain user can't reach admin at all -> 403
+        self.assertEqual(r.status_code, 403)
+
+    def test_status_returns_shape(self):
+        r = self.client.get("/api/admin/dce-extraction/status",
+                            headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("last_run", body)
+        self.assertIn("extracted_count", body)
+
+
 if __name__ == "__main__":
     unittest.main()

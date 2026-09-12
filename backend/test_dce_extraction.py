@@ -363,5 +363,65 @@ class ReadApiTest(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
 
 
+class EnqueueTest(unittest.TestCase):
+    def setUp(self):
+        import config, database
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        self._old_webhook = config.N8N_EXTRACT_WEBHOOK_URL
+        self._old_secret = config.DCE_EXTRACTION_SECRET
+        self._old_ttl = config.DCE_EXTRACT_SIGNING_TTL
+        config.DB_PATH = self.tmp.name
+        database.DB_PATH = self.tmp.name
+        config.DCE_EXTRACTION_SECRET = "test-secret"
+        config.DCE_EXTRACT_SIGNING_TTL = 900
+        config.N8N_EXTRACT_WEBHOOK_URL = "https://n8n.example/webhook/extract"
+        run(database.init_db())
+
+    def tearDown(self):
+        import config, database
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        config.N8N_EXTRACT_WEBHOOK_URL = self._old_webhook
+        config.DCE_EXTRACTION_SECRET = self._old_secret
+        config.DCE_EXTRACT_SIGNING_TTL = self._old_ttl
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+
+    def test_enqueue_posts_signed_zip_url(self):
+        import dce_extraction
+
+        class FakeResp:
+            status_code = 200
+
+        sent = {}
+
+        class FakeClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+            async def post(self, url, json=None, timeout=None):
+                sent["url"] = url
+                sent["json"] = json
+                return FakeResp()
+
+        async def scenario():
+            import database
+            db = await database.get_db()
+            await db.execute("INSERT INTO tenders (id, reference, title, entity) VALUES (?,?,?,?)",
+                             ("T1", "R", "T", "E"))
+            await db.commit()
+            ok = await dce_extraction.enqueue_extraction(db, "T1", "https://app.example", client=FakeClient())
+            await db.close()
+            return ok
+
+        ok = run(scenario())
+        self.assertTrue(ok)
+        self.assertEqual(sent["url"], "https://n8n.example/webhook/extract")
+        self.assertEqual(sent["json"]["tender_id"], "T1")
+        self.assertIn("/api/dce/T1/archive?token=", sent["json"]["zip_url"])
+
+
 if __name__ == "__main__":
     unittest.main()
