@@ -6,7 +6,11 @@ import unittest
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 class SchemaTest(unittest.TestCase):
@@ -14,11 +18,16 @@ class SchemaTest(unittest.TestCase):
         import config, database
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
         config.DB_PATH = self.tmp.name
         database.DB_PATH = self.tmp.name
         run(database.init_db())
 
     def tearDown(self):
+        import config, database
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
         if os.path.exists(self.tmp.name):
             os.remove(self.tmp.name)
 
@@ -51,6 +60,9 @@ class StorageTest(unittest.TestCase):
         import config, database
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        self._old_ctx_dir = config.DCE_CONTEXT_DIR
         config.DB_PATH = self.tmp.name
         database.DB_PATH = self.tmp.name
         self.ctxdir = tempfile.mkdtemp()
@@ -58,7 +70,10 @@ class StorageTest(unittest.TestCase):
         run(database.init_db())
 
     def tearDown(self):
-        import shutil
+        import shutil, config, database
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        config.DCE_CONTEXT_DIR = self._old_ctx_dir
         if os.path.exists(self.tmp.name):
             os.remove(self.tmp.name)
         shutil.rmtree(self.ctxdir, ignore_errors=True)
@@ -125,8 +140,15 @@ class StorageTest(unittest.TestCase):
 class SigningTest(unittest.TestCase):
     def setUp(self):
         import config
+        self._old_secret = config.DCE_EXTRACTION_SECRET
+        self._old_ttl = config.DCE_EXTRACT_SIGNING_TTL
         config.DCE_EXTRACTION_SECRET = "test-secret"
         config.DCE_EXTRACT_SIGNING_TTL = 900
+
+    def tearDown(self):
+        import config
+        config.DCE_EXTRACTION_SECRET = self._old_secret
+        config.DCE_EXTRACT_SIGNING_TTL = self._old_ttl
 
     def test_sign_then_verify_ok(self):
         import dce_signing
@@ -157,6 +179,12 @@ class ZipFetchApiTest(unittest.TestCase):
         import main
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        self._old_secret = config.DCE_EXTRACTION_SECRET
+        self._old_ttl = config.DCE_EXTRACT_SIGNING_TTL
+        self._old_cache_dir = config.DCE_CACHE_DIR
+        self._old_dce_cache_dir = dce_cache.DCE_CACHE_DIR
         config.DB_PATH = self.tmp.name
         database.DB_PATH = self.tmp.name
         config.DCE_EXTRACTION_SECRET = "test-secret"
@@ -168,7 +196,13 @@ class ZipFetchApiTest(unittest.TestCase):
         self.client = TestClient(main.app)
 
     def tearDown(self):
-        import shutil
+        import shutil, config, database, dce_cache
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        config.DCE_EXTRACTION_SECRET = self._old_secret
+        config.DCE_EXTRACT_SIGNING_TTL = self._old_ttl
+        config.DCE_CACHE_DIR = self._old_cache_dir
+        dce_cache.DCE_CACHE_DIR = self._old_dce_cache_dir
         if os.path.exists(self.tmp.name):
             os.remove(self.tmp.name)
         shutil.rmtree(self.cachedir, ignore_errors=True)
