@@ -1710,6 +1710,24 @@ async def download_tender_dce(tender_id: str):
     return FileResponse(path, media_type="application/zip", filename=filename)
 
 
+@app.get("/api/tenders/{tender_id:path}/dce-extraction")
+async def get_tender_dce_extraction(tender_id: str):
+    import dce_extraction
+    db = await get_db()
+    visible = await (await db.execute(
+        f"SELECT id FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
+        (tender_id,),
+    )).fetchone()
+    if not visible:
+        await db.close()
+        raise HTTPException(status_code=404, detail="Tender not found")
+    row = await dce_extraction.get_extraction(db, tender_id)
+    await db.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="No extraction for this tender")
+    return row
+
+
 # Register the catch-all detail route after the download routes so their suffixes win.
 app.add_api_route("/api/tenders/{tender_id:path}", get_tender, methods=["GET"])
 

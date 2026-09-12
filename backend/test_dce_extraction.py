@@ -308,5 +308,60 @@ class CallbackApiTest(unittest.TestCase):
         self.assertEqual(row["core"]["object"]["value"], "Voirie")
 
 
+class ReadApiTest(unittest.TestCase):
+    def setUp(self):
+        import config, database
+        from fastapi.testclient import TestClient
+        import main
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
+        self._old_config_path = config.DB_PATH
+        self._old_db_path = database.DB_PATH
+        self._old_ctx_dir = config.DCE_CONTEXT_DIR
+        config.DB_PATH = self.tmp.name
+        database.DB_PATH = self.tmp.name
+        self.ctxdir = tempfile.mkdtemp()
+        config.DCE_CONTEXT_DIR = self.ctxdir
+        run(database.init_db())
+        self.client = TestClient(main.app)
+
+    def tearDown(self):
+        import shutil, config, database
+        config.DB_PATH = self._old_config_path
+        database.DB_PATH = self._old_db_path
+        config.DCE_CONTEXT_DIR = self._old_ctx_dir
+        if os.path.exists(self.tmp.name):
+            os.remove(self.tmp.name)
+        shutil.rmtree(self.ctxdir, ignore_errors=True)
+
+    def _seed(self, tid, admin_status="active", store=True):
+        import database, dce_extraction
+        async def s():
+            db = await database.get_db()
+            await db.execute("INSERT INTO tenders (id, reference, title, entity, admin_status) VALUES (?,?,?,?,?)",
+                             (tid, "R", "T", "E", admin_status))
+            await db.commit()
+            if store:
+                await dce_extraction.store_extraction(db, tid, {"status": "ok", "core": {"object": {"value": "V"}}, "tags": ["t"]})
+            await db.close()
+        run(s())
+
+    def test_returns_extraction(self):
+        self._seed("T1")
+        r = self.client.get("/api/tenders/T1/dce-extraction")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["core"]["object"]["value"], "V")
+
+    def test_missing_extraction_is_404(self):
+        self._seed("T2", store=False)
+        r = self.client.get("/api/tenders/T2/dce-extraction")
+        self.assertEqual(r.status_code, 404)
+
+    def test_archived_tender_is_404(self):
+        self._seed("T3", admin_status="archived")
+        r = self.client.get("/api/tenders/T3/dce-extraction")
+        self.assertEqual(r.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
