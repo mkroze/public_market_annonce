@@ -9,7 +9,8 @@ export type Permission =
   | "audit.view" | "audit.export"
   | "users.view" | "users.suspend" | "users.manage_role"
   | "roles.view"
-  | "settings.view" | "settings.manage";
+  | "settings.view" | "settings.manage"
+  | "costs.view" | "costs.manage";
 
 export const ADMIN_ROLES = ["owner", "admin", "operator", "auditor", "support"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -22,6 +23,7 @@ const ALL: Permission[] = [
   "users.view", "users.suspend", "users.manage_role",
   "roles.view",
   "settings.view", "settings.manage",
+  "costs.view", "costs.manage",
 ];
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
@@ -32,6 +34,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
     "imports.view", "imports.run", "imports.retry",
     "audit.view", "audit.export",
     "users.view", "roles.view",
+    "costs.view", "costs.manage",
   ]),
   operator: new Set<Permission>([
     "overview.view",
@@ -45,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
     "imports.view",
     "audit.view", "audit.export",
     "users.view", "roles.view",
+    "costs.view",
   ]),
   support: new Set<Permission>([
     "overview.view",
@@ -57,9 +61,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
 export const ASSIGNABLE_LABEL: Record<string, string> = {
   user: "no admin access",
   support: "limited tender review + diagnostics",
-  auditor: "read-only + audit export",
+  auditor: "read-only + audit/cost export",
   operator: "imports + record moderation",
-  admin: "tenders, imports, exports",
+  admin: "tenders, imports, exports, costs",
   owner: "full control",
 };
 
@@ -88,6 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Audit logs", path: "/admin/audit-logs", icon: "ScrollText", permission: "audit.view" },
   { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view" },
   { label: "Roles", path: "/admin/roles", icon: "ShieldCheck", permission: "roles.view" },
+  { label: "Costs", path: "/admin/costs", icon: "Receipt", permission: "costs.view" },
   { label: "Settings", path: "/admin/settings", icon: "Settings", permission: "settings.view" },
   { label: "Integrations", path: "/admin/integrations", icon: "Plug", permission: "overview.view", disabled: true, disabledReason: "Coming soon" },
 ];

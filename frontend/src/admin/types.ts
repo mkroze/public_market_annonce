@@ -60,6 +60,53 @@ export interface DceExtractionStatus {
   simulate_enabled: boolean;
 }
 
+export type CostCategory =
+  | "hosting" | "domain" | "email" | "ai_api" | "storage"
+  | "monitoring" | "scraping" | "software" | "other";
+
+export type BillingCycle = "monthly" | "yearly" | "one_off" | "usage_based";
+export type CostStatus = "planned" | "due" | "paid" | "overdue" | "cancelled";
+export type CostCurrency = "MAD" | "USD" | "EUR";
+
+export interface WebsiteCost {
+  id: number;
+  provider: string;
+  category: CostCategory;
+  description: string;
+  amount_minor: number;
+  currency: CostCurrency;
+  billing_cycle: BillingCycle;
+  service_period_start: string | null;
+  service_period_end: string | null;
+  due_date: string | null;
+  paid_date: string | null;
+  status: CostStatus;
+  reference: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  archived_at: string | null;
+}
+
+export type WebsiteCostPayload = Omit<
+  WebsiteCost,
+  "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "archived_at"
+>;
+
+export interface WebsiteCostSummary {
+  current_month: Record<CostCurrency, number>;
+  upcoming_unpaid: Record<CostCurrency, number>;
+  overdue: Record<CostCurrency, number>;
+  annualized_recurring: Record<CostCurrency, number>;
+  largest_current_month_category: Partial<Record<CostCurrency, {
+    currency: CostCurrency;
+    category: CostCategory;
+    amount_minor: number;
+  }>>;
+}
+
 export interface AdminOverview {
   last_import: ImportRun | null;
   freshness: {

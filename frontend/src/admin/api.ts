@@ -6,6 +6,7 @@ import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
   AdminUser, RoleInfo, AuditEvent, ImportRun, DceCacheRun, DceExtractionStatus,
   EmailSettings, EmailSettingsPatch,
+  WebsiteCost, WebsiteCostPayload, WebsiteCostSummary,
 } from "./types";
 
 const BASE = "/api/admin";
@@ -112,6 +113,27 @@ export const updateEmailSettings = (body: EmailSettingsPatch) =>
 
 export const testEmailSettings = () =>
   request<{ status: string; to: string }>("/settings/email/test", { method: "POST" });
+
+// ── Website costs ──
+export const getCostSummary = () => request<WebsiteCostSummary>("/costs/summary");
+
+export const getCosts = (params: Record<string, string>) =>
+  request<Paginated<WebsiteCost>>("/costs", { params });
+
+export const createCost = (body: WebsiteCostPayload) =>
+  request<WebsiteCost>("/costs", { method: "POST", body });
+
+export const updateCost = (id: number, body: WebsiteCostPayload) =>
+  request<WebsiteCost>(`/costs/${id}`, { method: "PATCH", body });
+
+export const markCostPaid = (id: number, paidDate?: string) =>
+  request<WebsiteCost>(`/costs/${id}/mark-paid`, {
+    method: "POST",
+    body: paidDate ? { paid_date: paidDate } : {},
+  });
+
+export const archiveCost = (id: number) =>
+  request<WebsiteCost>(`/costs/${id}/archive`, { method: "POST" });
 
 // ── Audit logs ──
 export const getAuditLogs = (params: Record<string, string>) =>

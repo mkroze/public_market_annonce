@@ -2,13 +2,13 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck,
-  Settings, Plug, LogOut, Menu, X, ExternalLink,
+  Settings, Plug, Receipt, LogOut, Menu, X, ExternalLink,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, can, type NavItem } from "./permissions";
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
-  LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck, Settings, Plug,
+  LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck, Settings, Plug, Receipt,
 };
 
 const ENV = import.meta.env.MODE === "production" ? "production" : "development";
