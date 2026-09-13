@@ -21,6 +21,7 @@ from database import get_db
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config, set_email_settings
 from tender_lifecycle import deadline_state_expr, public_visible_condition
+from website_costs import CostListFilters, list_costs, summarize_costs
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -38,6 +39,7 @@ ALL_PERMISSIONS = [
     "users.view", "users.suspend", "users.manage_role",
     "roles.view",
     "settings.view", "settings.manage",
+    "costs.view", "costs.manage",
 ]
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -48,6 +50,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "imports.view", "imports.run", "imports.retry",
         "audit.view", "audit.export",
         "users.view", "roles.view",
+        "costs.view", "costs.manage",
     },
     "operator": {
         "overview.view",
@@ -61,6 +64,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "imports.view",
         "audit.view", "audit.export",
         "users.view", "roles.view",
+        "costs.view",
     },
     "support": {
         "overview.view",
@@ -71,10 +75,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
 }
 
 ROLE_DESCRIPTIONS = {
-    "owner": "Full control: roles, users, imports, tenders, audit, and high-risk operations.",
-    "admin": "Manage tenders, imports, and exports. Cannot change roles.",
+    "owner": "Full control: roles, users, imports, tenders, audit, settings, costs, and high-risk operations.",
+    "admin": "Manage tenders, imports, exports, and website operating costs. Cannot change roles.",
     "operator": "Run imports, review and moderate records, inspect non-sensitive logs.",
-    "auditor": "Read-only access to admin data and audit logs, with audit export.",
+    "auditor": "Read-only access to admin data, costs, and audit logs, with audit export.",
     "support": "Limited tender review and operational diagnostics.",
 }
 
@@ -844,6 +848,48 @@ async def admin_simulate_dce_extraction(
                         target_type="tender", target_id=tender_id, request=request)
         stored = await dce_extraction.get_extraction(db, tender_id)
         return {"tender_id": tender_id, "title": row["title"], "extraction": stored}
+    finally:
+        await db.close()
+
+
+# ── Website costs ────────────────────────────────────────────────────────────
+
+@router.get("/costs/summary")
+async def admin_costs_summary(user=Depends(require_admin("costs.view"))):
+    db = await get_db()
+    try:
+        return await summarize_costs(db)
+    finally:
+        await db.close()
+
+
+@router.get("/costs")
+async def admin_costs(
+    q: str = Query(""),
+    provider: str = Query(""),
+    category: str = Query(""),
+    status: str = Query(""),
+    currency: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
+    user=Depends(require_admin("costs.view")),
+):
+    filters = CostListFilters(
+        q=q.strip(),
+        provider=provider.strip(),
+        category=category.strip(),
+        status=status.strip(),
+        currency=currency.strip(),
+        date_from=date_from.strip(),
+        date_to=date_to.strip(),
+        page=page,
+        per_page=per_page,
+    )
+    db = await get_db()
+    try:
+        return await list_costs(db, filters)
     finally:
         await db.close()
 

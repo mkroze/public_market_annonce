@@ -249,6 +249,35 @@ async def init_db():
             actor_email TEXT,
             error TEXT
         );
+
+        -- Internal website operating expense ledger. Stores provider costs,
+        -- never provider secrets.
+        CREATE TABLE IF NOT EXISTS website_costs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            amount_minor INTEGER NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'MAD',
+            billing_cycle TEXT NOT NULL,
+            service_period_start TEXT,
+            service_period_end TEXT,
+            due_date TEXT,
+            paid_date TEXT,
+            status TEXT NOT NULL DEFAULT 'planned',
+            reference TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            created_by TEXT,
+            updated_by TEXT,
+            archived_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_website_costs_status ON website_costs(status);
+        CREATE INDEX IF NOT EXISTS idx_website_costs_due_date ON website_costs(due_date);
+        CREATE INDEX IF NOT EXISTS idx_website_costs_category ON website_costs(category);
+        CREATE INDEX IF NOT EXISTS idx_website_costs_currency ON website_costs(currency);
+        CREATE INDEX IF NOT EXISTS idx_website_costs_archived ON website_costs(archived_at);
     """)
 
     # ── Migrations for pre-existing tables ──────────────────────────────────
