@@ -167,3 +167,93 @@ class WebsiteCostsReadApiTest(unittest.TestCase):
         body = r.json()
         self.assertEqual(body["total"], 1)
         self.assertEqual(body["data"][0]["provider"], "Brevo")
+
+
+class WebsiteCostsMutationApiTest(unittest.TestCase):
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("owner@x.com", role="owner"))
+        self.owner_headers = _auth(self.owner_id, "owner@x.com")
+        self.auditor_id = run(_make_user("auditor@x.com", role="auditor"))
+        self.auditor_headers = _auth(self.auditor_id, "auditor@x.com")
+
+    def valid_payload(self):
+        return {
+            "provider": "OpenAI",
+            "category": "ai_api",
+            "description": "Assistant usage",
+            "amount_minor": 4320,
+            "currency": "USD",
+            "billing_cycle": "usage_based",
+            "service_period_start": "2026-09-01",
+            "service_period_end": "2026-09-30",
+            "due_date": "2026-10-05",
+            "paid_date": None,
+            "status": "due",
+            "reference": "OPENAI-2026-09",
+            "notes": "No key material here",
+        }
+
+    def test_create_cost_audits_action(self):
+        r = self.client.post("/api/admin/costs", headers=self.owner_headers, json=self.valid_payload())
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["provider"], "OpenAI")
+        self.assertEqual(body["created_by"], "owner@x.com")
+        self.assertGreaterEqual(run(_audit_count("cost.create")), 1)
+
+    def test_auditor_cannot_create_cost(self):
+        r = self.client.post("/api/admin/costs", headers=self.auditor_headers, json=self.valid_payload())
+        self.assertEqual(r.status_code, 403)
+
+    def test_create_rejects_invalid_amount_and_date(self):
+        payload = self.valid_payload()
+        payload["amount_minor"] = 0
+        payload["due_date"] = "09/30/2026"
+        r = self.client.post("/api/admin/costs", headers=self.owner_headers, json=payload)
+        self.assertEqual(r.status_code, 422)
+
+    def test_update_mark_paid_and_archive_cost(self):
+        created = self.client.post(
+            "/api/admin/costs",
+            headers=self.owner_headers,
+            json=self.valid_payload(),
+        ).json()
+        payload = self.valid_payload()
+        payload["provider"] = "Anthropic"
+        payload["amount_minor"] = 9900
+
+        updated = self.client.patch(
+            f"/api/admin/costs/{created['id']}",
+            headers=self.owner_headers,
+            json=payload,
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["provider"], "Anthropic")
+
+        paid = self.client.post(
+            f"/api/admin/costs/{created['id']}/mark-paid",
+            headers=self.owner_headers,
+            json={"paid_date": "2026-10-01"},
+        )
+        self.assertEqual(paid.status_code, 200)
+        self.assertEqual(paid.json()["status"], "paid")
+        self.assertEqual(paid.json()["paid_date"], "2026-10-01")
+
+        archived = self.client.post(
+            f"/api/admin/costs/{created['id']}/archive",
+            headers=self.owner_headers,
+        )
+        self.assertEqual(archived.status_code, 200)
+        self.assertIsNotNone(archived.json()["archived_at"])
+
+        listed = self.client.get("/api/admin/costs", headers=self.owner_headers)
+        self.assertEqual(listed.json()["total"], 0)
+        self.assertGreaterEqual(run(_audit_count("cost.update")), 1)
+        self.assertGreaterEqual(run(_audit_count("cost.mark_paid")), 1)
+        self.assertGreaterEqual(run(_audit_count("cost.archive")), 1)
+
+    def test_mutating_missing_cost_returns_404(self):
+        r = self.client.post("/api/admin/costs/999/mark-paid", headers=self.owner_headers, json={})
+        self.assertEqual(r.status_code, 404)

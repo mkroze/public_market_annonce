@@ -21,7 +21,11 @@ from database import get_db
 from emailer import email_is_configured, send_email
 from settings import resolve_email_config, set_email_settings
 from tender_lifecycle import deadline_state_expr, public_visible_condition
-from website_costs import CostListFilters, list_costs, summarize_costs
+from website_costs import (
+    CostListFilters, CostPayload, MarkPaidPayload,
+    archive_cost, create_cost, list_costs, mark_cost_paid,
+    summarize_costs, update_cost,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -890,6 +894,90 @@ async def admin_costs(
     db = await get_db()
     try:
         return await list_costs(db, filters)
+    finally:
+        await db.close()
+
+
+@router.post("/costs")
+async def admin_create_cost(
+    req: CostPayload,
+    request: Request,
+    user=Depends(require_admin("costs.manage")),
+):
+    db = await get_db()
+    try:
+        row = await create_cost(db, req, user.get("email"))
+        await log_audit(
+            db, actor=user, action="cost.create", target_type="website_cost",
+            target_id=row["id"], request=request, after=row,
+        )
+        return row
+    finally:
+        await db.close()
+
+
+@router.patch("/costs/{cost_id}")
+async def admin_update_cost(
+    cost_id: int,
+    req: CostPayload,
+    request: Request,
+    user=Depends(require_admin("costs.manage")),
+):
+    db = await get_db()
+    try:
+        before, after = await update_cost(db, cost_id, req, user.get("email"))
+        if not after:
+            raise HTTPException(status_code=404, detail="Cost record not found")
+        await log_audit(
+            db, actor=user, action="cost.update", target_type="website_cost",
+            target_id=cost_id, request=request, before=before, after=after,
+        )
+        return after
+    finally:
+        await db.close()
+
+
+@router.post("/costs/{cost_id}/mark-paid")
+async def admin_mark_cost_paid(
+    cost_id: int,
+    req: MarkPaidPayload,
+    request: Request,
+    user=Depends(require_admin("costs.manage")),
+):
+    db = await get_db()
+    try:
+        before, after = await mark_cost_paid(db, cost_id, req.paid_date, user.get("email"))
+        if not after:
+            raise HTTPException(status_code=404, detail="Cost record not found")
+        await log_audit(
+            db, actor=user, action="cost.mark_paid", target_type="website_cost",
+            target_id=cost_id, request=request,
+            before={"status": before.get("status"), "paid_date": before.get("paid_date")},
+            after={"status": after.get("status"), "paid_date": after.get("paid_date")},
+        )
+        return after
+    finally:
+        await db.close()
+
+
+@router.post("/costs/{cost_id}/archive")
+async def admin_archive_cost(
+    cost_id: int,
+    request: Request,
+    user=Depends(require_admin("costs.manage")),
+):
+    db = await get_db()
+    try:
+        before, after = await archive_cost(db, cost_id, user.get("email"))
+        if not after:
+            raise HTTPException(status_code=404, detail="Cost record not found")
+        await log_audit(
+            db, actor=user, action="cost.archive", target_type="website_cost",
+            target_id=cost_id, request=request,
+            before={"archived_at": before.get("archived_at")},
+            after={"archived_at": after.get("archived_at")},
+        )
+        return after
     finally:
         await db.close()
 

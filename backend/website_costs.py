@@ -231,3 +231,83 @@ async def list_costs(db, filters: CostListFilters) -> dict:
         "pages": (total + per_page - 1) // per_page,
         "data": [_row_to_cost(row) for row in rows],
     }
+
+
+WRITE_FIELDS = [
+    "provider", "category", "description", "amount_minor", "currency",
+    "billing_cycle", "service_period_start", "service_period_end", "due_date",
+    "paid_date", "status", "reference", "notes",
+]
+
+
+async def get_cost(db, cost_id: int) -> dict | None:
+    row = await (await db.execute(
+        "SELECT * FROM website_costs WHERE id = ?",
+        (cost_id,),
+    )).fetchone()
+    return dict(row) if row else None
+
+
+async def create_cost(db, payload: CostPayload, actor_email: str | None) -> dict:
+    values = payload.model_dump()
+    columns = WRITE_FIELDS + ["created_by", "updated_by"]
+    params = [values[field] for field in WRITE_FIELDS] + [actor_email, actor_email]
+    placeholders = ", ".join("?" for _ in columns)
+    cur = await db.execute(
+        f"INSERT INTO website_costs ({', '.join(columns)}) VALUES ({placeholders})",
+        params,
+    )
+    row = await get_cost(db, cur.lastrowid)
+    if row is None:
+        raise RuntimeError("Created cost could not be loaded")
+    return row
+
+
+async def update_cost(db, cost_id: int, payload: CostPayload, actor_email: str | None) -> tuple[dict, dict]:
+    before = await get_cost(db, cost_id)
+    if before is None or before.get("archived_at"):
+        return {}, {}
+    values = payload.model_dump()
+    assignments = ", ".join(f"{field} = ?" for field in WRITE_FIELDS)
+    params = [values[field] for field in WRITE_FIELDS] + [actor_email, cost_id]
+    await db.execute(
+        f"""UPDATE website_costs
+            SET {assignments}, updated_at = datetime('now'), updated_by = ?
+            WHERE id = ?""",
+        params,
+    )
+    after = await get_cost(db, cost_id)
+    return before, after or {}
+
+
+async def mark_cost_paid(db, cost_id: int, paid_date: str | None, actor_email: str | None) -> tuple[dict, dict]:
+    before = await get_cost(db, cost_id)
+    if before is None or before.get("archived_at"):
+        return {}, {}
+    await db.execute(
+        """UPDATE website_costs
+           SET status = 'paid',
+               paid_date = COALESCE(?, date('now')),
+               updated_at = datetime('now'),
+               updated_by = ?
+           WHERE id = ?""",
+        (paid_date, actor_email, cost_id),
+    )
+    after = await get_cost(db, cost_id)
+    return before, after or {}
+
+
+async def archive_cost(db, cost_id: int, actor_email: str | None) -> tuple[dict, dict]:
+    before = await get_cost(db, cost_id)
+    if before is None or before.get("archived_at"):
+        return {}, {}
+    await db.execute(
+        """UPDATE website_costs
+           SET archived_at = datetime('now'),
+               updated_at = datetime('now'),
+               updated_by = ?
+           WHERE id = ?""",
+        (actor_email, cost_id),
+    )
+    after = await get_cost(db, cost_id)
+    return before, after or {}
