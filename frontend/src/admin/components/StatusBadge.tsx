@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import {
   CheckCircle2, XCircle, Loader2, Clock, AlertTriangle, Flag, Archive,
-  Eye, ShieldX, Minus,
+  Eye, ShieldX, Minus, CalendarClock,
 } from "lucide-react";
 
 type Tone = "success" | "danger" | "warning" | "neutral" | "info" | "running";
@@ -89,4 +89,19 @@ export function ResultBadge({ result }: { result: string }) {
 export function RoleBadge({ role }: { role: string }) {
   const tone: Tone = role === "owner" ? "danger" : role === "user" ? "neutral" : "info";
   return <Badge tone={tone} icon={null}>{role}</Badge>;
+}
+
+export function CostStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "paid":
+      return <Badge tone="success" icon={<CheckCircle2 className={ICON} aria-hidden />}>Paid</Badge>;
+    case "overdue":
+      return <Badge tone="danger" icon={<AlertTriangle className={ICON} aria-hidden />}>Overdue</Badge>;
+    case "due":
+      return <Badge tone="warning" icon={<CalendarClock className={ICON} aria-hidden />}>Due</Badge>;
+    case "cancelled":
+      return <Badge tone="neutral" icon={<XCircle className={ICON} aria-hidden />}>Cancelled</Badge>;
+    default:
+      return <Badge tone="info" icon={<Clock className={ICON} aria-hidden />}>Planned</Badge>;
+  }
 }
