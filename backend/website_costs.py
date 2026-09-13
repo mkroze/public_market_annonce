@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from typing import Literal
 
 from pydantic import BaseModel, field_validator
@@ -22,6 +23,19 @@ SUMMARY_EMPTY = {
     "annualized_recurring": {},
     "largest_current_month_category": {},
 }
+SECRET_PATTERNS = [
+    re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bsk-ant-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\b[A-Za-z0-9_-]{32,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"(?i)\b(api[_ -]?key|secret|token|password)\b\s*[:=]\s*\S{8,}"),
+]
+
+
+def _reject_secret_like_text(value: str) -> str:
+    if any(pattern.search(value) for pattern in SECRET_PATTERNS):
+        raise ValueError("cost records must not contain API keys or secrets")
+    return value
 
 
 class CostPayload(BaseModel):
@@ -45,12 +59,13 @@ class CostPayload(BaseModel):
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("provider is required")
-        return cleaned
+        return _reject_secret_like_text(cleaned)
 
     @field_validator("description", "reference", "notes", mode="before")
     @classmethod
     def clean_optional_text(cls, value):
-        return "" if value is None else str(value).strip()
+        cleaned = "" if value is None else str(value).strip()
+        return _reject_secret_like_text(cleaned)
 
     @field_validator("amount_minor")
     @classmethod

@@ -214,6 +214,13 @@ class WebsiteCostsMutationApiTest(unittest.TestCase):
         r = self.client.post("/api/admin/costs", headers=self.owner_headers, json=payload)
         self.assertEqual(r.status_code, 422)
 
+    def test_create_rejects_secret_like_notes_without_audit(self):
+        payload = self.valid_payload()
+        payload["notes"] = "OpenAI key sk-proj-abc123abc123abc123abc123abc123abc123 should not be stored"
+        r = self.client.post("/api/admin/costs", headers=self.owner_headers, json=payload)
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(run(_audit_count("cost.create")), 0)
+
     def test_update_mark_paid_and_archive_cost(self):
         created = self.client.post(
             "/api/admin/costs",

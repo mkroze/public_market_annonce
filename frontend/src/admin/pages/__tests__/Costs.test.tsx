@@ -107,6 +107,37 @@ describe("Costs page", () => {
     expect(screen.getByLabelText("Provider")).toBeInTheDocument();
   });
 
+  it("keeps partial and invalid amount text in the form field", async () => {
+    const user = userEvent.setup();
+    renderCosts();
+    await screen.findByText("OpenAI");
+    await user.click(screen.getByRole("button", { name: /add cost/i }));
+    await user.type(screen.getByLabelText("Provider"), "OpenAI");
+
+    const amount = screen.getByLabelText("Amount");
+    await user.type(amount, "1.");
+    expect(amount).toHaveValue("1.");
+
+    await user.clear(amount);
+    await user.type(amount, "abc");
+    expect(amount).toHaveValue("abc");
+    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+  });
+
+  it("confirms before archiving a cost", async () => {
+    const user = userEvent.setup();
+    renderCosts();
+    await screen.findByText("OpenAI");
+
+    await user.click(screen.getByRole("button", { name: /archive openai/i }));
+
+    expect(mocks.archiveCost).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: /archive cost/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^archive$/i }));
+    expect(mocks.archiveCost).toHaveBeenCalledWith(1);
+  });
+
   it("keeps mutation controls disabled for auditors", async () => {
     mocks.role = "auditor";
     renderCosts();

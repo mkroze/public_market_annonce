@@ -17,6 +17,7 @@ import { EmptyState, FailedState, FilteredEmptyState, LoadingState, DeniedState 
 import { GatedButton, MetricCard, PageHeader, Panel, fmtDateOnly } from "../components/ui";
 import { CostStatusBadge } from "../components/StatusBadge";
 import { useToasts } from "../components/useToasts";
+import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
 
 const FILTER_KEYS = ["q", "category", "status", "currency", "date_from", "date_to"];
 const CATEGORIES: CostCategory[] = ["hosting", "domain", "email", "ai_api", "storage", "monitoring", "scraping", "software", "other"];
@@ -83,10 +84,12 @@ function amountInputValue(amountMinor: number): string {
   return amountMinor ? String(amountMinor / 100) : "";
 }
 
-function parseAmountMinor(value: string): number {
+function parseAmountMinor(value: string): number | null {
   const normalized = value.replace(",", ".").trim();
-  if (!normalized) return 0;
-  return Math.round(Number(normalized) * 100);
+  if (!normalized) return null;
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return Math.round(amount * 100);
 }
 
 export default function Costs() {
@@ -102,10 +105,13 @@ export default function Costs() {
   const [error, setError] = useState<ApiError | null>(null);
   const [editing, setEditing] = useState<WebsiteCost | null>(null);
   const [draft, setDraft] = useState<WebsiteCostPayload | null>(null);
+  const [amountText, setAmountText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
   const page = Number(params.get("page") || "1");
   const hasFilters = FILTER_KEYS.some((key) => params.get(key));
+  const parsedAmountMinor = draft ? parseAmountMinor(amountText) : null;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -142,11 +148,13 @@ export default function Costs() {
   function openCreate() {
     setEditing(null);
     setDraft({ ...EMPTY_DRAFT });
+    setAmountText("");
   }
 
   function openEdit(cost: WebsiteCost) {
     setEditing(cost);
     setDraft(draftFrom(cost));
+    setAmountText(amountInputValue(cost.amount_minor));
   }
 
   function patchDraft(patch: Partial<WebsiteCostPayload>) {
@@ -155,14 +163,16 @@ export default function Costs() {
 
   async function submitDraft(event: React.FormEvent) {
     event.preventDefault();
-    if (!draft || !canManage || draft.amount_minor <= 0) return;
+    const amountMinor = parseAmountMinor(amountText);
+    if (!draft || !canManage || amountMinor === null) return;
+    const payload = { ...draft, amount_minor: amountMinor };
     setSaving(true);
     try {
       if (editing) {
-        await updateCost(editing.id, draft);
+        await updateCost(editing.id, payload);
         push("Cost updated", "success");
       } else {
-        await createCost(draft);
+        await createCost(payload);
         push("Cost created", "success");
       }
       setDraft(null);
@@ -195,6 +205,19 @@ export default function Costs() {
     } catch (err) {
       push(err instanceof ApiError ? err.message : "Failed to archive cost", "error");
     }
+  }
+
+  function confirmArchive(cost: WebsiteCost) {
+    setConfirm({
+      title: "Archive cost",
+      action: "Archive cost",
+      target: `${cost.provider} · ${formatMoney(cost.amount_minor, cost.currency)}`,
+      consequence: "This hides the cost from the default ledger while keeping the audit trail.",
+      reversible: false,
+      confirmLabel: "Archive",
+      danger: true,
+      onConfirm: () => doArchive(cost),
+    });
   }
 
   const largest = useMemo(() => {
@@ -327,7 +350,7 @@ export default function Costs() {
                           <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
                         </button>
                         <button
-                          onClick={() => doArchive(cost)}
+                          onClick={() => confirmArchive(cost)}
                           disabled={!canManage}
                           title={!canManage ? "Requires costs.manage permission" : "Archive cost"}
                           aria-label={`Archive ${cost.provider}`}
@@ -379,7 +402,7 @@ export default function Costs() {
               </label>
               <label className="space-y-1.5">
                 <span className="editorial-label text-[var(--color-slate)]">Amount</span>
-                <input className={CONTROL} inputMode="decimal" value={amountInputValue(draft.amount_minor)} onChange={(e) => patchDraft({ amount_minor: parseAmountMinor(e.target.value) })} required />
+                <input className={CONTROL} inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} required />
               </label>
               <label className="space-y-1.5">
                 <span className="editorial-label text-[var(--color-slate)]">Currency</span>
@@ -437,7 +460,7 @@ export default function Costs() {
               </button>
               <button
                 type="submit"
-                disabled={saving || !draft.provider.trim() || draft.amount_minor <= 0}
+                disabled={saving || !draft.provider.trim() || parsedAmountMinor === null}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans font-medium rounded text-white bg-[var(--color-crimson)] hover:bg-[var(--color-crimson-dark)] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
@@ -448,6 +471,7 @@ export default function Costs() {
         </div>
       )}
 
+      <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
