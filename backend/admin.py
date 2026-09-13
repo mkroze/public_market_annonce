@@ -705,15 +705,145 @@ async def admin_run_dce_extraction(request: Request, user=Depends(require_admin(
 
 @router.get("/dce-extraction/status")
 async def admin_dce_extraction_status(user=Depends(require_admin("imports.view"))):
+    import config as _config
     db = await get_db()
     try:
-        row = await (await db.execute(
-            "SELECT * FROM dce_extraction_log ORDER BY id DESC LIMIT 1"
-        )).fetchone()
+        rows = await (await db.execute(
+            "SELECT * FROM dce_extraction_log ORDER BY id DESC LIMIT 20"
+        )).fetchall()
+        runs = [dict(r) for r in rows]
+        active = bool(runs and runs[0]["status"] == "running")
         done = await (await db.execute(
             "SELECT COUNT(*) AS n FROM dce_extraction WHERE status != 'failed'"
         )).fetchone()
-        return {"last_run": dict(row) if row else None, "extracted_count": done["n"]}
+        recent_rows = await (await db.execute(
+            """SELECT e.tender_id, t.title, e.status, e.ocr_lang, e.tags_json,
+                      e.core_json, e.extracted_at
+               FROM dce_extraction e
+               LEFT JOIN tenders t ON t.id = e.tender_id
+               ORDER BY e.extracted_at DESC LIMIT 10"""
+        )).fetchall()
+        recent = []
+        for r in recent_rows:
+            r = dict(r)
+            try:
+                tags = json.loads(r.get("tags_json") or "[]")
+            except ValueError:
+                tags = []
+            try:
+                core = json.loads(r.get("core_json") or "{}")
+            except ValueError:
+                core = {}
+            obj = core.get("object") if isinstance(core.get("object"), dict) else {}
+            recent.append({
+                "tender_id": r["tender_id"],
+                "title": r["title"],
+                "status": r["status"],
+                "ocr_lang": r["ocr_lang"],
+                "tags": tags,
+                "object": obj.get("value"),
+                "extracted_at": r["extracted_at"],
+            })
+        return {
+            "last_run": runs[0] if runs else None,
+            "data": runs,
+            "active": active,
+            "extracted_count": done["n"],
+            "recent": recent,
+            "simulate_enabled": not _config.N8N_EXTRACT_WEBHOOK_URL,
+        }
+    finally:
+        await db.close()
+
+
+# A realistic French sample of what the OCR→redact→extract pipeline would return,
+# used by the admin "Simulate" affordance so the store→read loop is visible in the
+# admin panel before the real OCR service + n8n flow exist.
+def _sample_extraction_payload() -> dict:
+    return {
+        "zip_hash": "SIMULATED",
+        "status": "ok",
+        "ocr_lang": "fr",
+        "model": "simulation",
+        "core": {
+            "object": {
+                "value": "Travaux de voirie et d'assainissement",
+                "confidence": "high", "source_doc": "CPS",
+                "quote": "Le présent marché a pour objet les travaux de voirie et d'assainissement.",
+            },
+            "key_dates": [
+                {"label": "Date limite de remise des plis", "value": "à préciser dans l'avis",
+                 "confidence": "medium", "source_doc": "RC", "quote": "Les plis doivent être déposés avant …"},
+                {"label": "Séance d'ouverture", "value": "à préciser",
+                 "confidence": "low", "source_doc": "RC", "quote": "La séance d'ouverture des plis aura lieu …"},
+            ],
+            "qualifications": [
+                {"value": "Secteur A — qualification exigée", "confidence": "medium",
+                 "source_doc": "RC", "quote": "Le concurrent doit disposer de la qualification …"},
+            ],
+            "agrements": [],
+            "required_documents": [
+                {"value": "Déclaration sur l'honneur", "confidence": "high", "source_doc": "RC", "quote": "…"},
+                {"value": "Attestation fiscale", "confidence": "high", "source_doc": "RC", "quote": "…"},
+            ],
+            "financial": {
+                "caution": {"value": "Caution provisoire exigée", "confidence": "medium",
+                            "source_doc": "RC", "quote": "Une caution provisoire est exigée."},
+                "ca_min": {"value": None, "confidence": "low", "source_doc": None, "quote": None},
+            },
+            "lots": [{"label": "Lot unique", "amount": None, "confidence": "low", "quote": ""}],
+            "award_criteria": {"value": "Moins-disant conforme au CPS", "confidence": "medium",
+                               "source_doc": "RC", "quote": "…"},
+        },
+        "key_points": [
+            "Caution provisoire exigée",
+            "Visite des lieux recommandée",
+            "Marché passé en lot unique",
+        ],
+        "tags": ["voirie", "assainissement", "btp"],
+        "doc_types": {"CPS.pdf": "CPS", "RC.pdf": "RC", "BPU.pdf": "BPU"},
+        "redaction_stats": {"names": 3, "cin": 1, "email": 0, "phone": 2},
+        "error": None,
+    }
+
+
+class SimulateExtractionRequest(BaseModel):
+    tender_id: str = ""
+
+
+@router.post("/dce-extraction/simulate")
+async def admin_simulate_dce_extraction(
+    req: SimulateExtractionRequest,
+    request: Request,
+    user=Depends(require_admin("imports.run")),
+):
+    """Store a sample extraction for one real tender so the admin panel can show
+    the store→read loop working. Auto-disabled once the real n8n pipeline is
+    wired (a configured webhook means real results will flow via the callback)."""
+    import config as _config
+    if _config.N8N_EXTRACT_WEBHOOK_URL:
+        raise HTTPException(status_code=409, detail="Simulation désactivée : le pipeline n8n est configuré.")
+    import dce_extraction
+    db = await get_db()
+    try:
+        if req.tender_id:
+            row = await (await db.execute(
+                f"SELECT id, title FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
+                (req.tender_id,),
+            )).fetchone()
+        else:
+            row = await (await db.execute(
+                f"SELECT id, title FROM tenders t WHERE {public_visible_condition('t')} "
+                "ORDER BY RANDOM() LIMIT 1"
+            )).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Aucun appel d'offres éligible trouvé.")
+        tender_id = row["id"]
+        await dce_extraction.store_extraction(db, tender_id, _sample_extraction_payload())
+        await log_audit(db, actor=user, action="dce_extraction.simulate",
+                        target_type="tender", target_id=tender_id, request=request)
+        stored = await dce_extraction.get_extraction(db, tender_id)
+        return {"tender_id": tender_id, "title": row["title"], "extraction": stored}
     finally:
         await db.close()
 

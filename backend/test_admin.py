@@ -690,6 +690,70 @@ class ExtractionSweepTest(unittest.TestCase):
         body = r.json()
         self.assertIn("last_run", body)
         self.assertIn("extracted_count", body)
+        # enriched shape for the admin panel
+        self.assertIn("data", body)
+        self.assertIn("active", body)
+        self.assertIn("recent", body)
+        self.assertIn("simulate_enabled", body)
+
+
+async def _make_tender(tid, title="Sample tender", admin_status="active"):
+    db = await database.get_db()
+    await db.execute(
+        "INSERT INTO tenders (id, reference, title, entity, admin_status) VALUES (?, ?, ?, ?, ?)",
+        (tid, "REF-" + tid, title, "Entity", admin_status),
+    )
+    await db.commit()
+    await db.close()
+
+
+class ExtractionSimulateTest(unittest.TestCase):
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("sim-owner@x.com", role="owner"))
+        self.owner_headers = _auth(self.owner_id, "sim-owner@x.com")
+        # keep the sample context-md write out of the repo
+        self._old_ctx = config.DCE_CONTEXT_DIR
+        self._old_webhook = config.N8N_EXTRACT_WEBHOOK_URL
+        self._ctx_dir = tempfile.mkdtemp()
+        config.DCE_CONTEXT_DIR = self._ctx_dir
+        config.N8N_EXTRACT_WEBHOOK_URL = ""  # simulate enabled
+
+    def tearDown(self):
+        import shutil
+        config.DCE_CONTEXT_DIR = self._old_ctx
+        config.N8N_EXTRACT_WEBHOOK_URL = self._old_webhook
+        shutil.rmtree(self._ctx_dir, ignore_errors=True)
+
+    def test_simulate_requires_permission(self):
+        uid = run(_make_user("sim-aud@x.com", role="auditor"))
+        r = self.client.post("/api/admin/dce-extraction/simulate", json={},
+                             headers=_auth(uid, "sim-aud@x.com"))
+        self.assertEqual(r.status_code, 403)
+
+    def test_simulate_stores_and_status_reflects_it(self):
+        run(_make_tender("SIM-1", "Voirie Casablanca"))
+        r = self.client.post("/api/admin/dce-extraction/simulate",
+                             json={"tender_id": "SIM-1"}, headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["tender_id"], "SIM-1")
+        self.assertEqual(body["extraction"]["status"], "ok")
+        self.assertIn("voirie", body["extraction"]["tags"])
+
+        s = self.client.get("/api/admin/dce-extraction/status",
+                            headers=self.owner_headers).json()
+        self.assertEqual(s["extracted_count"], 1)
+        self.assertTrue(s["simulate_enabled"])
+        self.assertTrue(any(row["tender_id"] == "SIM-1" for row in s["recent"]))
+
+    def test_simulate_disabled_when_webhook_configured(self):
+        config.N8N_EXTRACT_WEBHOOK_URL = "https://n8n.example/webhook/extract"
+        run(_make_tender("SIM-2"))
+        r = self.client.post("/api/admin/dce-extraction/simulate",
+                             json={"tender_id": "SIM-2"}, headers=self.owner_headers)
+        self.assertEqual(r.status_code, 409)
 
 
 if __name__ == "__main__":

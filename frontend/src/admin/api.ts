@@ -4,7 +4,7 @@
 
 import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
-  AdminUser, RoleInfo, AuditEvent, ImportRun, DceCacheRun,
+  AdminUser, RoleInfo, AuditEvent, ImportRun, DceCacheRun, DceExtractionStatus,
   EmailSettings, EmailSettingsPatch,
 } from "./types";
 
@@ -78,6 +78,17 @@ export const runDceCache = () => request<{ status: string }>("/dce-cache", { met
 
 export const clearDceCache = (mode: "all" | "outdated") =>
   request<{ removed: number; freed_bytes: number; mode: string }>("/dce-cache/clear", { method: "POST", params: { mode } });
+
+// ── DCE extraction ──
+export const getDceExtraction = () => request<DceExtractionStatus>("/dce-extraction/status");
+
+export const runDceExtraction = () => request<{ status: string }>("/dce-extraction/run", { method: "POST" });
+
+export const simulateDceExtraction = (tenderId?: string) =>
+  request<{ tender_id: string; title: string | null; extraction: unknown }>(
+    "/dce-extraction/simulate",
+    { method: "POST", body: tenderId ? { tender_id: tenderId } : {} },
+  );
 
 // ── Users ──
 export const getUsers = (params: Record<string, string>) =>

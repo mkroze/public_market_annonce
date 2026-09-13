@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RotateCcw, Loader2, DownloadCloud, Trash2 } from "lucide-react";
-import { getImports, runImport, retryImport, getDceCache, runDceCache, clearDceCache, ApiError } from "../api";
-import type { ImportRun, DceCacheRun } from "../types";
+import { Play, RotateCcw, Loader2, DownloadCloud, Trash2, FileSearch, Sparkles } from "lucide-react";
+import { getImports, runImport, retryImport, getDceCache, runDceCache, clearDceCache, getDceExtraction, runDceExtraction, simulateDceExtraction, ApiError } from "../api";
+import type { ImportRun, DceCacheRun, DceExtractionRun, DceExtractionRecent } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
 import { PageHeader, Panel, GatedButton, fmtDate } from "../components/ui";
@@ -43,6 +43,13 @@ export default function Imports() {
   const [dceCapBytes, setDceCapBytes] = useState(0);
   const dcePollRef = useRef<number | null>(null);
 
+  const [extRuns, setExtRuns] = useState<DceExtractionRun[]>([]);
+  const [extRecent, setExtRecent] = useState<DceExtractionRecent[]>([]);
+  const [extActive, setExtActive] = useState(false);
+  const [extCount, setExtCount] = useState(0);
+  const [extSimEnabled, setExtSimEnabled] = useState(false);
+  const extPollRef = useRef<number | null>(null);
+
   const canRun = can(user?.role, "imports.run");
   const canRetry = can(user?.role, "imports.retry");
 
@@ -70,8 +77,21 @@ export default function Imports() {
       .catch(() => { /* non-fatal: the import view still works without it */ });
   }, []);
 
+  const loadExt = useCallback(() => {
+    getDceExtraction()
+      .then((res) => {
+        setExtRuns(res.data);
+        setExtRecent(res.recent);
+        setExtActive(res.active);
+        setExtCount(res.extracted_count);
+        setExtSimEnabled(res.simulate_enabled);
+      })
+      .catch(() => { /* non-fatal: the import view still works without it */ });
+  }, []);
+
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadDce(); }, [loadDce]);
+  useEffect(() => { loadExt(); }, [loadExt]);
 
   // While an import is running, poll so status transitions become visible.
   useEffect(() => {
@@ -88,6 +108,14 @@ export default function Imports() {
       return () => { if (dcePollRef.current) window.clearInterval(dcePollRef.current); };
     }
   }, [dceActive, loadDce]);
+
+  // Same for a DCE extraction sweep.
+  useEffect(() => {
+    if (extActive) {
+      extPollRef.current = window.setInterval(() => loadExt(), 4000);
+      return () => { if (extPollRef.current) window.clearInterval(extPollRef.current); };
+    }
+  }, [extActive, loadExt]);
 
   async function doRun() {
     try {
@@ -116,6 +144,26 @@ export default function Imports() {
       loadDce();
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Failed to start DCE cache run", "error");
+    }
+  }
+
+  async function doExtRun() {
+    try {
+      await runDceExtraction();
+      push("DCE extraction sweep started", "success");
+      loadExt();
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Failed to start extraction", "error");
+    }
+  }
+
+  async function doSimulate() {
+    try {
+      const res = await simulateDceExtraction();
+      push(`Simulated extraction for “${res.title ?? res.tender_id}”`, "success");
+      loadExt();
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Failed to simulate extraction", "error");
     }
   }
 
@@ -179,6 +227,18 @@ export default function Imports() {
     });
   }
 
+  function confirmExtRun() {
+    setConfirm({
+      title: "Run DCE extraction sweep",
+      action: "Run extraction",
+      target: "Every tender with a cached DCE",
+      consequence: "Enqueues each cached DCE to the extraction pipeline (n8n → OCR → redact → extract). Results appear below as they arrive via the callback. Requires the n8n webhook to be configured — otherwise nothing is enqueued (use “Simulate result” to test the display loop).",
+      reversible: true,
+      confirmLabel: "Run extraction",
+      onConfirm: doExtRun,
+    });
+  }
+
   if (loading) return <LoadingState label="Loading imports" />;
   if (error?.status === 403) return <DeniedState message={error.message} />;
   if (error) return <FailedState message={error.message} onRetry={() => load()} />;
@@ -203,6 +263,13 @@ export default function Imports() {
               onClick={confirmDceRun}
             >
               <DownloadCloud className="w-4 h-4" aria-hidden /> Cache DCEs
+            </GatedButton>
+            <GatedButton
+              allowed={canRun && !extActive}
+              reason={extActive ? "An extraction sweep is already running" : "Requires imports.run permission"}
+              onClick={confirmExtRun}
+            >
+              <FileSearch className="w-4 h-4" aria-hidden /> Run extraction
             </GatedButton>
           </div>
         }
@@ -333,6 +400,113 @@ export default function Imports() {
                       <td className="px-4 py-2 text-right tabular-nums">{run.concurrency ?? "—"}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{run.pauses ?? 0}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{run.cached}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{run.skipped}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--color-crimson)]">{run.failed}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--color-slate)]">{run.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <div className="mt-6">
+        <Panel title="DCE extraction">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4 text-sm font-sans text-[var(--color-slate)]">
+              <span>
+                <strong className="text-[var(--color-charcoal)] tabular-nums">{extCount}</strong> extraction{extCount === 1 ? "" : "s"} stored
+              </span>
+              {extActive && (
+                <span className="inline-flex items-center gap-1.5 text-[var(--color-gold)]">
+                  <Loader2 className="w-3.5 h-3.5 motion-safe:animate-spin" aria-hidden /> sweep in progress — refreshes automatically
+                </span>
+              )}
+              {extSimEnabled && (
+                <span className="text-xs rounded bg-[var(--color-gold)]/10 text-[var(--color-gold)] px-2 py-0.5">
+                  n8n not configured — use “Simulate result” to test the store→display loop
+                </span>
+              )}
+            </div>
+            {extSimEnabled && (
+              <button
+                onClick={doSimulate}
+                disabled={!canRun}
+                title={!canRun ? "Requires imports.run permission" : undefined}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden /> Simulate result
+              </button>
+            )}
+          </div>
+
+          {extRecent.length > 0 && (
+            <div className="mb-5 overflow-x-auto">
+              <p className="mb-2 text-xs font-sans uppercase tracking-wide text-[var(--color-slate)]">Recent extractions</p>
+              <table className="w-full text-sm font-sans">
+                <thead>
+                  <tr className="text-left text-[var(--color-slate)] border-b border-[var(--color-border-subtle)]">
+                    <th scope="col" className="px-4 py-2 font-medium">Tender</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Object (extracted)</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Status</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Tags</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Extracted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extRecent.map((r) => (
+                    <tr key={r.tender_id} className="border-b border-[var(--color-border-subtle)] last:border-0 hover:bg-[var(--color-ivory-dim)]/40 align-top">
+                      <td className="px-4 py-2 max-w-[16rem] truncate" title={r.title ?? r.tender_id}>{r.title ?? r.tender_id}</td>
+                      <td className="px-4 py-2 max-w-[18rem] text-[var(--color-slate)]">{r.object ?? "—"}</td>
+                      <td className="px-4 py-2 capitalize">{r.status}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {r.tags.length === 0 ? (
+                            <span className="text-[var(--color-slate)]">—</span>
+                          ) : (
+                            r.tags.map((t) => (
+                              <span key={t} className="text-xs rounded bg-[var(--color-ivory-dim)] px-1.5 py-0.5 text-[var(--color-charcoal)]">{t}</span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 tabular-nums text-[var(--color-slate)]">{fmtDate(r.extracted_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {extRuns.length === 0 ? (
+            <EmptyState title="No extraction runs yet" hint="Run an extraction sweep to enqueue cached DCEs, or use “Simulate result” to store a sample extraction." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm font-sans">
+                <thead>
+                  <tr className="text-left text-[var(--color-slate)] border-b border-[var(--color-border-subtle)]">
+                    <th scope="col" className="px-4 py-2 font-medium">#</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Status</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Actor</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Started</th>
+                    <th scope="col" className="px-4 py-2 font-medium">Duration</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Enqueued</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Skipped</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Failed</th>
+                    <th scope="col" className="px-4 py-2 font-medium text-right tabular-nums">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extRuns.map((run) => (
+                    <tr key={run.id} className="border-b border-[var(--color-border-subtle)] last:border-0 hover:bg-[var(--color-ivory-dim)]/40">
+                      <td className="px-4 py-2 tabular-nums text-[var(--color-slate)]">{run.id}</td>
+                      <td className="px-4 py-2 capitalize">{run.status}</td>
+                      <td className="px-4 py-2 text-[var(--color-slate)]">{run.actor_email || "—"}</td>
+                      <td className="px-4 py-2 tabular-nums">{fmtDate(run.started_at)}</td>
+                      <td className="px-4 py-2 tabular-nums">{duration(run)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{run.enqueued}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{run.skipped}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-[var(--color-crimson)]">{run.failed}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-[var(--color-slate)]">{run.total}</td>

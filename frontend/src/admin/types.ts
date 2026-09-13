@@ -28,6 +28,38 @@ export interface DceCacheRun {
   pauses: number | null;
 }
 
+export interface DceExtractionRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  total: number;
+  enqueued: number;
+  skipped: number;
+  failed: number;
+  status: string; // running | done | failed
+  actor_email: string | null;
+  error: string | null;
+}
+
+export interface DceExtractionRecent {
+  tender_id: string;
+  title: string | null;
+  status: string; // ok | partial | failed
+  ocr_lang: string;
+  tags: string[];
+  object: string | null;
+  extracted_at: string;
+}
+
+export interface DceExtractionStatus {
+  last_run: DceExtractionRun | null;
+  data: DceExtractionRun[];
+  active: boolean;
+  extracted_count: number;
+  recent: DceExtractionRecent[];
+  simulate_enabled: boolean;
+}
+
 export interface AdminOverview {
   last_import: ImportRun | null;
   freshness: {
