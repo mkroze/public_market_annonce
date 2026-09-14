@@ -37,3 +37,4 @@ backend/data/*.db
 .claude/
 .agents/
 skills-lock.json
+.worktrees/
