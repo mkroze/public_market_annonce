@@ -142,10 +142,56 @@ export interface TenderFilters {
   order: string;
   page: number;
   per_page: number;
+  /** Opt-in "épuré" catalog: hide tenders the caller's company is provably ineligible for. */
+  eligible_only?: boolean;
 }
 
 // Auth
 export type ThemePreference = "system" | "light" | "dark";
+
+export type LegalForm =
+  | "auto_entrepreneur"
+  | "personne_physique"
+  | "sarl"
+  | "sarl_au"
+  | "sa"
+  | "sas"
+  | "snc"
+  | "cooperative"
+  | "gie"
+  | "association"
+  | "autre";
+
+export type SizeBand = "micro" | "tpe" | "pme" | "eti" | "grande";
+
+export type RevenueBand = "lt_1m" | "1m_10m" | "10m_50m" | "50m_200m" | "gt_200m";
+
+/** Structured, optional company profile — powers the eligibility-aware catalog
+ * and facilitates legal procedures. All fields are declared by the user and
+ * unverified. Mirrors the backend `/api/account` `profile` block. */
+export interface CompanyProfile {
+  legal_form: LegalForm | "";
+  ice: string;
+  rc_number: string;
+  rc_city: string;
+  if_number: string;
+  cnss_number: string;
+  patente_number: string;
+  hq_city: string;
+  sectors: string[];
+  categories: string[];
+  qualifications: unknown[];
+  certifications: string[];
+  coverage_regions: string[];
+  keywords: string;
+  size_band: SizeBand | "";
+  revenue_band: RevenueBand | "";
+  contract_min: number | null;
+  contract_max: number | null;
+  bids_in_groupement: boolean;
+  preferred_procedures: string[];
+  eligibility_filter_default: boolean;
+}
 
 export interface User {
   id: number;
@@ -170,6 +216,7 @@ export interface AccountProfile extends User {
   status: string;
   created_at?: string | null;
   last_login?: string | null;
+  profile?: CompanyProfile;
 }
 
 export interface AuthResponse {

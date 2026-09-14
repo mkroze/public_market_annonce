@@ -38,6 +38,7 @@ from settings import resolve_email_config
 from admin import router as admin_router, bootstrap_admins, is_bootstrap_admin_email
 from tender_display import build_tender_display
 from tender_lifecycle import public_visible_condition
+import eligibility
 from tokens import (
     issue_token, consume_token, last_unused_token_age,
     VERIFY_EMAIL, PASSWORD_RESET, VERIFY_TTL, RESET_TTL, RESEND_COOLDOWN,
@@ -62,13 +63,26 @@ async def run_scrape_and_digest(actor_email: str | None = None, trigger: str = "
 MOROCCO_TZ = ZoneInfo("Africa/Casablanca")
 
 
+def _next_run_after(now: datetime, hour: int) -> datetime:
+    target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return target
+
+
+def next_scheduled_run() -> dict:
+    """The next daily scrape+digest firing, matching daily_scheduler's schedule.
+    Exposed to the admin UI for schedule visibility (read-only)."""
+    hour = int(os.getenv("DIGEST_HOUR", "7"))
+    now = datetime.now(MOROCCO_TZ)
+    return {"next_scheduled_run": _next_run_after(now, hour).isoformat(), "digest_hour": hour}
+
+
 async def daily_scheduler():
     hour = int(os.getenv("DIGEST_HOUR", "7"))
     while True:
         now = datetime.now(MOROCCO_TZ)
-        target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
+        target = _next_run_after(now, hour)
         await asyncio.sleep(max(0.0, (target - now).total_seconds()))
         try:
             result = await run_scrape_and_digest()
@@ -250,6 +264,32 @@ class AccountPreferencesRequest(BaseModel):
     theme: str
 
 
+class ProfileUpdate(BaseModel):
+    """Partial company-profile update — every field optional so profiling can be
+    progressive. Only provided (non-None) keys are written."""
+    legal_form: str | None = None
+    ice: str | None = None
+    rc_number: str | None = None
+    rc_city: str | None = None
+    if_number: str | None = None
+    cnss_number: str | None = None
+    patente_number: str | None = None
+    hq_city: str | None = None
+    sectors: list | None = None
+    categories: list | None = None
+    qualifications: list | None = None
+    certifications: list | None = None
+    coverage_regions: list | None = None
+    keywords: str | None = None
+    size_band: str | None = None
+    revenue_band: str | None = None
+    contract_min: int | None = None
+    contract_max: int | None = None
+    bids_in_groupement: bool | None = None
+    preferred_procedures: list | None = None
+    eligibility_filter_default: bool | None = None
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -381,6 +421,7 @@ def account_view(user: dict) -> dict:
         "email_verified": user.get("email_verified_at") is not None,
         "created_at": user.get("created_at"),
         "last_login": user.get("last_login"),
+        "profile": eligibility.parse_profile(user),
     }
 
 
@@ -433,6 +474,79 @@ async def change_account_password(
     finally:
         await db.close()
     return {"status": "updated"}
+
+
+# Map ProfileUpdate keys → (users column, serializer). List fields are JSON-dumped;
+# everything else is written as-is.
+_PROFILE_COLUMN_MAP = {
+    "legal_form": ("legal_form", None),
+    "ice": ("ice", None),
+    "rc_number": ("rc_number", None),
+    "rc_city": ("rc_city", None),
+    "if_number": ("if_number", None),
+    "cnss_number": ("cnss_number", None),
+    "patente_number": ("patente_number", None),
+    "hq_city": ("hq_city", None),
+    "sectors": ("profile_sectors_json", "json"),
+    "categories": ("profile_categories_json", "json"),
+    "qualifications": ("qualifications_json", "json"),
+    "certifications": ("certifications_json", "json"),
+    "coverage_regions": ("coverage_regions_json", "json"),
+    "keywords": ("profile_keywords", None),
+    "size_band": ("size_band", None),
+    "revenue_band": ("revenue_band", None),
+    "contract_min": ("contract_min", None),
+    "contract_max": ("contract_max", None),
+    "bids_in_groupement": ("bids_in_groupement", "bool"),
+    "preferred_procedures": ("preferred_procedures_json", "json"),
+    "eligibility_filter_default": ("eligibility_filter_default", "bool"),
+}
+
+
+@app.patch("/api/account/profile")
+async def update_account_profile(
+    req: ProfileUpdate,
+    authorization: str | None = Header(None),
+):
+    """Progressive company-profile update. Only provided fields are written; the
+    profile powers the opt-in eligibility-aware catalog + legal-dossier auto-fill."""
+    user = await require_user(authorization)
+
+    provided = req.model_dump(exclude_none=True)
+
+    # Validate enum-ish fields against the eligibility allowlists (empty allowed).
+    if "legal_form" in provided and provided["legal_form"] and provided["legal_form"] not in eligibility.LEGAL_FORMS:
+        raise HTTPException(status_code=422, detail="Forme juridique invalide.")
+    if "size_band" in provided and provided["size_band"] and provided["size_band"] not in eligibility.SIZE_BANDS:
+        raise HTTPException(status_code=422, detail="Tranche d'effectif invalide.")
+    if "revenue_band" in provided and provided["revenue_band"] and provided["revenue_band"] not in eligibility.REVENUE_BANDS:
+        raise HTTPException(status_code=422, detail="Tranche de chiffre d'affaires invalide.")
+
+    set_clauses = []
+    params = []
+    for key, value in provided.items():
+        column, kind = _PROFILE_COLUMN_MAP[key]
+        if kind == "json":
+            params.append(json.dumps(value, ensure_ascii=False))
+        elif kind == "bool":
+            params.append(1 if value else 0)
+        else:
+            params.append(value)
+        set_clauses.append(f"{column} = ?")
+
+    db = await get_db()
+    try:
+        if set_clauses:
+            params.append(user["id"])
+            await db.execute(
+                f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?", params
+            )
+            await db.commit()
+        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user["id"],))
+        updated = await cursor.fetchone()
+        return account_view(dict(updated))
+    finally:
+        await db.close()
 
 
 # ── Email verification & password reset ──────────────────────────────────────
@@ -544,7 +658,20 @@ async def list_tenders(
     order: str = Query("asc", description="asc or desc"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    eligible_only: bool = Query(False, description="Épuré: hide tenders the caller's company is provably ineligible for"),
+    authorization: str | None = Header(None),
 ):
+    # Opt-in "épuré" catalog: only active when the caller is authenticated AND has
+    # a non-empty company profile. Anonymous callers / empty profiles are unaffected
+    # — the catalog stays a public read and behaves exactly as before.
+    profile = None
+    if eligible_only:
+        current = await get_current_user(authorization)
+        if current:
+            candidate = eligibility.parse_profile(current)
+            if not eligibility.profile_is_empty(candidate):
+                profile = candidate
+
     db = await get_db()
     conditions = [public_visible_condition("t")]
     params = []
@@ -582,6 +709,36 @@ async def list_tenders(
         order_clause = f"t.{sort_col} {sort_dir}"
 
     where_prefixed = f"WHERE {' AND '.join(conditions)}"
+
+    if profile is not None:
+        # Eligibility filtering happens in Python (the reserved-PME parse isn't
+        # portable SQL), so pull the full matching set (bounded like /export),
+        # drop provably-ineligible tenders, then paginate on the filtered result.
+        query = f"""
+            SELECT t.*, td.estimation, td.caution_provisoire, td.reserved_pme FROM tenders t
+            LEFT JOIN tender_details td ON td.tender_id = t.id
+            {where_prefixed}
+            ORDER BY {order_clause}
+            LIMIT 10000
+        """
+        cursor = await db.execute(query, params)
+        all_rows = [dict(r) for r in await cursor.fetchall()]
+        await db.close()
+
+        kept = [
+            r for r in all_rows
+            if not eligibility.evaluate(r, r, profile)["hidden"]
+        ]
+        total = len(kept)
+        offset = (page - 1) * per_page
+        data = kept[offset:offset + per_page]
+        return {
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": (total + per_page - 1) // per_page,
+            "data": data,
+        }
 
     count_row = await db.execute(f"SELECT COUNT(*) as total FROM tenders t {where_prefixed}", params)
     total = (await count_row.fetchone())[0]

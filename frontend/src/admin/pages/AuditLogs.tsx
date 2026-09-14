@@ -5,7 +5,7 @@ import { getAuditLogs, exportAuditLogs, ApiError } from "../api";
 import type { AuditEvent } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
-import { PageHeader, Panel, GatedButton, fmtDate } from "../components/ui";
+import { PageHeader, Panel, GatedButton, fmtDate, JsonBlock } from "../components/ui";
 import { LoadingState, FailedState, DeniedState, EmptyState, FilteredEmptyState } from "../components/StateBlock";
 import { ResultBadge } from "../components/StatusBadge";
 import ToastContainer from "../../components/Toast";
@@ -178,8 +178,16 @@ export default function AuditLogs() {
             </dl>
             {(detail.before_json || detail.after_json) && (
               <div className="mt-4 grid grid-cols-1 gap-3">
-                {detail.before_json && <JsonBlock title="Before" json={detail.before_json} />}
-                {detail.after_json && <JsonBlock title="After" json={detail.after_json} />}
+                {detail.before_json && (
+                  <div className="border-l-2 border-[var(--color-border)] pl-2">
+                    <JsonBlock value={detail.before_json} label="Before" />
+                  </div>
+                )}
+                {detail.after_json && (
+                  <div className="border-l-2 border-[var(--color-gold)] pl-2">
+                    <JsonBlock value={detail.after_json} label="After" />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -200,13 +208,3 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function JsonBlock({ title, json }: { title: string; json: string }) {
-  let pretty = json;
-  try { pretty = JSON.stringify(JSON.parse(json), null, 2); } catch { /* keep raw */ }
-  return (
-    <div>
-      <div className="text-xs font-sans uppercase tracking-wide text-[var(--color-slate)] mb-1">{title}</div>
-      <pre className="text-xs font-mono bg-[var(--color-ivory-dim)] rounded p-2 overflow-x-auto text-[var(--color-charcoal)]">{pretty}</pre>
-    </div>
-  );
-}

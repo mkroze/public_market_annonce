@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ExternalLink, Eye, Flag, Archive, ArchiveRestore, RefreshCw } from "lucide-react";
-import { getAdminTenders, batchTenders, ApiError } from "../api";
+import { ExternalLink, Eye, Flag, Archive, ArchiveRestore, RefreshCw, CalendarX2 } from "lucide-react";
+import { getAdminTenders, batchTenders, cleanupExpired, ApiError } from "../api";
 import type { AdminTender, BatchResult } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
-import { PageHeader, Panel, fmtDateOnly } from "../components/ui";
+import { GatedButton, PageHeader, Panel, fmtDateOnly, fmtBytes } from "../components/ui";
 import { LoadingState, FailedState, DeniedState, EmptyState, FilteredEmptyState } from "../components/StateBlock";
 import { ReviewStatusBadge, AdminStatusBadge, DetailBadge } from "../components/StatusBadge";
 import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
@@ -28,6 +28,7 @@ export default function AdminTenders() {
   const canModerate = can(user?.role, "tenders.moderate");
   const page = Number(params.get("page") || "1");
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
+  const purgeCacheRef = useRef(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -97,11 +98,52 @@ export default function AdminTenders() {
     });
   }
 
+  async function doCleanup(purge: boolean) {
+    try {
+      const res = await cleanupExpired(purge);
+      const extra = purge
+        ? ` · ${res.dce_removed} cached DCE${res.dce_removed === 1 ? "" : "s"} purged (${fmtBytes(res.dce_freed_bytes)} freed)`
+        : "";
+      push(`${res.archived} expired tender${res.archived === 1 ? "" : "s"} archived${extra}`,
+           res.dce_error ? "info" : "success", 6000);
+      setSelected(new Set());
+      load();
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Cleanup failed", "error");
+    }
+  }
+
+  function confirmCleanup() {
+    purgeCacheRef.current = false;
+    setConfirm({
+      title: "Archive expired tenders",
+      action: "Archive every past-deadline tender",
+      target: "All active tenders past their deadline",
+      consequence: <CleanupConsequence onChange={(v) => { purgeCacheRef.current = v; }} />,
+      reversible: true,
+      confirmLabel: "Archive expired",
+      typedConfirmation: "ARCHIVE EXPIRED",
+      onConfirm: () => doCleanup(purgeCacheRef.current),
+    });
+  }
+
   const inputCls = "input input-bordered input-sm font-sans bg-base-100 border-[var(--color-border-subtle)] rounded";
 
   return (
     <div>
-      <PageHeader title="Tender administration" description="Review, moderate, and moderate data quality across ingested tenders." />
+      <PageHeader
+        title="Tender administration"
+        description="Review, moderate, and maintain data quality across ingested tenders."
+        actions={
+          <GatedButton
+            allowed={canModerate}
+            reason="Requires tenders.moderate permission"
+            onClick={confirmCleanup}
+          >
+            <CalendarX2 className="w-4 h-4" aria-hidden /> Cleanup expired
+          </GatedButton>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -136,9 +178,9 @@ export default function AdminTenders() {
         )}
       </div>
 
-      {/* Batch action bar */}
+      {/* Batch action bar — sticky so it stays reachable while scrolling a tall table */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 px-3 py-2 border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)]">
+        <div className="sticky top-14 z-30 flex flex-wrap items-center gap-2 mb-3 px-3 py-2 border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] shadow-card">
           <span className="text-sm font-sans font-medium">{selected.size} selected</span>
           <div className="flex flex-wrap gap-1.5 ml-auto">
             <BatchBtn allowed={canModerate} onClick={() => confirmBatch("mark_reviewed", "Mark reviewed", "Marks the selected tenders as reviewed.", true)} icon={<Eye className="w-3.5 h-3.5" aria-hidden />} label="Mark reviewed" />
@@ -222,6 +264,29 @@ export default function AdminTenders() {
       <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
+  );
+}
+
+// Consequence body for the cleanup confirm dialog, with a self-contained toggle
+// that writes the "also purge cached DCEs" choice back through `onChange`.
+function CleanupConsequence({ onChange }: { onChange: (v: boolean) => void }) {
+  const [purge, setPurge] = useState(false);
+  return (
+    <span className="block space-y-2">
+      <span className="block">
+        Archives every non-archived tender whose deadline has passed. They stay in the catalog as
+        archived (reason: expired deadline) and can be restored individually.
+      </span>
+      <label className="flex items-center gap-2 text-sm font-sans">
+        <input
+          type="checkbox"
+          className="checkbox checkbox-sm"
+          checked={purge}
+          onChange={(e) => { setPurge(e.target.checked); onChange(e.target.checked); }}
+        />
+        Also purge cached DCE files for those tenders (frees disk; they re-cache on demand)
+      </label>
+    </span>
   );
 }
 

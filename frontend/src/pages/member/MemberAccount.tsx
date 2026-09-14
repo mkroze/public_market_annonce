@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import { KeyRound, Loader2, Palette, ShieldCheck, UserRound } from "lucide-react";
-import { changePassword, getAccount, updateAccountPreferences } from "../../lib/api";
-import type { AccountProfile, ThemePreference } from "../../lib/types";
+import { Building2, KeyRound, Loader2, Palette, ShieldCheck, UserRound } from "lucide-react";
+import { changePassword, getAccount, updateAccountPreferences, updateAccountProfile } from "../../lib/api";
+import type {
+  AccountProfile,
+  CompanyProfile,
+  LegalForm,
+  RevenueBand,
+  SizeBand,
+  ThemePreference,
+} from "../../lib/types";
 import { useAuth } from "../../lib/auth";
 import { applyThemePreference } from "../../lib/theme";
 
@@ -10,6 +17,69 @@ const themes: { value: ThemePreference; label: string; description: string }[] =
   { value: "light", label: "Clair", description: "Interface claire en permanence." },
   { value: "dark", label: "Sombre", description: "Interface sombre en permanence." },
 ];
+
+const LEGAL_FORMS: { value: LegalForm; label: string }[] = [
+  { value: "auto_entrepreneur", label: "Auto-entrepreneur" },
+  { value: "personne_physique", label: "Personne physique" },
+  { value: "sarl", label: "SARL" },
+  { value: "sarl_au", label: "SARL AU" },
+  { value: "sa", label: "SA" },
+  { value: "sas", label: "SAS" },
+  { value: "snc", label: "SNC" },
+  { value: "cooperative", label: "Coopérative" },
+  { value: "gie", label: "GIE" },
+  { value: "association", label: "Association" },
+  { value: "autre", label: "Autre" },
+];
+
+const SIZE_BANDS: { value: SizeBand; label: string }[] = [
+  { value: "micro", label: "Micro (< 10)" },
+  { value: "tpe", label: "TPE / Auto-entrepreneur" },
+  { value: "pme", label: "PME (10 – 200)" },
+  { value: "eti", label: "ETI" },
+  { value: "grande", label: "Grande entreprise" },
+];
+
+const REVENUE_BANDS: { value: RevenueBand; label: string }[] = [
+  { value: "lt_1m", label: "< 1 M MAD" },
+  { value: "1m_10m", label: "1 – 10 M MAD" },
+  { value: "10m_50m", label: "10 – 50 M MAD" },
+  { value: "50m_200m", label: "50 – 200 M MAD" },
+  { value: "gt_200m", label: "> 200 M MAD" },
+];
+
+const EMPTY_PROFILE: CompanyProfile = {
+  legal_form: "",
+  ice: "",
+  rc_number: "",
+  rc_city: "",
+  if_number: "",
+  cnss_number: "",
+  patente_number: "",
+  hq_city: "",
+  sectors: [],
+  categories: [],
+  qualifications: [],
+  certifications: [],
+  coverage_regions: [],
+  keywords: "",
+  size_band: "",
+  revenue_band: "",
+  contract_min: null,
+  contract_max: null,
+  bids_in_groupement: false,
+  preferred_procedures: [],
+  eligibility_filter_default: false,
+};
+
+const CATEGORY_OPTIONS = ["Travaux", "Fournitures", "Services"];
+
+function splitList(value: string): string[] {
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
 
 export default function MemberAccount() {
   const { updateUser } = useAuth();
@@ -25,6 +95,11 @@ export default function MemberAccount() {
     new_password: "",
     confirm_password: "",
   });
+  const [profile, setProfile] = useState<CompanyProfile>(EMPTY_PROFILE);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [showIdentifiers, setShowIdentifiers] = useState(false);
 
   useEffect(() => {
     getAccount()
@@ -32,9 +107,34 @@ export default function MemberAccount() {
         setAccount(loaded);
         applyThemePreference(loaded.theme);
         updateUser(loaded);
+        if (loaded.profile) {
+          setProfile({ ...EMPTY_PROFILE, ...loaded.profile });
+        }
       })
       .finally(() => setLoading(false));
   }, []);
+
+  function patchProfile(patch: Partial<CompanyProfile>) {
+    setProfile((current) => ({ ...current, ...patch }));
+  }
+
+  async function handleProfileSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileError("");
+    setProfileMessage("");
+    setProfileSaving(true);
+    try {
+      const updated = await updateAccountProfile(profile);
+      setAccount(updated);
+      updateUser(updated);
+      if (updated.profile) setProfile({ ...EMPTY_PROFILE, ...updated.profile });
+      setProfileMessage("Profil entreprise enregistré.");
+    } catch (err: any) {
+      setProfileError(err?.message || "Impossible d'enregistrer le profil.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   async function handleTheme(theme: ThemePreference) {
     setThemeSaving(true);
@@ -128,6 +228,208 @@ export default function MemberAccount() {
             <dd className="mt-1 text-sm text-[var(--color-ink)]">{account.plan || "free"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5">
+        <div className="flex items-center gap-2">
+          <Building2 size={18} className="text-[var(--color-primary)]" aria-hidden />
+          <h2 className="text-lg font-semibold text-[var(--color-ink)]">Profil entreprise</h2>
+        </div>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
+          Ces informations restent privées. Elles facilitent vos procédures légales et permettent
+          d'afficher un catalogue épuré des consultations pour lesquelles votre entreprise est éligible.
+        </p>
+        <form onSubmit={handleProfileSubmit} className="mt-4 grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-[var(--color-ink)]">Forme juridique</span>
+              <select
+                className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+                value={profile.legal_form}
+                onChange={(e) => patchProfile({ legal_form: e.target.value as CompanyProfile["legal_form"] })}
+              >
+                <option value="">Non renseignée</option>
+                {LEGAL_FORMS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-[var(--color-ink)]">Ville / siège</span>
+              <input
+                type="text"
+                className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+                value={profile.hq_city}
+                onChange={(e) => patchProfile({ hq_city: e.target.value })}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-[var(--color-ink)]">Effectif</span>
+              <select
+                className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+                value={profile.size_band}
+                onChange={(e) => patchProfile({ size_band: e.target.value as CompanyProfile["size_band"] })}
+              >
+                <option value="">Non renseigné</option>
+                {SIZE_BANDS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-[var(--color-ink)]">Chiffre d'affaires annuel</span>
+              <select
+                className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+                value={profile.revenue_band}
+                onChange={(e) => patchProfile({ revenue_band: e.target.value as CompanyProfile["revenue_band"] })}
+              >
+                <option value="">Non renseigné</option>
+                {REVENUE_BANDS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-semibold text-[var(--color-ink)]">Types de prestation</legend>
+            <div className="flex flex-wrap gap-3">
+              {CATEGORY_OPTIONS.map((cat) => {
+                const checked = profile.categories.includes(cat);
+                return (
+                  <label key={cat} className="inline-flex items-center gap-2 text-sm text-[var(--color-ink)]">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      checked={checked}
+                      onChange={(e) =>
+                        patchProfile({
+                          categories: e.target.checked
+                            ? [...profile.categories, cat]
+                            : profile.categories.filter((c) => c !== cat),
+                        })
+                      }
+                    />
+                    {cat}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-[var(--color-ink)]">Secteurs d'activité (codes, séparés par des virgules)</span>
+            <input
+              type="text"
+              placeholder="1.12, 1.10"
+              className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+              value={profile.sectors.join(", ")}
+              onChange={(e) => patchProfile({ sectors: splitList(e.target.value) })}
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-[var(--color-ink)]">Couverture géographique (régions, séparées par des virgules)</span>
+            <input
+              type="text"
+              placeholder="Casablanca-Settat, Rabat-Salé-Kénitra"
+              className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+              value={profile.coverage_regions.join(", ")}
+              onChange={(e) => patchProfile({ coverage_regions: splitList(e.target.value) })}
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-[var(--color-ink)]">Certifications (séparées par des virgules)</span>
+            <input
+              type="text"
+              placeholder="ISO 9001, ISO 14001"
+              className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+              value={profile.certifications.join(", ")}
+              onChange={(e) => patchProfile({ certifications: splitList(e.target.value) })}
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-[var(--color-ink)]">Mots-clés / produits</span>
+            <input
+              type="text"
+              placeholder="voirie, assainissement"
+              className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+              value={profile.keywords}
+              onChange={(e) => patchProfile({ keywords: e.target.value })}
+            />
+          </label>
+
+          <div className="flex flex-col gap-2">
+            <label className="inline-flex items-center gap-2 text-sm text-[var(--color-ink)]">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm"
+                checked={profile.bids_in_groupement}
+                onChange={(e) => patchProfile({ bids_in_groupement: e.target.checked })}
+              />
+              Je peux candidater en groupement
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-[var(--color-ink)]">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm"
+                checked={profile.eligibility_filter_default}
+                onChange={(e) => patchProfile({ eligibility_filter_default: e.target.checked })}
+              />
+              Afficher par défaut le catalogue épuré (consultations éligibles)
+            </label>
+          </div>
+
+          <div className="rounded-lg border border-[var(--color-border-subtle)]">
+            <button
+              type="button"
+              onClick={() => setShowIdentifiers((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-[var(--color-ink)]"
+              aria-expanded={showIdentifiers}
+            >
+              Identifiants légaux (ICE, RC, IF, CNSS, patente)
+              <span className="text-[var(--color-muted)]">{showIdentifiers ? "−" : "+"}</span>
+            </button>
+            {showIdentifiers && (
+              <div className="grid gap-4 border-t border-[var(--color-border-subtle)] p-4 sm:grid-cols-2">
+                {([
+                  ["ice", "ICE"],
+                  ["rc_number", "Registre de Commerce (RC)"],
+                  ["rc_city", "Ville du RC"],
+                  ["if_number", "Identifiant Fiscal (IF)"],
+                  ["cnss_number", "N° CNSS"],
+                  ["patente_number", "N° Patente / TP"],
+                ] as const).map(([field, label]) => (
+                  <label key={field} className="grid gap-1.5">
+                    <span className="text-sm font-semibold text-[var(--color-ink)]">{label}</span>
+                    <input
+                      type="text"
+                      className="institutional-control w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]"
+                      value={profile[field]}
+                      onChange={(e) => patchProfile({ [field]: e.target.value } as Partial<CompanyProfile>)}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {profileError && <p className="text-sm text-[var(--color-danger)]">{profileError}</p>}
+          {profileMessage && <p className="text-sm text-[var(--color-success)]">{profileMessage}</p>}
+          <button
+            type="submit"
+            disabled={profileSaving}
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {profileSaving && <Loader2 size={15} className="animate-spin" aria-hidden />}
+            Enregistrer le profil
+          </button>
+        </form>
       </section>
 
       <section className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5">

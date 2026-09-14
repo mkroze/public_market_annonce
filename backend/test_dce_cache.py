@@ -101,6 +101,33 @@ class DceCacheCapAndClearTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(await dce_cache.get_cached(self.db, "T1"))
         self.assertIsNone(await dce_cache.get_cached(self.db, "T2"))
 
+    async def test_clear_outdated_prunes_orphan_files(self):
+        # An active tender keeps its row+file; a stray .zip with no row is périmé.
+        await self.db.execute("INSERT INTO tenders (id, deadline, admin_status) VALUES ('T1', '01/01/2099 10:00', '')")
+        await self.db.commit()
+        await dce_cache._store(self.db, "T1", b"x" * 10, "a.zip")
+        orphan = os.path.join(self.cachedir, "deadbeef.zip")  # no matching cache row
+        with open(orphan, "wb") as f:
+            f.write(b"z" * 25)
+
+        with patch.object(dce_cache, "DCE_CACHE_PRUNE_ORPHANS", True):
+            res = await dce_cache.clear_dce_cache(self.db, mode="outdated")
+
+        self.assertFalse(os.path.exists(orphan))                  # orphan swept
+        self.assertIsNotNone(await dce_cache.get_cached(self.db, "T1"))  # active kept
+        self.assertEqual(res["removed"], 1)                       # only the orphan
+        self.assertEqual(res["freed_bytes"], 25)
+
+    async def test_prune_orphans_disabled_leaves_files(self):
+        orphan = os.path.join(self.cachedir, "cafe.zip")
+        os.makedirs(self.cachedir, exist_ok=True)
+        with open(orphan, "wb") as f:
+            f.write(b"z" * 5)
+        with patch.object(dce_cache, "DCE_CACHE_PRUNE_ORPHANS", False):
+            removed, freed = await dce_cache.prune_orphan_files(self.db)
+        self.assertEqual((removed, freed), (0, 0))
+        self.assertTrue(os.path.exists(orphan))
+
 
 class WarmAllBackoffTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -222,6 +249,43 @@ class WarmAllBackoffTest(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(res["cached"], 1)
         log = await self._last_log()
         self.assertIn("cap", (log["error"] or "").lower())
+
+    async def test_download_cap_stops_after_budget(self):
+        # 5 uncached tenders, but the per-run cap is 3: exactly 3 are fetched and
+        # the run stops cleanly ('stopped'), leaving the rest for the next run.
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 1), \
+             patch.object(dce_cache, "DCE_WARM_MAX_DOWNLOADS", 3), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=ok)):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "stopped")
+        self.assertEqual(res["cached"], 3)          # capped at the budget
+        log = await self._last_log()
+        self.assertIn("cap", (log["error"] or "").lower())
+
+    async def test_download_cap_zero_means_no_cap(self):
+        # cap=0 disables the limit: all 5 tenders cache and the run finishes.
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 1), \
+             patch.object(dce_cache, "DCE_WARM_MAX_DOWNLOADS", 0), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=ok)):
+            res = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(res["status"], "done")
+        self.assertEqual(res["cached"], 5)
+
+    async def test_download_cap_resumes_next_run(self):
+        # First capped run fetches 3; a second run resumes and fetches the last 2,
+        # proving many small runs cover the full catalog (skips are free).
+        ok = ("ok", (b"PK\x03\x04zip", "d.zip"))
+        with patch.object(dce_cache, "DCE_WARM_START_THREADS", 1), \
+             patch.object(dce_cache, "DCE_WARM_MAX_DOWNLOADS", 3), \
+             patch.object(dce_cache, "download_dce", AsyncMock(return_value=ok)):
+            first = await dce_cache.cache_all_dces("admin@test")
+            second = await dce_cache.cache_all_dces("admin@test")
+        self.assertEqual(first["cached"], 3)
+        self.assertEqual(second["cached"], 2)       # only the remaining two
+        self.assertEqual(second["skipped"], 3)      # first batch already cached
+        self.assertEqual(second["status"], "done")  # nothing left -> finished
 
 
 if __name__ == "__main__":

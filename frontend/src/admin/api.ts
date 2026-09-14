@@ -4,9 +4,10 @@
 
 import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
-  AdminUser, RoleInfo, AuditEvent, ImportRun, DceCacheRun, DceExtractionStatus,
+  AdminUser, RoleInfo, AuditEvent, ImportRun, DceExtractionStatus,
   EmailSettings, EmailSettingsPatch,
   WebsiteCost, WebsiteCostPayload, WebsiteCostSummary,
+  ImportsStatus, DceCacheStatus, ScrapePreview, PipelineStage, SteerAction, SteerResult,
 } from "./types";
 
 const BASE = "/api/admin";
@@ -60,9 +61,14 @@ export const getAdminTenders = (params: Record<string, string>) =>
 export const batchTenders = (action: string, ids: string[], note?: string) =>
   request<BatchResult>("/tenders/batch", { method: "POST", body: { action, ids, note } });
 
-// ── Imports ──
-export const getImports = () =>
-  request<{ data: ImportRun[]; active: boolean }>("/imports");
+export const cleanupExpired = (clearCache: boolean) =>
+  request<{ matched: number; archived: number; dce_removed: number; dce_freed_bytes: number; dce_error: string | null }>(
+    "/tenders/cleanup-expired",
+    { method: "POST", params: clearCache ? { clear_dce_cache: "true" } : {}, body: { confirmation: "ARCHIVE EXPIRED" } },
+  );
+
+// ── Scrape / imports ──
+export const getImports = () => request<ImportsStatus>("/imports");
 
 export const getImportDetail = (id: number) => request<ImportRun>(`/imports/${id}`);
 
@@ -71,14 +77,19 @@ export const runImport = () => request<{ status: string }>("/imports", { method:
 export const retryImport = (id: number) =>
   request<{ status: string }>(`/imports/${id}/retry`, { method: "POST" });
 
+export const scrapePreview = () => request<ScrapePreview>("/scrape/preview");
+
 // ── DCE cache ──
-export const getDceCache = () =>
-  request<{ data: DceCacheRun[]; active: boolean; cached_total: number; cached_bytes: number; cap_bytes: number }>("/dce-cache");
+export const getDceCache = () => request<DceCacheStatus>("/dce-cache");
 
 export const runDceCache = () => request<{ status: string }>("/dce-cache", { method: "POST" });
 
 export const clearDceCache = (mode: "all" | "outdated") =>
   request<{ removed: number; freed_bytes: number; mode: string }>("/dce-cache/clear", { method: "POST", params: { mode } });
+
+// ── Pipeline steering (pause / resume / cancel), shared across the 3 stages ──
+export const steerPipeline = (stage: PipelineStage, action: SteerAction) =>
+  request<SteerResult>(`/${stage}/control/${action}`, { method: "POST" });
 
 // ── DCE extraction ──
 export const getDceExtraction = () => request<DceExtractionStatus>("/dce-extraction/status");

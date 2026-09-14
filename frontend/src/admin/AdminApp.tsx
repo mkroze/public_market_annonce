@@ -1,7 +1,9 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "./AdminLayout";
 import Dashboard from "./pages/Dashboard";
-import Imports from "./pages/Imports";
+import Scrape from "./pages/Scrape";
+import DceCache from "./pages/DceCache";
+import DceExtraction from "./pages/DceExtraction";
 import AdminTenders from "./pages/Tenders";
 import AuditLogs from "./pages/AuditLogs";
 import Users from "./pages/Users";
@@ -25,7 +27,11 @@ export default function AdminApp() {
     <AdminLayout>
       <Routes>
         <Route index element={<Dashboard />} />
-        <Route path="imports" element={<Imports />} />
+        <Route path="scrape" element={<Scrape />} />
+        <Route path="dce-cache" element={<DceCache />} />
+        <Route path="dce-extraction" element={<DceExtraction />} />
+        {/* Old combined page — keep the link working. */}
+        <Route path="imports" element={<Navigate to="/admin/scrape" replace />} />
         <Route path="tenders" element={<AdminTenders />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="users" element={<Users />} />

@@ -2,13 +2,15 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck,
-  Settings, Plug, Receipt, LogOut, Menu, X, ExternalLink,
+  Settings, Plug, Receipt, LogOut, Menu, X, ExternalLink, Database, FileSearch,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, can, type NavItem } from "./permissions";
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck, Settings, Plug, Receipt,
+  Database, FileSearch,
 };
 
 const ENV = import.meta.env.MODE === "production" ? "production" : "development";
@@ -16,11 +18,23 @@ const ENV = import.meta.env.MODE === "production" ? "production" : "development"
 function NavList({ role, onNavigate }: { role: string | undefined; onNavigate?: () => void }) {
   const visible = NAV_ITEMS.filter((item) => item.disabled || can(role, item.permission));
 
+  let lastGroup: string | undefined;
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Admin sections">
-      {visible.map((item) => (
-        <NavEntry key={item.path} item={item} onNavigate={onNavigate} />
-      ))}
+      {visible.map((item) => {
+        const showHeading = !!item.group && item.group !== lastGroup;
+        lastGroup = item.group;
+        return (
+          <div key={item.path}>
+            {showHeading && (
+              <div className="px-3 pt-3 pb-1 text-[10px] font-sans font-semibold uppercase tracking-[0.12em] text-[var(--color-muted-light)]">
+                {item.group}
+              </div>
+            )}
+            <NavEntry item={item} onNavigate={onNavigate} />
+          </div>
+        );
+      })}
     </nav>
   );
 }
@@ -132,15 +146,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </button>
 
           <span
-            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-sans font-medium ${
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-sans font-semibold ${
               ENV === "production"
-                ? "border-[var(--color-crimson)]/40 text-[var(--color-crimson)] bg-[var(--color-crimson)]/5"
+                ? "border-[var(--color-crimson)]/50 text-[var(--color-crimson)] bg-[var(--color-crimson)]/10"
                 : "border-[var(--color-gold)]/40 text-[var(--color-gold)] bg-[var(--color-gold)]/5"
             }`}
-            title="Current environment"
+            title={ENV === "production" ? "Live production — actions affect real data" : "Development environment"}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
-            {ENV}
+            {ENV === "production"
+              ? <AlertTriangle className="w-3 h-3" aria-hidden />
+              : <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
+            {ENV === "production" ? "LIVE · production" : ENV}
           </span>
 
           <div className="ml-auto flex items-center gap-3">

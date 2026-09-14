@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup, Tag
 
 from config import BASE_URL, HEADERS, SEARCH_URL, SECTORS, CATEGORIES
 from database import get_db
+from mem_profile import profile_run
+from pipeline_control import SCRAPE
 
 # Substrings that mark a rate-limit / CAPTCHA interstitial served in place of a
 # ZIP. Presence => the portal is pushing back on us (a "flag"), not a bad tender.
@@ -436,46 +438,71 @@ async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "sch
     total_found = 0
     total_new = 0
     new_ids: list[str] = []
+    cancelled = False
+    SCRAPE.begin({"sectors_total": len(SECTORS), "sectors_done": 0, "found": 0, "new": 0})
 
-    for sector_code in SECTORS:
-        tenders = await scrape_sector(sector_code)
-        total_found += len(tenders)
+    try:
+      async with profile_run("scrape_all_sectors"):
+        for idx, sector_code in enumerate(SECTORS):
+            # Cooperative pause/cancel between sectors.
+            if not await SCRAPE.checkpoint():
+                cancelled = True
+                break
 
-        for t in tenders:
-            try:
-                before = db.total_changes
-                await db.execute(
-                    """INSERT OR IGNORE INTO tenders
-                       (id, reference, title, entity, entity_code, sector_code,
-                        sector_name, category, deadline, publication_date,
-                        status, procedure_type, location, detail_url)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        t["id"], t["reference"], t["title"], t["entity"],
-                        t["entity_code"], t["sector_code"], t["sector_name"],
-                        t["category"], t["deadline"], t["publication_date"],
-                        t["status"], t["procedure_type"], t["location"],
-                        t["detail_url"],
-                    ),
-                )
-                # total_changes is cumulative for the connection, so compare against
-                # its value before the insert to know if this row was actually new
-                if db.total_changes > before:
-                    total_new += 1
-                    new_ids.append(t["id"])
-            except Exception as e:
-                print(f"[scraper] DB insert error: {e}")
+            tenders = await scrape_sector(sector_code)
+            total_found += len(tenders)
 
+            for t in tenders:
+                try:
+                    before = db.total_changes
+                    await db.execute(
+                        """INSERT OR IGNORE INTO tenders
+                           (id, reference, title, entity, entity_code, sector_code,
+                            sector_name, category, deadline, publication_date,
+                            status, procedure_type, location, detail_url)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            t["id"], t["reference"], t["title"], t["entity"],
+                            t["entity_code"], t["sector_code"], t["sector_name"],
+                            t["category"], t["deadline"], t["publication_date"],
+                            t["status"], t["procedure_type"], t["location"],
+                            t["detail_url"],
+                        ),
+                    )
+                    # total_changes is cumulative for the connection, so compare against
+                    # its value before the insert to know if this row was actually new
+                    if db.total_changes > before:
+                        total_new += 1
+                        new_ids.append(t["id"])
+                except Exception as e:
+                    print(f"[scraper] DB insert error: {e}")
+
+            await db.commit()
+
+            # Release this sector's parsed rows before fetching the next one so
+            # per-sector DOM/dict allocations don't accumulate across the sweep.
+            del tenders
+
+            # Live progress: flush interim counters so the polling admin UI shows
+            # the run advancing sector by sector (previously only on completion).
+            SCRAPE.update(sectors_done=idx + 1, found=total_found, new=total_new)
+            await db.execute(
+                "UPDATE scrape_log SET tenders_found = ?, tenders_new = ? WHERE id = ?",
+                (total_found, total_new, log_id),
+            )
+            await db.commit()
+
+        status = "stopped" if cancelled else "done"
+        await db.execute(
+            """UPDATE scrape_log
+               SET finished_at = datetime('now'), tenders_found = ?, tenders_new = ?, status = ?
+               WHERE id = ?""",
+            (total_found, total_new, status, log_id),
+        )
         await db.commit()
-
-    await db.execute(
-        """UPDATE scrape_log
-           SET finished_at = datetime('now'), tenders_found = ?, tenders_new = ?, status = 'done'
-           WHERE id = ?""",
-        (total_found, total_new, log_id),
-    )
-    await db.commit()
-    await db.close()
+    finally:
+        await db.close()
+        SCRAPE.end()
 
     return {"total_found": total_found, "total_new": total_new, "new_ids": new_ids}
 

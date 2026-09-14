@@ -128,6 +128,15 @@ class V1ApiSurfaceTest(unittest.TestCase):
         response = self.client.get("/api/dce/T1/archive?token=bad.sig")
         self.assertEqual(response.status_code, 401)
 
+    def test_account_profile_is_reachable_but_gated(self):
+        import main
+
+        # Covered by the existing /api/account/ allowlist branch — reachable, not
+        # surface-404'd, but auth-gated (401 without a valid bearer token).
+        self.assertTrue(main.is_v1_catalog_api_path("/api/account/profile"))
+        response = self.client.patch("/api/account/profile", json={"legal_form": "sarl"})
+        self.assertEqual(response.status_code, 401)
+
     def test_extraction_callback_is_public_surface(self):
         # no Bearer, wrong secret -> handler-level 401, proving it isn't surface-404'd
         r = self.client.post("/api/dce/extraction-callback", json={"tender_id": "x"},

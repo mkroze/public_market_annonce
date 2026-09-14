@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Database, Globe, RefreshCw } from "lucide-react";
-import { getOverview, ApiError } from "../api";
+import { Database, Globe, RefreshCw, ChevronRight, CalendarClock } from "lucide-react";
+import { getOverview, getImports, getDceCache, getDceExtraction, ApiError } from "../api";
 import type { AdminOverview } from "../types";
 import { PageHeader, Panel, MetricCard, fmtDate } from "../components/ui";
 import { LoadingState, FailedState, DeniedState } from "../components/StateBlock";
 import { ImportStatusBadge } from "../components/StatusBadge";
 
+interface PipelineSummary { cached: number; extracted: number; nextRun: string | null; }
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<AdminOverview | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -20,6 +23,11 @@ export default function Dashboard() {
       .then(setData)
       .catch((e) => setError(e))
       .finally(() => setLoading(false));
+    // Pipeline funnel counts (best-effort; the dashboard still renders without them).
+    Promise.all([getImports(), getDceCache(), getDceExtraction()])
+      .then(([imp, cache, ext]) =>
+        setPipeline({ cached: cache.cached_total, extracted: ext.extracted_count, nextRun: imp.next_scheduled_run }))
+      .catch(() => setPipeline(null));
   }
 
   useEffect(load, []);
@@ -51,6 +59,26 @@ export default function Dashboard() {
         <MetricCard label="Last success" value={<span className="text-base">{fmtDate(f.last_successful_import_at)}</span>} sub="Completed import" />
       </div>
 
+      {/* Data pipeline funnel: scraped → cached → extracted */}
+      <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)] mb-2">Data pipeline</h2>
+      <div className="flex flex-col sm:flex-row sm:items-stretch gap-2 mb-1">
+        <div className="flex-1">
+          <MetricCard label="Scraped" value={f.tender_count.toLocaleString("fr-FR")} sub="tenders in catalog" onClick={() => navigate("/admin/scrape")} />
+        </div>
+        <FunnelArrow />
+        <div className="flex-1">
+          <MetricCard label="Cached" value={pipeline ? pipeline.cached.toLocaleString("fr-FR") : "—"} sub="DCE documents" onClick={() => navigate("/admin/dce-cache")} />
+        </div>
+        <FunnelArrow />
+        <div className="flex-1">
+          <MetricCard label="Extracted" value={pipeline ? pipeline.extracted.toLocaleString("fr-FR") : "—"} sub="structured DCEs" onClick={() => navigate("/admin/dce-extraction")} />
+        </div>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs font-sans text-[var(--color-slate)] mb-5">
+        <CalendarClock className="w-3.5 h-3.5 text-[var(--color-gold)]" aria-hidden />
+        Next automatic run <strong className="text-[var(--color-charcoal)] font-semibold">{fmtDate(pipeline?.nextRun)}</strong>
+      </p>
+
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Latest import */}
         <Panel title="Latest import">
@@ -73,7 +101,7 @@ export default function Dashboard() {
                 <p className="text-[var(--color-crimson)] break-words">{data.last_import.error}</p>
               )}
               <button
-                onClick={() => navigate("/admin/imports")}
+                onClick={() => navigate("/admin/scrape")}
                 className="text-[var(--color-crimson)] hover:underline focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] rounded"
               >
                 View import history →
@@ -106,7 +134,7 @@ export default function Dashboard() {
       {/* Failure queues */}
       <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)] mt-6 mb-2">Failure &amp; exception queues</h2>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <MetricCard label="Failed imports" value={q.failed_imports} tone={q.failed_imports ? "danger" : "neutral"} onClick={() => navigate("/admin/imports")} sub="View history" />
+        <MetricCard label="Failed imports" value={q.failed_imports} tone={q.failed_imports ? "danger" : "neutral"} onClick={() => navigate("/admin/scrape")} sub="View history" />
         <MetricCard label="Missing details" value={q.missing_details} tone={q.missing_details ? "warning" : "neutral"} onClick={() => navigate("/admin/tenders?detail=no")} sub="Review tenders" />
         <MetricCard label="Flagged" value={q.flagged_tenders} tone={q.flagged_tenders ? "warning" : "neutral"} onClick={() => navigate("/admin/tenders?review_status=flagged")} sub="Review tenders" />
         <MetricCard label="Archived" value={q.archived_tenders} onClick={() => navigate("/admin/tenders?admin_status=archived")} sub="Review tenders" />
@@ -136,6 +164,15 @@ export default function Dashboard() {
           </button>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+// Chevron between funnel stages — horizontal on desktop, rotated on mobile stack.
+function FunnelArrow() {
+  return (
+    <div className="hidden sm:flex items-center justify-center text-[var(--color-muted-light)]" aria-hidden>
+      <ChevronRight className="w-5 h-5" />
     </div>
   );
 }

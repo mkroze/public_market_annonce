@@ -11,6 +11,7 @@ import json
 import os
 
 import config
+from pipeline_control import DCE_EXTRACTION
 
 
 def context_md_path(tender_id: str) -> str:
@@ -149,25 +150,37 @@ async def extract_all_dces(base_url: str, actor_email: str | None = None) -> dic
         total = enqueued = skipped = failed = 0
         final_status = "done"
         err = None
+        DCE_EXTRACTION.begin()
         try:
             rows = await (await db.execute(
                 "SELECT tender_id FROM dce_cache WHERE status = 'ok'"
             )).fetchall()
             total = len(rows)
+            DCE_EXTRACTION.update(total=total, enqueued=0, skipped=0, failed=0)
             for r in rows:
+                # Cooperative pause/cancel between items.
+                if not await DCE_EXTRACTION.checkpoint():
+                    final_status = "stopped"
+                    err = "Run cancelled by operator."
+                    break
                 tid = r["tender_id"]
                 cached = await get_cached(db, tid)
                 if not cached:
                     skipped += 1
-                    continue
-                zh = zip_content_hash(cached[0])
-                if await _already_extracted(db, tid, zh):
+                elif await _already_extracted(db, tid, zip_content_hash(cached[0])):
                     skipped += 1
-                    continue
-                if await enqueue_extraction(tid, base_url):
+                elif await enqueue_extraction(tid, base_url):
                     enqueued += 1
                 else:
                     failed += 1
+                # Flush interim counters so the polling admin UI shows progress
+                # as the sweep runs (previously only written on completion).
+                DCE_EXTRACTION.update(enqueued=enqueued, skipped=skipped, failed=failed)
+                await db.execute(
+                    "UPDATE dce_extraction_log SET total=?, enqueued=?, skipped=?, failed=? WHERE id=?",
+                    (total, enqueued, skipped, failed, log_id),
+                )
+                await db.commit()
         except Exception as e:  # noqa: BLE001
             final_status = "failed"
             err = str(e)[:500]
@@ -180,4 +193,5 @@ async def extract_all_dces(base_url: str, actor_email: str | None = None) -> dic
             )
             await db.commit()
             await db.close()
+            DCE_EXTRACTION.end()
         return {"total": total, "enqueued": enqueued, "skipped": skipped, "failed": failed, "status": final_status}

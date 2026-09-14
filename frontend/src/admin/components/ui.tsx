@@ -1,4 +1,4 @@
-import type { ReactNode, ElementType } from "react";
+import { useState, type ReactNode, type ElementType } from "react";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -65,6 +65,76 @@ export function fmtDateOnly(value: string | null | undefined): string {
   const d = new Date(value.includes("T") ? value : value.replace(" ", "T") + "Z");
   if (isNaN(d.getTime())) return value;
   return d.toLocaleDateString("fr-FR", { dateStyle: "short" });
+}
+
+// Elapsed time of a run (shared by all three pipeline history tables).
+export function duration(run: { started_at: string; finished_at: string | null }): string {
+  if (!run.finished_at) return "—";
+  const start = new Date(run.started_at.replace(" ", "T") + "Z").getTime();
+  const end = new Date(run.finished_at.replace(" ", "T") + "Z").getTime();
+  if (isNaN(start) || isNaN(end)) return "—";
+  const s = Math.round((end - start) / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+export function fmtBytes(n: number): string {
+  if (!n) return "0 MB";
+  const mb = n / (1024 * 1024);
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
+// A thin determinate progress bar. `value`/`max` are counts; label sits above.
+export function ProgressBar({ value, max, label }: { value: number; max: number; label?: ReactNode }) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div>
+      {label && <div className="flex justify-between text-xs font-sans text-[var(--color-slate)] mb-1">{label}</div>}
+      <div className="h-2 w-full rounded-full bg-[var(--color-ivory-dim)] overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full rounded-full bg-[var(--color-gold)] transition-all" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// Collapsible pretty-printed JSON with a copy button (used in the audit drawer).
+export function JsonBlock({ value, label }: { value: unknown; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(true);
+  let text: string;
+  try {
+    text = typeof value === "string" ? JSON.stringify(JSON.parse(value), null, 2) : JSON.stringify(value, null, 2);
+  } catch {
+    text = String(value ?? "");
+  }
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable — ignore */ }
+  }
+  return (
+    <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]/50">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[var(--color-border-subtle)]">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="text-xs font-sans font-semibold uppercase tracking-wide text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+          aria-expanded={open}
+        >
+          {open ? "▾" : "▸"} {label ?? "JSON"}
+        </button>
+        <button
+          onClick={copy}
+          className="text-xs font-sans rounded px-2 py-0.5 border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] text-[var(--color-slate)]"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      {open && (
+        <pre className="max-h-72 overflow-auto px-3 py-2 text-xs font-mono text-[var(--color-charcoal)] whitespace-pre-wrap break-words">{text}</pre>
+      )}
+    </div>
+  );
 }
 
 // A button that stays visible when the user lacks permission, but is disabled

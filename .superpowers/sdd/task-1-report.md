@@ -1,86 +1,136 @@
-# Task 1 Report: Backend Normalization Module
+# Task 1 Report: Lifecycle Helper, Schema, And Backfill
 
 ## Status
 
-DONE
-
-## Scope
-
-Implemented Task 1 from `task-1-brief.md` only.
-
-Created:
-
-- `backend/tender_display.py`
-- `backend/test_tender_display.py`
-
-Unrelated existing modified and untracked files were left untouched.
-
-## Implementation
-
-The normalization module provides the required interfaces:
-
-- `build_tender_display(tender, details=None)`
-- `display_value(value, status="detected", source="computed", confidence="medium", raw=None)`
-- `clean_text(value)`
-- `parse_money(text)`
-
-It includes the brief's required behavior for:
-
-- whitespace and punctuation cleanup;
-- detail-first title, buyer, and location normalization;
-- duplicate commune, province, or prefecture suffix removal;
-- base-tender fallback values;
-- missing signal states;
-- Moroccan money formats;
-- zero estimation handling versus zero plan-price handling;
-- explicit competition-label parsing for application counts;
-- DCE availability signals.
+Complete.
 
 ## TDD Evidence
 
-The mandated RED command was run before implementation:
+The required focused RED run was executed after adding the tests and before implementation:
 
 ```text
-./.venv/bin/python -m unittest test_tender_display -v
+Ran 4 tests
+FAILED (errors=4)
 ```
 
-It failed as expected with:
+Failures were the expected missing `tender_lifecycle` module and missing `deadline_date` column.
+
+After implementation, the focused GREEN run passed:
 
 ```text
-ModuleNotFoundError: No module named 'tender_display'
-```
-
-After implementation, the same focused command passed:
-
-```text
-Ran 6 tests in 0.002s
+cd backend && .venv/bin/python -m unittest test_admin.TenderLifecycleHelperTest test_admin.TenderLifecycleMigrationTest
+Ran 4 tests in 0.037s
 OK
 ```
 
-## Commit
-
-Created path-limited commit:
+The backend regression suite also passed:
 
 ```text
-7bd184a feat: add tender display normalization
+cd backend && .venv/bin/python -m unittest test_admin.py test_tender_routes.py test_dce_cache.py
+Ran 40 tests in 1.098s
+OK
 ```
 
-The commit contains only `backend/tender_display.py` and `backend/test_tender_display.py`.
+## Implementation
+
+- Added deadline normalization and SQL lifecycle expression helpers in `backend/tender_lifecycle.py`.
+- Added idempotent tender lifecycle columns, indexes, and deadline-date backfill in `backend/database.py`.
+- Added the required lifecycle helper and migration tests in `backend/test_admin.py`.
 
 ## Concerns
 
-None for Task 1. The full project test suite was not run because the brief specifies the focused backend command.
+None.
 
-## Review Fixes
+---
 
-- Removed the broad commune, province, and prefecture suffix fallback; trailing location text is removed only when it matches the selected buyer or location.
-- Preserved the original selected source value in `raw` for normalized display fields and money signals without mutating scraped inputs.
-- Made estimation source provenance follow the cleaned selected value, including whitespace-only detail fallback to the base tender.
+## Review Fix: Deadline Validation
 
-Focused verification:
+### Status
+
+Complete.
+
+### TDD Evidence
+
+After adding malformed and impossible-deadline coverage, the focused RED run failed as expected:
 
 ```text
-cd backend && .venv/bin/python -m unittest test_tender_display -v
-Ran 9 tests in 0.002s
+Ran 5 tests in 0.059s
+FAILED (failures=2)
+```
+
+The failures showed that `31/02/2020` was normalized to `2020-02-31` by both
+the SQL helper expression and the migration backfill.
+
+After the fix, the requested focused GREEN run passed:
+
+```text
+cd backend && .venv/bin/python -m unittest test_admin.TenderLifecycleHelperTest test_admin.TenderLifecycleMigrationTest
+Ran 5 tests in 0.072s
 OK
 ```
+
+The requested backend regression suite also passed:
+
+```text
+cd backend && .venv/bin/python -m unittest test_admin.py test_tender_routes.py test_dce_cache.py
+Ran 41 tests in 1.181s
+OK
+```
+
+### Fix
+
+- `deadline_date_expr()` now accepts only trimmed, exact `DD/MM/YYYY` or
+  `DD/MM/YYYY HH:MM` values whose SQLite canonical date/time equals the input.
+- The schema backfill now uses `deadline_date_expr()`, preventing its rules
+  from drifting from lifecycle state evaluation.
+- Added Python and SQL regression cases for impossible dates, malformed dates,
+  and invalid times; invalid values remain normalized as `NULL` and state
+  `unknown`.
+
+### Concerns
+
+None.
+
+---
+
+## Re-review Fix: Repair Populated Deadline Cache
+
+### Status
+
+Complete.
+
+### TDD Evidence
+
+Added an upgrade-path regression that seeds lifecycle columns already present
+with the previous fabricated value `2020-02-31` for source deadline
+`31/02/2020`, plus a mismatched cached value for a valid source deadline.
+
+The focused RED run failed before the repair migration:
+
+```text
+cd backend && .venv/bin/python -m unittest test_admin.TenderLifecycleMigrationTest
+Ran 2 tests in 0.058s
+FAILED (failures=1)
+```
+
+The failure showed the old migration retained populated `2020-02-31`.
+
+After the repair, the required focused GREEN run passed:
+
+```text
+cd backend && .venv/bin/python -m unittest test_admin.TenderLifecycleHelperTest test_admin.TenderLifecycleMigrationTest
+Ran 6 tests in 0.102s
+OK
+```
+
+### Fix
+
+- The lifecycle migration now reconciles every `deadline_date` against the
+  validated source-deadline expression using SQLite's null-safe `IS`
+  comparison.
+- Invalid cached ISO dates are cleared, and populated values that disagree
+  with a valid source deadline are recomputed during upgrade.
+
+### Concerns
+
+None.

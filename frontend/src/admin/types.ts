@@ -55,9 +55,61 @@ export interface DceExtractionStatus {
   last_run: DceExtractionRun | null;
   data: DceExtractionRun[];
   active: boolean;
+  paused: boolean;
   extracted_count: number;
   recent: DceExtractionRecent[];
   simulate_enabled: boolean;
+}
+
+// Live per-sector progress reported by a running scrape (from the shared
+// PipelineControl on the backend). Null when no scrape is active.
+export interface ScrapeProgress {
+  sectors_total: number;
+  sectors_done: number;
+  found: number;
+  new: number;
+}
+
+export interface ImportsStatus {
+  data: ImportRun[];
+  active: boolean;
+  paused: boolean;
+  progress: ScrapeProgress | null;
+  next_scheduled_run: string;
+  digest_hour: number;
+}
+
+export interface DceCacheStatus {
+  data: DceCacheRun[];
+  active: boolean;
+  paused: boolean;
+  cached_total: number;
+  cached_bytes: number;
+  cap_bytes: number;
+  /** Per-run download budget (0 = uncapped). A run stops after this many new DCEs. */
+  max_downloads_per_run?: number;
+}
+
+export interface ScrapePreviewRow {
+  category: string;
+  sector_code: string;
+  sector_name: string;
+  count: number;
+}
+
+export interface ScrapePreview {
+  data: ScrapePreviewRow[];
+  total: number;
+}
+
+// Pipeline steering (pause / resume / cancel) shared across the three stages.
+export type PipelineStage = "imports" | "dce-cache" | "dce-extraction";
+export type SteerAction = "pause" | "resume" | "cancel";
+
+export interface SteerResult {
+  status: string;
+  paused: boolean;
+  cancel_requested: boolean;
 }
 
 export type CostCategory =

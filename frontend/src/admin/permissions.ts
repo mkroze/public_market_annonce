@@ -81,13 +81,16 @@ export interface NavItem {
   path: string;
   icon: string; // lucide icon name, resolved in AdminLayout
   permission: Permission;
+  group?: string; // optional sidebar section heading
   disabled?: boolean;
   disabledReason?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", permission: "overview.view" },
-  { label: "Imports", path: "/admin/imports", icon: "DownloadCloud", permission: "imports.view" },
+  { label: "Scrape", path: "/admin/scrape", icon: "DownloadCloud", permission: "imports.view", group: "Data pipeline" },
+  { label: "DCE cache", path: "/admin/dce-cache", icon: "Database", permission: "imports.view", group: "Data pipeline" },
+  { label: "DCE extraction", path: "/admin/dce-extraction", icon: "FileSearch", permission: "imports.view", group: "Data pipeline" },
   { label: "Tenders", path: "/admin/tenders", icon: "Table2", permission: "tenders.view" },
   { label: "Audit logs", path: "/admin/audit-logs", icon: "ScrollText", permission: "audit.view" },
   { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view" },

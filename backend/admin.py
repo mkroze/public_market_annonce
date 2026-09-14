@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from database import get_db
 from emailer import email_is_configured, send_email
+from pipeline_control import SCRAPE, DCE_CACHE, DCE_EXTRACTION
 from settings import resolve_email_config, set_email_settings
 from tender_lifecycle import deadline_state_expr, public_visible_condition
 from website_costs import (
@@ -535,6 +536,42 @@ async def admin_cleanup_expired_tenders(
 
 # ── Import control center ────────────────────────────────────────────────────
 
+_STEER_ACTIONS = ("pause", "resume", "cancel")
+
+
+async def _steer_pipeline(control, action: str, is_active: bool, *, request: Request,
+                          user: dict, target_type: str) -> dict:
+    """Flip a pipeline's pause/resume/cancel flag, audit it, and echo state.
+
+    Cooperative: the running sweep observes the flag at its next checkpoint.
+    ``pause``/``cancel`` require an active run; ``resume`` is always allowed
+    (harmless no-op when nothing is paused)."""
+    if action not in _STEER_ACTIONS:
+        raise HTTPException(status_code=404, detail="Unknown action")
+    if action in ("pause", "cancel") and not is_active:
+        raise HTTPException(status_code=409, detail="No run is currently in progress")
+    getattr(control, action)()
+    db = await get_db()
+    try:
+        await log_audit(db, actor=user, action=f"{target_type}.{action}",
+                        target_type=target_type, request=request)
+    finally:
+        await db.close()
+    return {"status": action, "paused": control.paused, "cancel_requested": control.cancel_requested}
+
+
+@router.get("/scrape/preview")
+async def admin_scrape_preview(user=Depends(require_admin("imports.view"))):
+    """Fast per-sector availability counts from the portal homepage — a
+    'what's available now' peek before committing to a full scrape."""
+    from scraper import scrape_homepage_counts
+    try:
+        counts = await scrape_homepage_counts()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Aperçu indisponible : {str(e)[:200]}")
+    return {"data": counts, "total": sum(int(c.get("count", 0)) for c in counts)}
+
+
 def _launch_import(actor_email: str):
     from main import run_scrape_and_digest
 
@@ -557,11 +594,18 @@ def _launch_import(actor_email: str):
 
 @router.get("/imports")
 async def admin_imports(limit: int = Query(50, ge=1, le=200), user=Depends(require_admin("imports.view"))):
-    from main import scrape_lock
+    from main import scrape_lock, next_scheduled_run
     db = await get_db()
     try:
         rows = await (await db.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT ?", (limit,))).fetchall()
-        return {"data": [dict(r) for r in rows], "active": scrape_lock.locked()}
+        active = scrape_lock.locked()
+        return {
+            "data": [dict(r) for r in rows],
+            "active": active,
+            "paused": SCRAPE.paused if active else False,
+            "progress": SCRAPE.progress if active else None,
+            **next_scheduled_run(),
+        }
     finally:
         await db.close()
 
@@ -609,6 +653,13 @@ async def admin_retry_import(import_id: int, request: Request, user=Depends(requ
     return {"status": "started"}
 
 
+@router.post("/imports/control/{action}")
+async def admin_import_control(action: str, request: Request, user=Depends(require_admin("imports.run"))):
+    from main import scrape_lock
+    return await _steer_pipeline(SCRAPE, action, scrape_lock.locked(),
+                                 request=request, user=user, target_type="import")
+
+
 # ── DCE cache control ────────────────────────────────────────────────────────
 
 def _launch_dce_cache(actor_email: str):
@@ -634,21 +685,31 @@ def _launch_dce_cache(actor_email: str):
 @router.get("/dce-cache")
 async def admin_dce_cache(limit: int = Query(20, ge=1, le=100), user=Depends(require_admin("imports.view"))):
     from dce_cache import dce_cache_lock, cache_total_bytes
-    from config import DCE_CACHE_MAX_BYTES
+    from config import DCE_CACHE_MAX_BYTES, DCE_WARM_MAX_DOWNLOADS
     db = await get_db()
     try:
         rows = await (await db.execute("SELECT * FROM dce_cache_log ORDER BY id DESC LIMIT ?", (limit,))).fetchall()
         cached_total = (await (await db.execute("SELECT COUNT(*) FROM dce_cache WHERE status = 'ok'")).fetchone())[0]
         cached_bytes = await cache_total_bytes(db)
+        active = dce_cache_lock.locked()
         return {
             "data": [dict(r) for r in rows],
-            "active": dce_cache_lock.locked(),
+            "active": active,
+            "paused": DCE_CACHE.paused if active else False,
             "cached_total": cached_total,
             "cached_bytes": cached_bytes,
             "cap_bytes": DCE_CACHE_MAX_BYTES,
+            "max_downloads_per_run": DCE_WARM_MAX_DOWNLOADS,
         }
     finally:
         await db.close()
+
+
+@router.post("/dce-cache/control/{action}")
+async def admin_dce_cache_control(action: str, request: Request, user=Depends(require_admin("imports.run"))):
+    from dce_cache import dce_cache_lock
+    return await _steer_pipeline(DCE_CACHE, action, dce_cache_lock.locked(),
+                                 request=request, user=user, target_type="dce_cache")
 
 
 @router.post("/dce-cache/clear")
@@ -711,6 +772,12 @@ async def admin_run_dce_extraction(request: Request, user=Depends(require_admin(
     return {"status": "started"}
 
 
+@router.post("/dce-extraction/control/{action}")
+async def admin_dce_extraction_control(action: str, request: Request, user=Depends(require_admin("imports.run"))):
+    return await _steer_pipeline(DCE_EXTRACTION, action, DCE_EXTRACTION.running,
+                                 request=request, user=user, target_type="dce_extraction")
+
+
 @router.get("/dce-extraction/status")
 async def admin_dce_extraction_status(user=Depends(require_admin("imports.view"))):
     import config as _config
@@ -756,6 +823,7 @@ async def admin_dce_extraction_status(user=Depends(require_admin("imports.view")
             "last_run": runs[0] if runs else None,
             "data": runs,
             "active": active,
+            "paused": DCE_EXTRACTION.paused if active else False,
             "extracted_count": done["n"],
             "recent": recent,
             "simulate_enabled": not _config.N8N_EXTRACT_WEBHOOK_URL,

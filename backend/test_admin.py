@@ -756,5 +756,146 @@ class ExtractionSimulateTest(unittest.TestCase):
         self.assertEqual(r.status_code, 409)
 
 
+class PipelineControlUnitTest(unittest.TestCase):
+    """The cooperative pause/resume/cancel primitive used by the sweep loops."""
+
+    def _fresh(self):
+        from pipeline_control import PipelineControl
+        return PipelineControl("t")
+
+    def test_checkpoint_passes_when_running(self):
+        c = self._fresh()
+        c.begin({"x": 1})
+        self.assertTrue(c.running)
+        self.assertFalse(c.paused)
+        self.assertTrue(run(c.checkpoint()))
+
+    def test_pause_blocks_until_resume(self):
+        c = self._fresh()
+        c.begin()
+        c.pause()
+        self.assertTrue(c.paused)
+
+        async def scenario():
+            task = asyncio.ensure_future(c.checkpoint())
+            await asyncio.sleep(0.05)
+            self.assertFalse(task.done())  # still blocked while paused
+            c.resume()
+            return await asyncio.wait_for(task, timeout=1)
+
+        self.assertTrue(run(scenario()))
+        self.assertFalse(c.paused)
+
+    def test_cancel_unblocks_and_signals_stop(self):
+        c = self._fresh()
+        c.begin()
+        c.pause()
+
+        async def scenario():
+            task = asyncio.ensure_future(c.checkpoint())
+            await asyncio.sleep(0.05)
+            c.cancel()
+            return await asyncio.wait_for(task, timeout=1)
+
+        self.assertFalse(run(scenario()))  # checkpoint returns False -> loop should stop
+        self.assertTrue(c.cancel_requested)
+
+    def test_end_resets_state(self):
+        c = self._fresh()
+        c.begin({"sectors_total": 3})
+        c.update(sectors_done=2)
+        self.assertEqual(c.snapshot()["progress"]["sectors_done"], 2)
+        c.end()
+        self.assertFalse(c.running)
+        self.assertFalse(c.cancel_requested)
+        self.assertEqual(c.progress, {})
+
+
+async def _running_extraction_log():
+    db = await database.get_db()
+    await db.execute("INSERT INTO dce_extraction_log (status) VALUES ('running')")
+    await db.commit()
+    await db.close()
+
+
+class PipelineSteerTest(unittest.TestCase):
+    """The /control/{action} endpoints, schedule visibility, and scrape preview."""
+
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("steer-owner@x.com", role="owner"))
+        self.headers = _auth(self.owner_id, "steer-owner@x.com")
+
+    def tearDown(self):
+        import pipeline_control as pc
+        pc.SCRAPE.end()
+        pc.DCE_CACHE.end()
+        pc.DCE_EXTRACTION.end()
+
+    def test_control_requires_run_permission(self):
+        uid = run(_make_user("steer-aud@x.com", role="auditor"))
+        r = self.client.post("/api/admin/dce-cache/control/pause",
+                             headers=_auth(uid, "steer-aud@x.com"))
+        self.assertEqual(r.status_code, 403)
+
+    def test_pause_or_cancel_without_active_run_conflicts(self):
+        r = self.client.post("/api/admin/imports/control/pause", headers=self.headers)
+        self.assertEqual(r.status_code, 409)
+        r = self.client.post("/api/admin/dce-cache/control/cancel", headers=self.headers)
+        self.assertEqual(r.status_code, 409)
+
+    def test_resume_is_harmless_noop(self):
+        r = self.client.post("/api/admin/imports/control/resume", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "resume")
+
+    def test_unknown_action_is_404(self):
+        r = self.client.post("/api/admin/imports/control/frobnicate", headers=self.headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_extraction_pause_resume_cancel_while_active(self):
+        import pipeline_control as pc
+
+        run(_running_extraction_log())   # makes status "active"
+        pc.DCE_EXTRACTION.begin()        # simulate a live sweep for the control gate
+        try:
+            r = self.client.post("/api/admin/dce-extraction/control/pause", headers=self.headers)
+            self.assertEqual(r.status_code, 200)
+            self.assertTrue(r.json()["paused"])
+
+            s = self.client.get("/api/admin/dce-extraction/status", headers=self.headers).json()
+            self.assertTrue(s["active"])
+            self.assertTrue(s["paused"])
+
+            r = self.client.post("/api/admin/dce-extraction/control/resume", headers=self.headers)
+            self.assertFalse(r.json()["paused"])
+
+            r = self.client.post("/api/admin/dce-extraction/control/cancel", headers=self.headers)
+            self.assertTrue(r.json()["cancel_requested"])
+        finally:
+            pc.DCE_EXTRACTION.end()
+
+    def test_imports_status_exposes_schedule_and_pause_fields(self):
+        body = self.client.get("/api/admin/imports", headers=self.headers).json()
+        for key in ("paused", "progress", "next_scheduled_run", "digest_hour"):
+            self.assertIn(key, body)
+
+    def test_scrape_preview_returns_counts(self):
+        sample = [{"category": "Travaux", "sector_code": "1", "sector_name": "X", "count": 5}]
+        with patch("scraper.scrape_homepage_counts", new_callable=AsyncMock, return_value=sample):
+            r = self.client.get("/api/admin/scrape/preview", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["total"], 5)
+        self.assertEqual(body["data"][0]["sector_name"], "X")
+
+    def test_scrape_preview_requires_view_permission(self):
+        uid = run(_make_user("prev-plain@x.com", role="user"))
+        r = self.client.get("/api/admin/scrape/preview",
+                            headers=_auth(uid, "prev-plain@x.com"))
+        self.assertEqual(r.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ import type {
   FiltersResponse,
   TenderWithDetails,
   AccountProfile,
+  CompanyProfile,
   AuthResponse,
   User,
   ThemePreference,
@@ -102,6 +103,7 @@ export function getTenders(filters: Partial<TenderFilters> = {}): Promise<Tender
   if (filters.order) params.order = filters.order;
   if (filters.page) params.page = String(filters.page);
   if (filters.per_page) params.per_page = String(filters.per_page);
+  if (filters.eligible_only) params.eligible_only = "1";
   return fetchJSON<TenderListResponse>(`${BASE}/tenders`, params, { redirectOnUnauthorized: false });
 }
 
@@ -253,6 +255,16 @@ export function changePassword(data: {
 }): Promise<{ status: string }> {
   return mutateJSON<{ status: string }>(`${BASE}/account/change-password`, {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/** Progressive company-profile update: send only the fields being changed. */
+export function updateAccountProfile(
+  data: Partial<CompanyProfile>,
+): Promise<AccountProfile> {
+  return mutateJSON<AccountProfile>(`${BASE}/account/profile`, {
+    method: "PATCH",
     body: JSON.stringify(data),
   });
 }

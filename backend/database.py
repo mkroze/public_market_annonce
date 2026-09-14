@@ -291,6 +291,34 @@ async def init_db():
     # email verification: NULL until the user confirms their address
     await _add_column_if_missing(db, "users", "email_verified_at", "email_verified_at TEXT")
 
+    # users: company / eligibility profile (all optional, source: user, unverified).
+    # Powers the "épuré" eligibility-aware catalog + facilitates legal procedures.
+    # Identity & legal (dossier auto-fill, not a hide rule).
+    await _add_column_if_missing(db, "users", "legal_form", "legal_form TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "ice", "ice TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "rc_number", "rc_number TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "rc_city", "rc_city TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "if_number", "if_number TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "cnss_number", "cnss_number TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "patente_number", "patente_number TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "hq_city", "hq_city TEXT DEFAULT ''")
+    # Activity & eligibility drivers (JSON arrays, mirrors saved_searches.criteria).
+    await _add_column_if_missing(db, "users", "profile_sectors_json", "profile_sectors_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "profile_categories_json", "profile_categories_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "qualifications_json", "qualifications_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "certifications_json", "certifications_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "coverage_regions_json", "coverage_regions_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "profile_keywords", "profile_keywords TEXT DEFAULT ''")
+    # Size & capacity (bands, never an exact figure) + contract fourchette.
+    await _add_column_if_missing(db, "users", "size_band", "size_band TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "revenue_band", "revenue_band TEXT DEFAULT ''")
+    await _add_column_if_missing(db, "users", "contract_min", "contract_min INTEGER")
+    await _add_column_if_missing(db, "users", "contract_max", "contract_max INTEGER")
+    # Bidding preferences.
+    await _add_column_if_missing(db, "users", "bids_in_groupement", "bids_in_groupement INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "users", "preferred_procedures_json", "preferred_procedures_json TEXT DEFAULT '[]'")
+    await _add_column_if_missing(db, "users", "eligibility_filter_default", "eligibility_filter_default INTEGER DEFAULT 0")
+
     # tenders: admin moderation state
     await _add_column_if_missing(db, "tenders", "admin_status", "admin_status TEXT DEFAULT 'active'")
     await _add_column_if_missing(db, "tenders", "review_status", "review_status TEXT DEFAULT 'unreviewed'")

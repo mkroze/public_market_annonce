@@ -41,6 +41,22 @@ DCE_WARM_PAUSE_SECONDS = float(os.getenv("DCE_WARM_PAUSE_SECONDS", "60"))
 DCE_WARM_BACKOFF_STEP = int(os.getenv("DCE_WARM_BACKOFF_STEP", "1"))
 DCE_WARM_MIN_THREADS = int(os.getenv("DCE_WARM_MIN_THREADS", "1"))
 
+# Hard cap on how many *new* DCE ZIPs a single warm-all run will download.
+# The whole ZIP is held in memory per download; capping the batch keeps a run's
+# peak RSS bounded so an in-process sweep can't OOM-kill the web worker (which on
+# Render restarts the container + fires the startup email). Already-cached
+# tenders don't count against the cap — a resumable sweep just picks up the next
+# 30 on the next run, so many small runs cover the full catalog safely. 0 = no
+# cap (legacy behavior). Override via env.
+DCE_WARM_MAX_DOWNLOADS = int(os.getenv("DCE_WARM_MAX_DOWNLOADS", "30"))
+
+# Cleanup of "périmé" (stale) cache folders. A cached DCE is stale once its
+# tender is archived, past its deadline, or gone from the catalog (see
+# dce_cache._STALE_TENDER_IDS). Orphan files (a ZIP on disk with no matching
+# 'ok' row, e.g. left by a crash mid-write) are also pruned. This is enforced by
+# the "outdated" clear mode and the periodic janitor.
+DCE_CACHE_PRUNE_ORPHANS = os.getenv("DCE_CACHE_PRUNE_ORPHANS", "1").strip().lower() in ("1", "true", "yes", "on")
+
 # DCE extraction pipeline. Recap markdown lives next to the ZIP cache on /app/data.
 DCE_CONTEXT_DIR = os.getenv("DCE_CONTEXT_DIR", "data/dce_context")
 # n8n webhook the backend calls to enqueue one tender for OCR→redact→extract.

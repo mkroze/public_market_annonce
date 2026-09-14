@@ -28,8 +28,12 @@ from config import (
     DCE_WARM_PAUSE_SECONDS,
     DCE_WARM_BACKOFF_STEP,
     DCE_WARM_MIN_THREADS,
+    DCE_WARM_MAX_DOWNLOADS,
+    DCE_CACHE_PRUNE_ORPHANS,
 )
 from database import get_db
+from mem_profile import profile_run
+from pipeline_control import DCE_CACHE
 from scraper import download_dce, ensure_tender_details
 
 # Only one warm-all run at a time (mirrors main.scrape_lock for imports).
@@ -172,16 +176,26 @@ async def _run_sweep(db, log_id: int, items, concurrency: int,
     Workers share the single aiosqlite connection (aiosqlite serializes SQL, so
     concurrent DB calls are safe); network I/O runs truly in parallel because
     download_dce opens its own client per call. Returns the sweep outcome:
-    "finished" | "cap" | "disk" | "flagged". On a terminal/flag outcome, workers
-    drain their in-flight download then stop pulling new work.
+    "finished" | "cap" | "disk" | "flagged" | "download_cap". On a terminal/flag
+    outcome, workers drain their in-flight download then stop pulling new work.
+
+    ``DCE_WARM_MAX_DOWNLOADS`` caps the number of *new* downloads in this run so a
+    single in-process sweep can't balloon RSS and OOM-kill the web worker. The
+    cap counts only fresh stores (skips of already-cached tenders are free), so a
+    resumable sweep picks up the next batch on the next run.
     """
     queue: asyncio.Queue = asyncio.Queue()
     for item in items:
         queue.put_nowait(item)
-    stop = {"reason": None}  # "cap" | "disk" | "flagged"
+    stop = {"reason": None}  # "cap" | "disk" | "flagged" | "cancelled" | "download_cap"
+    downloaded_this_run = {"n": 0}
 
     async def worker():
         while stop["reason"] is None:
+            # Cooperative pause/cancel: block here while paused, bail on cancel.
+            if not await DCE_CACHE.checkpoint():
+                stop["reason"] = "cancelled"
+                return
             try:
                 tender_id, detail_url = queue.get_nowait()
             except asyncio.QueueEmpty:
@@ -191,6 +205,11 @@ async def _run_sweep(db, log_id: int, items, concurrency: int,
                     async with counter_lock:
                         state["skipped"] += 1
                     continue
+                # Per-run download cap: stop pulling new work once this run has
+                # fetched its budget of fresh ZIPs (keeps peak RSS bounded).
+                if DCE_WARM_MAX_DOWNLOADS > 0 and downloaded_this_run["n"] >= DCE_WARM_MAX_DOWNLOADS:
+                    stop["reason"] = "download_cap"
+                    return
                 if await cache_total_bytes(db) >= DCE_CACHE_MAX_BYTES:
                     stop["reason"] = "cap"
                     return
@@ -223,9 +242,20 @@ async def _run_sweep(db, log_id: int, items, concurrency: int,
 
                 file_bytes, filename = payload
                 await _store(db, tender_id, file_bytes, filename)
+                # Release the ZIP buffer promptly so it isn't pinned across the
+                # inter-download sleep while other workers allocate their own.
+                del file_bytes, payload
                 async with counter_lock:
                     state["cached"] += 1
+                    downloaded_this_run["n"] += 1
+                    hit_cap = (
+                        DCE_WARM_MAX_DOWNLOADS > 0
+                        and downloaded_this_run["n"] >= DCE_WARM_MAX_DOWNLOADS
+                    )
                 await _write_run_log(db, log_id, state, "running")
+                if hit_cap:
+                    stop["reason"] = "download_cap"
+                    return
                 await asyncio.sleep(random.uniform(DCE_WARM_DELAY_MIN, DCE_WARM_DELAY_MAX))
             finally:
                 queue.task_done()
@@ -260,6 +290,7 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
         counter_lock = asyncio.Lock()
         final_status = "done"
         err = None
+        DCE_CACHE.begin()
 
         try:
             rows = await (await db.execute(
@@ -269,29 +300,41 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
             items = [(r["id"], r["detail_url"]) for r in rows]
             state["total"] = len(items)
 
-            while True:
-                outcome = await _run_sweep(db, log_id, items, concurrency, state, counter_lock)
-                if outcome == "finished":
-                    final_status = "done"
-                    break
-                if outcome == "cap":
-                    final_status = "stopped"
-                    err = "Cache size cap reached — remaining DCEs will cache on demand."
-                    break
-                if outcome == "disk":
-                    final_status = "stopped"
-                    err = "Low disk space — stopped to protect the volume."
-                    break
-                # outcome == "flagged": back off one step, or stop at the floor.
-                state["pauses"] += 1
-                concurrency -= DCE_WARM_BACKOFF_STEP
-                if concurrency < DCE_WARM_MIN_THREADS:
-                    final_status = "stopped"
-                    err = "Portal pushing back even at the minimum thread count — try again later."
-                    break
-                state["concurrency"] = concurrency
-                await _write_run_log(db, log_id, state, "running")
-                await asyncio.sleep(DCE_WARM_PAUSE_SECONDS)
+            async with profile_run("cache_all_dces"):
+                while True:
+                    outcome = await _run_sweep(db, log_id, items, concurrency, state, counter_lock)
+                    if outcome == "finished":
+                        final_status = "done"
+                        break
+                    if outcome == "download_cap":
+                        # Hit the per-run download budget: stop cleanly (not a failure).
+                        # The next scheduled run resumes with the next batch.
+                        final_status = "stopped"
+                        err = (f"Per-run download cap ({DCE_WARM_MAX_DOWNLOADS}) reached — "
+                               "remaining DCEs will cache on the next run.")
+                        break
+                    if outcome == "cap":
+                        final_status = "stopped"
+                        err = "Cache size cap reached — remaining DCEs will cache on demand."
+                        break
+                    if outcome == "disk":
+                        final_status = "stopped"
+                        err = "Low disk space — stopped to protect the volume."
+                        break
+                    if outcome == "cancelled":
+                        final_status = "stopped"
+                        err = "Run cancelled by operator."
+                        break
+                    # outcome == "flagged": back off one step, or stop at the floor.
+                    state["pauses"] += 1
+                    concurrency -= DCE_WARM_BACKOFF_STEP
+                    if concurrency < DCE_WARM_MIN_THREADS:
+                        final_status = "stopped"
+                        err = "Portal pushing back even at the minimum thread count — try again later."
+                        break
+                    state["concurrency"] = concurrency
+                    await _write_run_log(db, log_id, state, "running")
+                    await asyncio.sleep(DCE_WARM_PAUSE_SECONDS)
         except Exception as e:  # noqa: BLE001
             final_status = "failed"
             err = str(e)[:500]
@@ -307,17 +350,49 @@ async def cache_all_dces(actor_email: str | None = None) -> dict:
             )
             await db.commit()
             await db.close()
+            DCE_CACHE.end()
 
         return {"total": state["total"], "cached": state["cached"],
                 "skipped": state["skipped"], "failed": state["failed"],
                 "pauses": state["pauses"], "status": final_status}
 
 
+async def prune_orphan_files(db) -> tuple[int, int]:
+    """Delete ZIP files on disk that have no matching 'ok' cache row.
+
+    These are "périmé" leftovers — e.g. a row deleted by eviction/clear while the
+    file lingered, or a partial write from a crashed run. Returns (files, bytes).
+    """
+    if not DCE_CACHE_PRUNE_ORPHANS:
+        return (0, 0)
+    try:
+        entries = os.listdir(DCE_CACHE_DIR)
+    except OSError:
+        return (0, 0)
+    rows = await (await db.execute(
+        "SELECT tender_id FROM dce_cache WHERE status = 'ok'"
+    )).fetchall()
+    known = {os.path.basename(_disk_path(r["tender_id"])) for r in rows}
+    removed = freed = 0
+    for name in entries:
+        if not name.endswith(".zip") or name in known:
+            continue
+        path = os.path.join(DCE_CACHE_DIR, name)
+        try:
+            freed += os.path.getsize(path)
+            os.remove(path)
+            removed += 1
+        except OSError:
+            pass
+    return (removed, freed)
+
+
 async def clear_dce_cache(db, mode: str = "all") -> dict:
     """Delete cached DCE ZIPs (files + rows).
 
     mode="all"      -> wipe the entire cache (e.g. to force a fresh re-download).
-    mode="outdated" -> only tenders that are archived, past deadline, or gone.
+    mode="outdated" -> only tenders that are archived, past deadline, or gone
+                       ("périmé"), PLUS orphan files with no matching cache row.
     Returns {"removed": n, "freed_bytes": b, "mode": mode}.
     """
     query = _STALE_TENDER_IDS if mode == "outdated" else "SELECT tender_id FROM dce_cache"
@@ -329,4 +404,12 @@ async def clear_dce_cache(db, mode: str = "all") -> dict:
         freed += await _remove_entry(db, row["tender_id"])
         removed += 1
     await db.commit()
+
+    # In "outdated" cleanup, also sweep orphan files (rows already gone but the
+    # ZIP lingered on the volume). "all" already removes every file it knows of.
+    if mode == "outdated":
+        orphan_files, orphan_bytes = await prune_orphan_files(db)
+        removed += orphan_files
+        freed += orphan_bytes
+
     return {"removed": removed, "freed_bytes": freed, "mode": mode}
