@@ -7,7 +7,7 @@ export type Permission =
   | "tenders.view" | "tenders.moderate" | "tenders.export"
   | "imports.view" | "imports.run" | "imports.retry"
   | "audit.view" | "audit.export"
-  | "users.view" | "users.suspend" | "users.manage_role"
+  | "users.view" | "users.suspend" | "users.manage_role" | "users.edit_profile"
   | "roles.view"
   | "settings.view" | "settings.manage"
   | "costs.view" | "costs.manage";
@@ -20,7 +20,7 @@ const ALL: Permission[] = [
   "tenders.view", "tenders.moderate", "tenders.export",
   "imports.view", "imports.run", "imports.retry",
   "audit.view", "audit.export",
-  "users.view", "users.suspend", "users.manage_role",
+  "users.view", "users.suspend", "users.manage_role", "users.edit_profile",
   "roles.view",
   "settings.view", "settings.manage",
   "costs.view", "costs.manage",
@@ -33,7 +33,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Set<Permission>> = {
     "tenders.view", "tenders.moderate", "tenders.export",
     "imports.view", "imports.run", "imports.retry",
     "audit.view", "audit.export",
-    "users.view", "roles.view",
+    "users.view", "users.edit_profile", "roles.view",
     "costs.view", "costs.manage",
   ]),
   operator: new Set<Permission>([
@@ -91,6 +91,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Scrape", path: "/admin/scrape", icon: "DownloadCloud", permission: "imports.view", group: "Data pipeline" },
   { label: "DCE cache", path: "/admin/dce-cache", icon: "Database", permission: "imports.view", group: "Data pipeline" },
   { label: "DCE extraction", path: "/admin/dce-extraction", icon: "FileSearch", permission: "imports.view", group: "Data pipeline" },
+  { label: "Cron jobs", path: "/admin/cron", icon: "Clock", permission: "imports.view", group: "Data pipeline" },
   { label: "Tenders", path: "/admin/tenders", icon: "Table2", permission: "tenders.view" },
   { label: "Audit logs", path: "/admin/audit-logs", icon: "ScrollText", permission: "audit.view" },
   { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view" },

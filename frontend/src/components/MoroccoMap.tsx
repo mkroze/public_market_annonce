@@ -108,11 +108,13 @@ const COORD_LOOKUP = new Map(
   Object.entries(MOROCCO_CITY_COORDS).map(([name, coords]) => [normalizeCityName(name), coords]),
 );
 
-// Marker palette per effective theme. Navy in light, lighter navy in dark to
-// stay legible over the CARTO Dark Matter basemap.
+// Marker palette per effective theme. Resting markers use the navy brand
+// (`--color-primary`); the hovered/active marker flips to the gold accent
+// (`--color-warning`) — the design's "one gold spark". Lighter navy in dark
+// keeps resting dots legible over the CARTO Dark Matter basemap.
 const MARKER_COLORS = {
-  light: { fill: "#00236f", stroke: "#001a52" },
-  dark: { fill: "#b6c4ff", stroke: "#dce1ff" },
+  light: { fill: "#00236f", stroke: "#001a52", activeFill: "#f59e0b", activeStroke: "#b26a00" },
+  dark: { fill: "#b6c4ff", stroke: "#dce1ff", activeFill: "#f59e0b", activeStroke: "#ffb95f" },
 } as const;
 
 const TILE_URLS = {
@@ -221,7 +223,7 @@ export default function MoroccoMap({ cities }: { cities: CityStats[] }) {
         scrollWheelZoom={false}
         minZoom={4}
         maxZoom={10}
-        className="h-[420px] w-full rounded border border-[var(--color-border-subtle)]"
+        className="h-[420px] w-full overflow-hidden rounded-2xl border border-[var(--color-border-subtle)]"
         aria-label="Carte du Maroc : consultations par ville"
       >
         <TileLayer
@@ -240,9 +242,9 @@ export default function MoroccoMap({ cities }: { cities: CityStats[] }) {
               center={[dot.lat, dot.lng]}
               radius={isActive ? dot.r * 1.35 : dot.r}
               pathOptions={{
-                color: colors.stroke,
+                color: isActive ? colors.activeStroke : colors.stroke,
                 weight: isActive ? 2 : 1,
-                fillColor: colors.fill,
+                fillColor: isActive ? colors.activeFill : colors.fill,
                 fillOpacity: isActive ? 1 : 0.7,
               }}
               // Leaflet renders each CircleMarker as an SVG element. We promote it

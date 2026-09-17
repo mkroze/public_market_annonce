@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Bell, Plus, Pencil, Trash2, Send, X, Loader2 } from "lucide-react";
 import {
@@ -39,10 +39,34 @@ const EMPTY_DRAFT: AlertDraft = {
   enabled: true,
 };
 
+const FRAME =
+  "overflow-hidden rounded-[1.75rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_80%,transparent)] bg-[var(--color-surface)] shadow-card";
+
+const LABEL = "text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-light)]";
+
+const PRIMARY_PILL =
+  "inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--color-on-primary)] no-underline shadow-[0_14px_34px_-24px_rgba(0,35,111,0.8)] transition-transform hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-warning)] motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+
 // Beta: daily is the only cadence the digest job honors, so the UI doesn't
 // offer a choice. The draft still carries frequency: "daily" for the backend.
 const CONTROL_CLASS =
-  "w-full border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] px-3 py-2 font-sans text-sm text-[var(--color-charcoal)] rounded focus:border-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-crimson)] transition-colors";
+  "w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-muted-light)] focus:border-[var(--color-primary)]";
+
+function chipClass(active: boolean): string {
+  return `rounded-full border px-3 py-1 text-xs font-semibold transition-colors motion-reduce:transition-none ${
+    active
+      ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+      : "border-[var(--color-border-subtle)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-border)]"
+  }`;
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-[1.15rem] bg-[var(--color-primary-soft)] px-3 py-0.5 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+      {children}
+    </span>
+  );
+}
 
 function csvList(csv: string): string[] {
   return (csv || "")
@@ -298,26 +322,23 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
   }
 
   const editor = (
-    <form
-      onSubmit={handleSave}
-      className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-5 space-y-4 shadow-card"
-    >
+    <form onSubmit={handleSave} className={`${FRAME} space-y-4 p-5`}>
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-lg text-[var(--color-charcoal)]">
+        <h3 className="text-sm font-black uppercase tracking-[0.06em] text-[var(--color-ink)]">
           {editingId === null ? "Nouvelle alerte" : "Modifier l'alerte"}
         </h3>
         <button
           type="button"
           onClick={closeEditor}
-          className="btn btn-ghost btn-xs btn-square"
+          className="grid h-9 w-9 place-items-center rounded-full border border-[var(--color-border-subtle)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border)] hover:text-[var(--color-ink)] motion-reduce:transition-none"
           aria-label="Fermer l'éditeur"
         >
-          <X size={16} />
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
 
-      <label className="space-y-1.5 block">
-        <span className="editorial-label text-[var(--color-slate)]">Nom de l'alerte</span>
+      <label className="block space-y-1.5">
+        <span className={LABEL}>Nom de l'alerte</span>
         <input
           type="text"
           className={CONTROL_CLASS}
@@ -328,64 +349,46 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
       </label>
 
       <fieldset className="space-y-1.5">
-        <legend className="editorial-label text-[var(--color-slate)]">Domaines d'activité</legend>
-        <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)] p-2">
-          {(options?.sectors || []).map((sector) => {
-            const active = csvHas(draft.sectors, sector.code);
-            return (
-              <button
-                type="button"
-                key={sector.code}
-                aria-pressed={active}
-                onClick={() => patchDraft({ sectors: toggleCsv(draft.sectors, sector.code) })}
-                className={`px-2 py-1 rounded font-sans text-xs border transition-colors ${
-                  active
-                    ? "bg-[var(--color-crimson)] text-[var(--color-ivory)] border-[var(--color-crimson)]"
-                    : "bg-[var(--color-ivory)] text-[var(--color-charcoal)] border-[var(--color-border-subtle)] hover:border-[var(--color-charcoal)]"
-                }`}
-              >
-                {sector.name}
-              </button>
-            );
-          })}
+        <legend className={LABEL}>Domaines d'activité</legend>
+        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-2.5">
+          {(options?.sectors || []).map((sector) => (
+            <button
+              type="button"
+              key={sector.code}
+              aria-pressed={csvHas(draft.sectors, sector.code)}
+              onClick={() => patchDraft({ sectors: toggleCsv(draft.sectors, sector.code) })}
+              className={chipClass(csvHas(draft.sectors, sector.code))}
+            >
+              {sector.name}
+            </button>
+          ))}
           {!options?.sectors?.length && (
-            <span className="font-sans text-xs text-[var(--color-slate)]">Aucun domaine disponible.</span>
+            <span className="text-xs text-[var(--color-muted)]">Aucun domaine disponible.</span>
           )}
         </div>
-        <p className="font-sans text-xs text-[var(--color-slate)]">
-          Laissez vide pour recevoir tous les domaines.
-        </p>
+        <p className="text-xs text-[var(--color-muted)]">Laissez vide pour recevoir tous les domaines.</p>
       </fieldset>
 
       <fieldset className="space-y-1.5">
-        <legend className="editorial-label text-[var(--color-slate)]">Régions</legend>
+        <legend className={LABEL}>Régions</legend>
         <div className="flex flex-wrap gap-1.5">
-          {(options?.regions || []).map((region) => {
-            const active = csvHas(draft.regions, region);
-            return (
-              <button
-                type="button"
-                key={region}
-                aria-pressed={active}
-                onClick={() => patchDraft({ regions: toggleCsv(draft.regions, region) })}
-                className={`px-2 py-1 rounded font-sans text-xs border transition-colors ${
-                  active
-                    ? "bg-[var(--color-crimson)] text-[var(--color-ivory)] border-[var(--color-crimson)]"
-                    : "bg-[var(--color-ivory)] text-[var(--color-charcoal)] border-[var(--color-border-subtle)] hover:border-[var(--color-charcoal)]"
-                }`}
-              >
-                {region}
-              </button>
-            );
-          })}
+          {(options?.regions || []).map((region) => (
+            <button
+              type="button"
+              key={region}
+              aria-pressed={csvHas(draft.regions, region)}
+              onClick={() => patchDraft({ regions: toggleCsv(draft.regions, region) })}
+              className={chipClass(csvHas(draft.regions, region))}
+            >
+              {region}
+            </button>
+          ))}
         </div>
-        <p className="font-sans text-xs text-[var(--color-slate)]">
-          Laissez vide pour recevoir toutes les régions.
-        </p>
+        <p className="text-xs text-[var(--color-muted)]">Laissez vide pour recevoir toutes les régions.</p>
       </fieldset>
 
-      <label className="space-y-1.5 block">
-        <span className="editorial-label text-[var(--color-slate)]">Mots-clés</span>
+      <label className="block space-y-1.5">
+        <span className={LABEL}>Mots-clés</span>
         <input
           type="text"
           className={CONTROL_CLASS}
@@ -396,8 +399,8 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <label className="space-y-1.5 block">
-          <span className="editorial-label text-[var(--color-slate)]">Budget min. (MAD)</span>
+        <label className="block space-y-1.5">
+          <span className={LABEL}>Budget min. (MAD)</span>
           <input
             type="text"
             inputMode="numeric"
@@ -407,8 +410,8 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
             onChange={(e) => patchDraft({ min_budget: e.target.value })}
           />
         </label>
-        <label className="space-y-1.5 block">
-          <span className="editorial-label text-[var(--color-slate)]">Budget max. (MAD)</span>
+        <label className="block space-y-1.5">
+          <span className={LABEL}>Budget max. (MAD)</span>
           <input
             type="text"
             inputMode="numeric"
@@ -419,39 +422,34 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
           />
         </label>
         <div className="space-y-1.5">
-          <span className="editorial-label text-[var(--color-slate)]">Fréquence</span>
-          <div
-            className={`${CONTROL_CLASS} flex items-center text-[var(--color-slate)] cursor-default`}
-            aria-readonly="true"
-          >
+          <span className={LABEL}>Fréquence</span>
+          <div className={`${CONTROL_CLASS} flex cursor-default items-center text-[var(--color-muted)]`} aria-readonly="true">
             Quotidien · 07:00 (heure du Maroc)
           </div>
         </div>
       </div>
 
-      <label className="flex items-center gap-2.5 cursor-pointer">
+      <label className="flex cursor-pointer items-center gap-2.5">
         <input
           type="checkbox"
           className="toggle toggle-sm"
           checked={draft.enabled}
           onChange={(e) => patchDraft({ enabled: e.target.checked })}
         />
-        <span className="font-sans text-sm text-[var(--color-charcoal)]">
-          Alerte active (recevoir les emails)
-        </span>
+        <span className="text-sm text-[var(--color-ink)]">Alerte active (recevoir les emails)</span>
       </label>
 
       {/* Aperçu en direct */}
-      <div className="border border-dashed border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] p-3">
-        <div className="flex items-center gap-2 font-sans text-sm text-[var(--color-charcoal)]">
+      <div className="rounded-2xl border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-4">
+        <div className="flex items-center gap-2 text-sm text-[var(--color-ink)]">
           {previewLoading ? (
             <>
-              <Loader2 size={14} className="animate-spin text-[var(--color-slate)]" />
-              <span className="text-[var(--color-slate)]">Calcul des correspondances…</span>
+              <Loader2 size={14} className="animate-spin text-[var(--color-muted)]" />
+              <span className="text-[var(--color-muted)]">Calcul des correspondances…</span>
             </>
           ) : (
             <span>
-              <strong className="text-[var(--color-crimson)]">{preview?.count ?? 0}</strong>{" "}
+              <strong className="text-[var(--color-primary)]">{preview?.count ?? 0}</strong>{" "}
               consultation{(preview?.count ?? 0) > 1 ? "s" : ""} correspondent actuellement à ces critères.
             </span>
           )}
@@ -459,10 +457,10 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
         {preview && preview.sample.length > 0 && (
           <ul className="mt-2 space-y-1">
             {preview.sample.map((t) => (
-              <li key={t.id} className="font-sans text-xs text-[var(--color-slate)] truncate">
+              <li key={t.id} className="truncate text-xs text-[var(--color-muted)]">
                 <Link
                   to={`/tenders/${encodeURIComponent(t.id)}`}
-                  className="text-[var(--color-crimson)] hover:underline"
+                  className="text-[var(--color-primary)] hover:underline"
                 >
                   {t.title}
                 </Link>{" "}
@@ -473,12 +471,12 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+      <div className="flex flex-wrap items-center justify-end gap-4 pt-1">
         <button
           type="button"
           onClick={handleTestEmail}
           disabled={testingEmail}
-          className="inline-flex items-center gap-1.5 editorial-label text-[var(--color-slate)] hover:text-[var(--color-charcoal)] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-50 motion-reduce:transition-none"
         >
           {testingEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           Email de test
@@ -486,15 +484,11 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
         <button
           type="button"
           onClick={closeEditor}
-          className="editorial-label text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+          className="text-sm font-semibold text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] motion-reduce:transition-none"
         >
           Annuler
         </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-crimson)] px-4 py-2 text-sm font-semibold text-[var(--color-ivory)] transition-colors hover:bg-[var(--color-crimson-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <button type="submit" disabled={saving} className={PRIMARY_PILL}>
           {saving && <Loader2 size={14} className="animate-spin" />}
           {editingId === null ? "Créer l'alerte" : "Enregistrer"}
         </button>
@@ -502,39 +496,67 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
     </form>
   );
 
-  return (
-    <div className={embedded ? "space-y-6" : "px-4 sm:px-6 py-8"}>
-      {!embedded && <Breadcrumbs items={[{ label: "Compte" }, { label: "Mes alertes" }]} className="mb-6" />}
+  const showCreateCta = !open && alerts.length === 0;
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold text-[var(--color-ink)]">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
-            <Bell size={16} />
-          </span>
-          Mes alertes
-        </h1>
-        {/* Beta: one alert per account — the create action disappears once an
-            alert exists, leaving only edit / pause / delete. */}
-        {!open && alerts.length === 0 && (
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-crimson)] px-4 py-2 text-sm font-semibold text-[var(--color-ivory)] transition-colors hover:bg-[var(--color-crimson-dark)]"
-          >
-            <Plus size={16} />
-            Nouvelle alerte
-          </button>
-        )}
-      </div>
-      <p className="font-sans text-sm text-[var(--color-slate)] mb-6 max-w-2xl">
-        Définissez votre alerte par domaine, région, mots-clés et budget. Chaque matin
-        à 07:00 (heure du Maroc), nous vous envoyons un récapitulatif des nouvelles
-        consultations qui y correspondent — uniquement s'il y en a.
-      </p>
+  return (
+    <div className={embedded ? "space-y-6" : "space-y-6 px-3 py-3 sm:px-5 sm:py-4"}>
+      {!embedded && <Breadcrumbs items={[{ label: "Compte" }, { label: "Mes alertes" }]} />}
+
+      {/* Header */}
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold text-[var(--color-ink)]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary)]">
+                <Bell size={16} aria-hidden="true" />
+              </span>
+              Mes alertes
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--color-muted)]">
+              Chaque matin à 07:00 (heure du Maroc), un récapitulatif des nouvelles consultations qui
+              correspondent à vos critères — uniquement s'il y en a.
+            </p>
+          </div>
+          {showCreateCta && (
+            <button type="button" onClick={startCreate} className={PRIMARY_PILL}>
+              <Plus size={16} aria-hidden="true" />
+              Nouvelle alerte
+            </button>
+          )}
+        </div>
+      ) : (
+        <section className={FRAME} aria-labelledby="alerts-title">
+          <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-7 sm:px-8">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+                <Bell size={14} aria-hidden="true" />
+                Veille personnalisée
+              </div>
+              <h1
+                id="alerts-title"
+                className="mt-4 text-[clamp(1.7rem,3.4vw,3rem)] font-semibold leading-[1.12] tracking-[0] text-[var(--color-ink)]"
+              >
+                Mes <Pill>alertes</Pill>.
+              </h1>
+              <p className="mt-4 text-base leading-7 text-[var(--color-muted)]">
+                Définissez votre alerte par domaine, région, mots-clés et budget. Chaque matin à 07:00
+                (heure du Maroc), nous vous envoyons un récapitulatif des nouvelles consultations
+                correspondantes — uniquement s'il y en a.
+              </p>
+            </div>
+            {showCreateCta && (
+              <button type="button" onClick={startCreate} className={PRIMARY_PILL}>
+                <Plus size={16} aria-hidden="true" />
+                Nouvelle alerte
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <span className="loading loading-spinner loading-lg text-[var(--color-crimson)]"></span>
+          <span className="loading loading-spinner loading-lg text-[var(--color-primary)]"></span>
         </div>
       ) : (
         <div className="space-y-4">
@@ -548,12 +570,8 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
               title="Aucune alerte pour le moment"
               description="Créez votre première alerte pour être prévenu, chaque matin, des nouvelles consultations qui correspondent à vos critères."
               action={
-                <button
-                  type="button"
-                  onClick={startCreate}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)] shadow-card transition-colors hover:bg-[var(--color-primary-strong)]"
-                >
-                  <Plus size={16} />
+                <button type="button" onClick={startCreate} className={PRIMARY_PILL}>
+                  <Plus size={16} aria-hidden="true" />
                   Créer une alerte
                 </button>
               }
@@ -563,18 +581,16 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
               {alerts.map((alert) => (
                 <li key={alert.id}>
                   <div
-                    className={`border rounded bg-[var(--color-ivory)] p-4 ${
+                    className={`rounded-2xl border bg-[var(--color-surface)] p-4 shadow-card transition-colors motion-reduce:transition-none ${
                       editingId === alert.id
-                        ? "border-[var(--color-crimson)]"
+                        ? "border-[var(--color-primary)]"
                         : "border-[var(--color-border-subtle)]"
                     }`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="font-display text-base text-[var(--color-charcoal)] truncate">
-                          {alert.name}
-                        </h3>
-                        <p className="font-sans text-xs text-[var(--color-slate)] mt-1">
+                        <h3 className="truncate text-base font-bold text-[var(--color-ink)]">{alert.name}</h3>
+                        <p className="mt-1 text-xs text-[var(--color-muted)]">
                           {csvList(alert.sectors).length
                             ? `Domaines : ${csvList(alert.sectors).map(sectorName).join(", ")}`
                             : "Tous domaines"}
@@ -584,19 +600,17 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
                             : "Toutes régions"}
                         </p>
                         {csvList(alert.keywords).length > 0 && (
-                          <p className="font-sans text-xs text-[var(--color-slate)] mt-0.5">
+                          <p className="mt-0.5 text-xs text-[var(--color-muted)]">
                             Mots-clés : {csvList(alert.keywords).join(", ")}
                           </p>
                         )}
-                        <p className="font-sans text-xs text-[var(--color-slate)] mt-0.5">
-                          {alert.last_sent
-                            ? `Dernier envoi : ${alert.last_sent}`
-                            : "Aucun envoi pour l'instant"}
+                        <p className="mt-0.5 text-xs text-[var(--color-muted-light)]">
+                          {alert.last_sent ? `Dernier envoi : ${alert.last_sent}` : "Aucun envoi pour l'instant"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <label
-                          className="flex items-center gap-1.5 cursor-pointer mr-1"
+                          className="mr-1 flex cursor-pointer items-center gap-1.5"
                           title={alert.enabled ? "Alerte active" : "Alerte en pause"}
                         >
                           <input
@@ -609,18 +623,18 @@ export default function Alerts({ embedded = false }: { embedded?: boolean }) {
                         <button
                           type="button"
                           onClick={() => startEdit(alert)}
-                          className="btn btn-ghost btn-xs btn-square"
+                          className="grid h-9 w-9 place-items-center rounded-full border border-[var(--color-border-subtle)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border)] hover:text-[var(--color-ink)] motion-reduce:transition-none"
                           aria-label={`Modifier ${alert.name}`}
                         >
-                          <Pencil size={15} />
+                          <Pencil size={15} aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(alert)}
-                          className="btn btn-ghost btn-xs btn-square text-[var(--color-crimson)]"
+                          className="grid h-9 w-9 place-items-center rounded-full border border-[var(--color-border-subtle)] text-[var(--color-danger)] transition-colors hover:border-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] motion-reduce:transition-none"
                           aria-label={`Supprimer ${alert.name}`}
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={15} aria-hidden="true" />
                         </button>
                       </div>
                     </div>

@@ -1,0 +1,11 @@
+# Extra deps for the award probe (scraping/award_probe.py) ONLY.
+# httpx + beautifulsoup4 + lxml already come from backend/requirements.txt.
+# The parser (backend/award_parser.py) and its tests need NONE of these — they
+# run pure-Python on saved text fixtures.
+#
+# pypdf: deterministic PDF text extraction for the sample builder. Pin matches
+# what the spike was validated against.
+pypdf==6.18.1
+# fonttools: lets pypdf fully decode CFF/Type1 font encodings (reduces the
+# "garbled winner name" OCR cases). Optional but recommended for the probe.
+fonttools>=4.50

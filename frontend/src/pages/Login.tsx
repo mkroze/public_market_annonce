@@ -1,17 +1,26 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowRight, Bell, Eye, EyeOff, FileCheck2, Search, ShieldCheck } from "lucide-react";
 import { login } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import logoFull from "../assets/logo-full.svg";
-import logoWhite from "../assets/logo-full-white.svg";
+
+const previewCards = [
+  { icon: Search, title: "32 nouvelles", meta: "aujourd'hui", tone: "blue", className: "left-[12%] top-[16%] rotate-[-4deg]" },
+  { icon: Bell, title: "3 alertes", meta: "à vérifier", tone: "gold", className: "right-[10%] top-[22%] rotate-[5deg]" },
+  { icon: ShieldCheck, title: "Éligible", meta: "profil PME", tone: "blue", className: "left-[22%] top-[46%] rotate-[4deg]" },
+  { icon: FileCheck2, title: "DCE prêt", meta: "2 pièces", tone: "gold", className: "right-[18%] bottom-[22%] rotate-[-3deg]" },
+] as const;
+
+const previewTone = {
+  blue: "bg-[var(--color-primary-soft)] text-[var(--color-primary)]",
+  gold: "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
+} as const;
 
 export default function Login() {
   const { setAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  // Reprend l'intention initiale : si l'utilisateur visait une page protégée,
-  // on l'y renvoie après connexion plutôt que vers l'accueil.
   const from = (location.state as { from?: string } | null)?.from || "/";
 
   const [email, setEmail] = useState("");
@@ -36,135 +45,117 @@ export default function Login() {
   }
 
   return (
-    <section className="px-4 py-6 sm:px-6 lg:py-8">
-      <div className="relative mx-auto grid min-h-[calc(100vh-8rem)] w-full max-w-[1440px] overflow-hidden rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.7fr)]">
-        <div
-          className="relative hidden min-h-[640px] overflow-hidden bg-[var(--color-primary)] lg:block"
-          style={{
-            clipPath: "polygon(0 0, 100% 0, 93% 100%, 0% 100%)",
-          }}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_22%,rgba(245,158,11,0.24),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.12),transparent_44%)]" />
-          <div className="relative z-10 flex h-full items-center justify-center pr-[12%]">
-            <div className="flex max-w-xl flex-col items-center text-center font-sans">
-              <img
-                src={logoWhite}
-                alt="Marchés Publics Maroc"
-                className="h-48 w-auto max-w-[28rem]"
-              />
-              <div className="mt-10 flex max-w-[26rem] translate-y-8 flex-col items-center">
-                <h1 className="max-w-[24rem] font-sans text-[1.75rem] font-semibold leading-[1.08] tracking-normal text-white [text-wrap:balance]">
-                  Votre accès simplifié au marché public
-                </h1>
-                <p className="mt-4 max-w-[26rem] font-sans text-base font-medium leading-[1.45] text-white/82">
-                  Une recherche intuitive, des alertes ciblées et un espace sécurisé pour faciliter chacune de vos consultations.
-                </p>
-              </div>
+    <section className="px-3 py-4 sm:px-6 sm:py-8">
+      <div className="mx-auto grid min-h-[calc(100svh-8rem)] max-w-[1440px] overflow-hidden rounded-[2rem] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card lg:grid-cols-[minmax(25rem,0.82fr)_minmax(0,1fr)]">
+        <div className="flex min-h-[620px] items-center justify-center px-6 py-10 sm:px-10 lg:px-16">
+          <div className="w-full max-w-md">
+            <img src={logoFull} alt="Marchés Publics Maroc" className="h-8 w-auto" />
+
+            <div className="mt-16">
+              <h1 className="text-5xl font-semibold leading-none tracking-[0] text-[var(--color-ink)] sm:text-6xl">
+                Bon retour
+              </h1>
+              <p className="mt-4 max-w-sm text-base leading-7 text-[var(--color-muted)]">
+                Connectez-vous à votre espace.
+              </p>
             </div>
+
+            {error && (
+              <div role="alert" className="mt-8 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="mt-9 flex flex-col gap-5">
+              <div>
+                <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                  Email
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  className="h-12 w-full rounded-full border border-[var(--color-border-subtle)] bg-white px-5 text-sm text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-muted-light)] focus:border-[var(--color-primary)] motion-reduce:transition-none"
+                  placeholder="email@exemple.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="login-password" className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    className="h-12 w-full rounded-full border border-[var(--color-border-subtle)] bg-white px-5 pr-12 text-sm text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-muted-light)] focus:border-[var(--color-primary)] motion-reduce:transition-none"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none"
+                    aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="-mt-2 flex items-center justify-end">
+                <Link to="/forgot-password" className="text-sm text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-ink)]">
+                  Mot de passe oublié ?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                className="mt-1 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-on-primary)] shadow-[0_16px_36px_-24px_rgba(0,35,111,0.82)] transition-transform hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
+                disabled={loading}
+              >
+                {loading ? "Connexion..." : "Se connecter"}
+                {!loading && <ArrowRight size={16} className="text-[var(--color-warning)]" aria-hidden="true" />}
+              </button>
+            </form>
+
+            <p className="mt-7 text-center text-sm text-[var(--color-muted)]">
+              Nouveau ?{" "}
+              <Link to="/register" className="font-semibold text-[var(--color-primary)] no-underline hover:underline">
+                Créer un compte
+              </Link>
+            </p>
           </div>
         </div>
 
-        <div className="flex min-h-[620px] items-center justify-center px-5 py-8 sm:px-8 lg:px-10">
-          <div className="w-full max-w-md">
-            <div className="mb-8 lg:hidden">
-              <img src={logoFull} alt="Marchés Publics Maroc" className="h-7 w-auto" />
-              <div className="mt-8 max-w-[24rem]">
-                <h1 className="max-w-[24rem] font-sans text-xl font-semibold leading-[1.08] tracking-normal text-[var(--color-ink)] [text-wrap:balance]">
-                  Votre accès simplifié au marché public
-                </h1>
-                <p className="mt-4 text-sm leading-[1.45] text-[var(--color-muted)]">
-                  Une recherche intuitive, des alertes ciblées et un espace sécurisé pour faciliter chacune de vos consultations.
-                </p>
-              </div>
+        <div className="relative hidden min-h-[620px] overflow-hidden rounded-l-[2rem] border-l border-[var(--color-border-subtle)] bg-[linear-gradient(160deg,var(--color-surface-muted)_0%,var(--color-primary-soft)_52%,var(--color-warning-soft)_100%)] lg:block">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(255,255,255,0.75),transparent_36%),radial-gradient(circle_at_84%_82%,color-mix(in_srgb,var(--color-warning)_20%,transparent),transparent_42%)]" />
+          <div className="absolute left-1/2 top-[46%] h-[30rem] w-[30rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-[color-mix(in_srgb,var(--color-border)_60%,transparent)]" />
+          <div className="absolute left-1/2 top-[46%] h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-[var(--color-border-subtle)]" />
+          {previewCards.map((card) => (
+            <div
+              key={card.title}
+              className={`absolute flex min-w-48 items-center gap-3 rounded-2xl border border-[var(--color-border-subtle)] bg-white/90 px-4 py-3 shadow-[0_18px_45px_-24px_rgba(15,23,42,0.4)] backdrop-blur-sm ${card.className}`}
+            >
+              <span className={`grid h-10 w-10 place-items-center rounded-full ${previewTone[card.tone]}`}>
+                <card.icon size={18} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-[var(--color-ink)]">{card.title}</span>
+                <span className="block text-xs text-[var(--color-muted)]">{card.meta}</span>
+              </span>
             </div>
-
-            <div className="p-1 sm:p-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
-                Accès membre
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-[var(--color-ink)]">
-                Se connecter
-              </h2>
-              <p className="mt-1 text-sm text-[var(--color-muted)]">
-                Retrouvez vos consultations, vos exports et vos alertes.
-              </p>
-
-              {error && (
-                <div
-                  role="alert"
-                  className="mt-5 rounded-lg border border-[var(--color-border-subtle)] border-l-4 border-l-[var(--color-accent)] bg-[var(--color-accent-soft)] p-3"
-                >
-                  <span className="font-sans text-sm text-[var(--color-charcoal)]">{error}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-                <div className="form-control">
-                  <label htmlFor="login-email" className="label">
-                    <span className="label-academic">Email</span>
-                  </label>
-                  <input
-                    id="login-email"
-                    type="email"
-                    autoComplete="email"
-                    className="input input-bordered w-full rounded border-[var(--color-border-subtle)] bg-base-100 font-sans"
-                    placeholder="email@exemple.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label htmlFor="login-password" className="label">
-                    <span className="label-academic">Mot de passe</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="login-password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
-                      className="input input-bordered w-full rounded border-[var(--color-border-subtle)] bg-base-100 pr-10 font-sans"
-                      placeholder="Votre mot de passe"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-slate)] hover:text-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-[var(--color-crimson)]"
-                      aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                      aria-pressed={showPassword}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="-mt-2 text-right">
-                  <Link to="/forgot-password" className="text-sm text-[var(--color-crimson)] hover:underline">
-                    Mot de passe oublié ?
-                  </Link>
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary mt-2 w-full rounded font-sans font-semibold gap-2"
-                  disabled={loading}
-                >
-                  {loading && <span className="loading loading-spinner loading-sm"></span>}
-                  {loading ? "Connexion..." : "Se connecter"}
-                </button>
-              </form>
-
-              <p className="mt-6 text-center font-sans text-sm text-[var(--color-slate)]">
-                Pas encore de compte ?{" "}
-                <Link to="/register" className="text-[var(--color-crimson)] hover:underline">
-                  Créer un compte
-                </Link>
-              </p>
-            </div>
+          ))}
+          <div className="absolute bottom-16 left-1/2 w-full max-w-md -translate-x-1/2 px-8 text-center">
+            <h2 className="text-3xl font-semibold leading-tight tracking-[0] text-[var(--color-ink)]">Votre veille reste prête.</h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">Alertes, dossiers et consultations au même endroit.</p>
           </div>
         </div>
       </div>

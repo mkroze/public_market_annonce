@@ -56,18 +56,20 @@ describe("ProcedureDetail", () => {
 });
 
 describe("Guide", () => {
-  it("presents a concise preparation hub without the old calculator section", () => {
+  it("presents the screenshot-inspired preparation hero without the old calculator section", () => {
     render(
       <MemoryRouter>
         <Guide />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: /préparer ma candidature/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /découvrez la voie simple/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/marchés publics/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("link", { name: /démarrer/i })).toHaveAttribute("href", "/tenders");
     expect(screen.queryByText(/calculateur/i)).not.toBeInTheDocument();
   });
 
-  it("links to the reference tools and the assistant entry point", () => {
+  it("links to the reference tools from the resource strip", () => {
     render(
       <MemoryRouter>
         <Guide />
@@ -76,5 +78,6 @@ describe("Guide", () => {
 
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(expect.arrayContaining(["/procedures", "/eligibility", "/recours", "/tenders"]));
+    expect(screen.getByText(/cadre réglementaire fiable/i)).toBeInTheDocument();
   });
 });

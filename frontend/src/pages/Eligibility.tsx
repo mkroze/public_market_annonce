@@ -1,10 +1,24 @@
-import { useMemo, useState } from "react";
-import { HelpCircle, RotateCcw, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
-import PageShell from "../components/PageShell";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Briefcase, FileCheck, HelpCircle, RotateCcw, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
 import { ELIGIBILITY_QUESTIONS, type EligibilityKind } from "../lib/procedures";
 
 type Answer = "oui" | "non" | "nsp";
 type Verdict = "eligible" | "preuves-manquantes" | "risque" | "non-eligible" | "incomplet";
+
+type IconType = ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+
+/** Highlight pill — signature headline treatment (new-hot-design.md §2.2). */
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-[1.15rem] bg-[var(--color-primary-soft)] px-3 py-0.5 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+      {children}
+    </span>
+  );
+}
+
+const FRAME =
+  "overflow-hidden rounded-[1.75rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_80%,transparent)] bg-[var(--color-surface)] shadow-card";
 
 const kindLabels: Record<EligibilityKind, string> = {
   capacite: "Capacités et activité",
@@ -12,9 +26,15 @@ const kindLabels: Record<EligibilityKind, string> = {
   exclusion: "Causes d'exclusion",
 };
 
+const kindIcons: Record<EligibilityKind, IconType> = {
+  capacite: Briefcase,
+  regularite: FileCheck,
+  exclusion: ShieldAlert,
+};
+
 const kindOrder: EligibilityKind[] = ["capacite", "regularite", "exclusion"];
 
-const verdicts: Record<Verdict, { icon: typeof ShieldCheck; title: string; description: string; className: string }> = {
+const verdicts: Record<Verdict, { icon: IconType; title: string; description: string; className: string }> = {
   eligible: {
     icon: ShieldCheck,
     title: "Éligible sur la base des informations déclarées",
@@ -77,9 +97,12 @@ export default function Eligibility({ embedded = false }: { embedded?: boolean }
 
   const content = (
     <div className="space-y-6">
-      <section className={`rounded-xl border-2 bg-[var(--color-surface)] p-5 shadow-card ${current.className}`}>
+      {/* ─── Verdict ──────────────────────────────────────────── */}
+      <section className={`rounded-[1.5rem] border-2 bg-[var(--color-surface)] p-5 shadow-card ${current.className}`}>
         <div className="flex items-start gap-3">
-          <VerdictIcon size={22} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 border-current">
+            <VerdictIcon size={20} aria-hidden={true} />
+          </span>
           <div className="min-w-0">
             <p className="font-semibold">{current.title}</p>
             <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">{current.description}</p>
@@ -100,44 +123,54 @@ export default function Eligibility({ embedded = false }: { embedded?: boolean }
         </div>
       </section>
 
-      {kindOrder.map((kind) => (
-        <section key={kind} className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5 shadow-card">
-          <h2 className="text-lg font-bold text-[var(--color-ink)]">{kindLabels[kind]}</h2>
-          <div className="mt-4 space-y-4">
-            {ELIGIBILITY_QUESTIONS.filter((question) => question.kind === kind).map((question) => (
-              <div key={question.id} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-[var(--color-ink)]">
-                    {question.question}
-                    <span className="ml-2 text-xs font-semibold text-[var(--color-muted-light)]">{question.legalRef}</span>
-                  </p>
-                  {question.help && <p className="mt-1 text-xs leading-relaxed text-[var(--color-muted)]">{question.help}</p>}
+      {/* ─── Question groups ──────────────────────────────────── */}
+      {kindOrder.map((kind) => {
+        const KindIcon = kindIcons[kind];
+        return (
+          <section key={kind} className={FRAME}>
+            <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] px-5 py-4">
+              <KindIcon size={17} className="text-[var(--color-primary)]" aria-hidden={true} />
+              <h2 className="text-sm font-black uppercase tracking-[0.06em] text-[var(--color-ink)]">{kindLabels[kind]}</h2>
+            </div>
+            <div className="divide-y divide-[var(--color-border-subtle)]">
+              {ELIGIBILITY_QUESTIONS.filter((question) => question.kind === kind).map((question) => (
+                <div
+                  key={question.id}
+                  className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[var(--color-ink)]">
+                      {question.question}
+                      <span className="ml-2 text-xs font-semibold text-[var(--color-muted-light)]">{question.legalRef}</span>
+                    </p>
+                    {question.help && <p className="mt-1 text-xs leading-relaxed text-[var(--color-muted)]">{question.help}</p>}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    {(["oui", "non", "nsp"] as Answer[]).map((answer) => {
+                      const active = answers[question.id] === answer;
+                      const label = answer === "nsp" ? "Je ne sais pas" : answer === "oui" ? "Oui" : "Non";
+                      return (
+                        <button
+                          key={answer}
+                          type="button"
+                          onClick={() => setAnswers((currentAnswers) => ({ ...currentAnswers, [question.id]: answer }))}
+                          className={`min-h-11 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none ${
+                            active
+                              ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                              : "border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[var(--color-ink)] hover:border-[var(--color-border)]"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  {(["oui", "non", "nsp"] as Answer[]).map((answer) => {
-                    const active = answers[question.id] === answer;
-                    const label = answer === "nsp" ? "Je ne sais pas" : answer === "oui" ? "Oui" : "Non";
-                    return (
-                      <button
-                        key={answer}
-                        type="button"
-                        onClick={() => setAnswers((currentAnswers) => ({ ...currentAnswers, [question.id]: answer }))}
-                        className={`min-h-11 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none ${
-                          active
-                            ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
-                            : "border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-[var(--color-ink)] hover:border-[var(--color-border)]"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       <p className="border-t border-[var(--color-border-subtle)] pt-4 text-xs leading-relaxed text-[var(--color-muted-light)]">
         Résultat indicatif fondé sur vos déclarations. Les pièces exactes et équivalents éventuels dépendent
@@ -149,14 +182,33 @@ export default function Eligibility({ embedded = false }: { embedded?: boolean }
   if (embedded) return content;
 
   return (
-    <PageShell
-      title="Vérificateur d'éligibilité"
-      section="Préparation"
-      lead="Contrôlez les conditions de soumission de l'article 27 du décret n° 2.22.431."
-      width="wide"
-      breadcrumbs={[{ label: "Préparer", to: "/guide" }, { label: "Éligibilité" }]}
-    >
-      {content}
-    </PageShell>
+    <div className="px-3 py-3 sm:px-5 sm:py-4">
+      {/* ─── Header card ──────────────────────────────────────── */}
+      <section className={`mx-auto ${FRAME}`} aria-labelledby="eligibility-title">
+        <div className="px-5 py-7 sm:px-8">
+          <Link
+            to="/guide"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)] transition-colors hover:border-[var(--color-border)] hover:text-[var(--color-primary-strong)]"
+          >
+            <ShieldCheck size={14} aria-hidden="true" />
+            Préparer votre candidature
+          </Link>
+
+          <h1
+            id="eligibility-title"
+            className="mt-4 max-w-2xl text-[clamp(1.7rem,3.4vw,3rem)] font-semibold leading-[1.12] tracking-[0] text-[var(--color-ink)]"
+          >
+            Vérifiez votre <Pill>éligibilité</Pill>.
+          </h1>
+
+          <p className="mt-4 max-w-[42rem] text-base leading-7 text-[var(--color-muted)]">
+            Contrôlez les conditions de soumission de l'article 27 du décret n° 2.22.431.
+          </p>
+        </div>
+      </section>
+
+      {/* ─── Body ─────────────────────────────────────────────── */}
+      <div className="mt-6">{content}</div>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Scrape from "./pages/Scrape";
 import DceCache from "./pages/DceCache";
 import DceExtraction from "./pages/DceExtraction";
+import CronJobs from "./pages/CronJobs";
 import AdminTenders from "./pages/Tenders";
 import AuditLogs from "./pages/AuditLogs";
 import Users from "./pages/Users";
@@ -30,6 +31,7 @@ export default function AdminApp() {
         <Route path="scrape" element={<Scrape />} />
         <Route path="dce-cache" element={<DceCache />} />
         <Route path="dce-extraction" element={<DceExtraction />} />
+        <Route path="cron" element={<CronJobs />} />
         {/* Old combined page — keep the link working. */}
         <Route path="imports" element={<Navigate to="/admin/scrape" replace />} />
         <Route path="tenders" element={<AdminTenders />} />

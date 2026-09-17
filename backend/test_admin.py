@@ -402,6 +402,131 @@ class RoleGuardTest(unittest.TestCase):
         self.assertGreaterEqual(run(_audit_count("user.suspend")), 1)
 
 
+class CronApiTest(unittest.TestCase):
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("owner@x.com", role="owner"))
+        self.owner_headers = _auth(self.owner_id, "owner@x.com")
+
+    def test_list_returns_three_jobs_with_running_flag(self):
+        r = self.client.get("/api/admin/cron", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        jobs = {j["job"]: j for j in r.json()["data"]}
+        self.assertEqual(set(jobs), {"scrape_digest", "dce_cache", "dce_extraction"})
+        self.assertIn("running", jobs["dce_cache"])
+        self.assertIn("next_run_at", jobs["scrape_digest"])
+        self.assertTrue(jobs["scrape_digest"]["enabled"])
+        self.assertFalse(jobs["dce_cache"]["enabled"])
+
+    def test_update_enables_and_audits(self):
+        r = self.client.patch(
+            "/api/admin/cron/dce_cache",
+            headers=self.owner_headers,
+            json={"enabled": True, "schedule_kind": "interval", "interval_minutes": 20},
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["enabled"])
+        self.assertEqual(body["interval_minutes"], 20)
+        self.assertIsNotNone(body["next_run_at"])
+        self.assertGreaterEqual(run(_audit_count("cron.update")), 1)
+
+    def test_update_rejects_bad_interval(self):
+        r = self.client.patch(
+            "/api/admin/cron/dce_cache", headers=self.owner_headers,
+            json={"interval_minutes": 1},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_update_unknown_job_404(self):
+        r = self.client.patch(
+            "/api/admin/cron/bogus", headers=self.owner_headers, json={"enabled": True},
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_run_now_started_and_audited(self):
+        from unittest.mock import patch, AsyncMock
+        with patch("scheduler.run_job", new=AsyncMock(return_value=True)):
+            r = self.client.post("/api/admin/cron/dce_cache/run", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "started")
+        self.assertGreaterEqual(run(_audit_count("cron.run")), 1)
+
+    def test_run_now_conflict_when_busy(self):
+        from unittest.mock import patch, AsyncMock
+        with patch("scheduler.run_job", new=AsyncMock(return_value=False)):
+            r = self.client.post("/api/admin/cron/dce_cache/run", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 409)
+
+    def test_cron_requires_imports_run_permission(self):
+        # auditor has imports.view (can GET) but not imports.run (cannot PATCH).
+        auditor = run(_make_user("auditor@x.com", role="auditor"))
+        headers = _auth(auditor, "auditor@x.com")
+        self.assertEqual(self.client.get("/api/admin/cron", headers=headers).status_code, 200)
+        r = self.client.patch("/api/admin/cron/dce_cache", headers=headers, json={"enabled": True})
+        self.assertEqual(r.status_code, 403)
+
+
+class UserClassificationTest(unittest.TestCase):
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("owner@x.com", role="owner"))
+        self.owner_headers = _auth(self.owner_id, "owner@x.com")
+        self.target = run(_make_user("member@x.com", role="user"))
+
+    def test_users_list_includes_classification_summary(self):
+        r = self.client.get("/api/admin/users", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        rows = {u["email"]: u for u in r.json()["data"]}
+        self.assertIn("classification", rows["member@x.com"])
+        self.assertNotIn("password_hash", rows["member@x.com"])
+        self.assertEqual(rows["member@x.com"]["classification"]["completeness"], 0.0)
+
+    def test_user_detail_returns_profile_and_classification(self):
+        r = self.client.get(f"/api/admin/users/{self.target}", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("profile", body)
+        self.assertIn("classification", body)
+        self.assertNotIn("password_hash", body)
+
+    def test_user_detail_404_for_unknown(self):
+        r = self.client.get("/api/admin/users/999999", headers=self.owner_headers)
+        self.assertEqual(r.status_code, 404)
+
+    def test_admin_override_writes_profile_derives_and_audits(self):
+        r = self.client.patch(
+            f"/api/admin/users/{self.target}/profile",
+            headers=self.owner_headers,
+            json={"legal_form": "sarl", "sectors": ["1.12"], "size_band": "pme"},
+        )
+        self.assertEqual(r.status_code, 200)
+        classification = r.json()["classification"]
+        self.assertEqual(classification["activity_fit"]["categories"], ["Travaux"])
+        self.assertTrue(classification["capacity_scale"]["is_pme"])
+        self.assertGreaterEqual(run(_audit_count("user.profile_edit")), 1)
+
+    def test_admin_override_rejects_invalid_enum(self):
+        r = self.client.patch(
+            f"/api/admin/users/{self.target}/profile",
+            headers=self.owner_headers,
+            json={"legal_form": "wizard"},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_override_requires_edit_permission(self):
+        # auditor has users.view but NOT users.edit_profile.
+        auditor = run(_make_user("auditor@x.com", role="auditor"))
+        r = self.client.patch(
+            f"/api/admin/users/{self.target}/profile",
+            headers=_auth(auditor, "auditor@x.com"),
+            json={"legal_form": "sarl"},
+        )
+        self.assertEqual(r.status_code, 403)
+
+
 class BatchTest(unittest.TestCase):
     def setUp(self):
         run(_reset_db())

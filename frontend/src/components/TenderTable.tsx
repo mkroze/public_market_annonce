@@ -1,8 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import type { Tender } from "../lib/types";
-import { ExternalLink, ArrowUpDown, MapPin, Banknote } from "lucide-react";
+import { ArrowRight, ArrowUpDown, ExternalLink } from "lucide-react";
 import { getTenderUrgency, toTenderPath } from "../lib/tenderUtils";
-import { CATEGORY_COLORS, CATEGORY_FALLBACK } from "../lib/tone";
 import FavoriteButton from "./FavoriteButton";
 
 interface Props {
@@ -14,32 +13,32 @@ interface Props {
   onToggleFavorite?: (id: string) => void;
 }
 
-const URGENCY_STYLES = {
-  expired: { dotClass: "status-dot-expired", textClass: "text-[var(--color-border)]" },
-  critical: { dotClass: "status-dot-pending", textClass: "text-[var(--color-warning)] font-semibold" },
-  warning: { dotClass: "status-dot-pending", textClass: "text-[var(--color-gold)]" },
-  normal: { dotClass: "status-dot-completed", textClass: "text-[var(--color-muted)]" },
+// Pastille douce + point coloré (langage « statut » partagé avec table.png).
+const URGENCY_DOT = {
+  expired: "bg-[var(--color-border)]",
+  critical: "bg-[var(--color-danger)]",
+  warning: "bg-[var(--color-warning)]",
+  normal: "bg-[var(--color-success)]",
 };
 
 export default function TenderTable({ tenders, sort, order, onSort, favoriteIds, onToggleFavorite }: Props) {
   const navigate = useNavigate();
 
-  function SortHeader({ field, label, highlight }: { field: string; label: string; highlight?: boolean }) {
+  function SortHeader({ field, label }: { field: string; label: string }) {
     const active = sort === field;
     return (
-      <th
-        className={`${active && highlight ? "bg-[var(--color-surface-muted)]" : ""}`}
-        aria-sort={active ? (order === "desc" ? "descending" : "ascending") : "none"}
-      >
+      <th aria-sort={active ? (order === "desc" ? "descending" : "ascending") : "none"} scope="col">
         <button
           type="button"
-          className={`flex w-full items-center gap-1 rounded px-1 py-1 text-left transition-colors duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] motion-reduce:transition-none ${active && highlight ? "text-[var(--color-primary)]" : ""}`}
+          className="inline-flex min-h-10 items-center gap-1 rounded-full px-2 text-left transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none"
           onClick={() => onSort(field)}
         >
           {label}
-          {active && (
-            <ArrowUpDown size={11} className={`text-[var(--color-primary)] ${order === "desc" ? "rotate-180" : ""}`} />
-          )}
+          <ArrowUpDown
+            size={13}
+            className={`transition-transform motion-reduce:transition-none ${active ? "opacity-100" : "opacity-35"} ${active && order === "desc" ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
         </button>
       </th>
     );
@@ -47,123 +46,101 @@ export default function TenderTable({ tenders, sort, order, onSort, favoriteIds,
 
   if (tenders.length === 0) {
     return (
-      <div className="text-center py-16 text-[var(--color-muted)]">
-        <p className="font-display text-lg">Aucune consultation trouvée</p>
-        <p className="text-sm mt-1">Modifiez ou réinitialisez vos filtres pour voir plus de résultats.</p>
+      <div className="rounded-[1.6rem] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-5 py-14 text-center shadow-card">
+        <p className="text-base font-semibold text-[var(--color-ink)]">Aucune consultation</p>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">Essayez une autre recherche.</p>
       </div>
     );
   }
 
   return (
-    <div className="institutional-panel overflow-hidden">
-      <p className="lg:hidden px-3 py-1.5 text-xs text-[var(--color-muted)] border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)]">
-        Faites défiler horizontalement pour voir toutes les colonnes →
-      </p>
+    <div className="overflow-hidden rounded-[1.6rem] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card">
       <div className="overflow-x-auto">
-      <table className="table table-sm">
-        <thead>
-          <tr className="bg-[var(--color-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">
-            <SortHeader field="title" label="Objet" />
-            <SortHeader field="entity" label="Entité" />
-            <th>Cat.</th>
-            <th>Secteur</th>
-            <SortHeader field="location" label="Lieu" />
-            <SortHeader field="estimation" label="Estimation" highlight />
-            <SortHeader field="deadline" label="Échéance" />
-            <th>Délai</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {tenders.map((t) => {
-            const urgency = getTenderUrgency(t.deadline);
-            const urgencyStyle = urgency && URGENCY_STYLES[urgency.tone];
-            return (
-              <tr
-                key={t.id}
-                className="cursor-pointer odd:bg-[var(--color-surface)] even:bg-[var(--color-app-bg)] hover:bg-[var(--color-surface-muted)] transition-colors duration-100 motion-reduce:transition-none"
-                onClick={() => navigate(toTenderPath(t.id))}
-              >
-                <td className="max-w-md">
-                  <Link
-                    to={toTenderPath(t.id)}
-                    className="font-medium text-sm leading-tight text-[var(--color-ink)] hover:text-[var(--color-primary)] hover:underline"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {t.title || t.reference}
-                  </Link>
-                  {t.reference && t.title && (
-                    <div className="text-xs text-[var(--color-muted)] mt-0.5 font-sans">
-                      {t.reference}
+        <table className="w-full min-w-[920px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] text-sm font-medium text-[var(--color-muted)]">
+              <SortHeader field="title" label="Consultation" />
+              <SortHeader field="deadline" label="Date" />
+              <SortHeader field="entity" label="Acheteur" />
+              <th scope="col" className="px-4 py-3 font-medium">Statut</th>
+              <th scope="col" className="px-4 py-3 font-medium">Action</th>
+              <th scope="col" className="w-20 px-4 py-3" aria-label="Actions rapides" />
+            </tr>
+          </thead>
+          <tbody>
+            {tenders.map((tender) => {
+              const urgency = getTenderUrgency(tender.deadline);
+              const dot = urgency ? URGENCY_DOT[urgency.tone] : URGENCY_DOT.normal;
+
+              return (
+                <tr
+                  key={tender.id}
+                  className="cursor-pointer border-b border-[var(--color-border-subtle)] transition-colors last:border-b-0 hover:bg-[var(--color-surface-muted)] motion-reduce:transition-none"
+                  onClick={() => navigate(toTenderPath(tender.id))}
+                >
+                  <td className="max-w-[28rem] px-4 py-5">
+                    <Link
+                      to={toTenderPath(tender.id)}
+                      className="block text-base font-semibold leading-snug text-[var(--color-ink)] no-underline hover:text-[var(--color-primary)]"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {tender.title || tender.reference}
+                    </Link>
+                    {tender.reference && tender.title && (
+                      <div className="mt-1 text-sm text-[var(--color-muted)]">{tender.reference}</div>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-5 text-base tabular-nums text-[var(--color-ink)]">
+                    {tender.deadline || "-"}
+                  </td>
+                  <td className="max-w-64 px-4 py-5">
+                    <div className="truncate text-base text-[var(--color-ink)]">{tender.entity || "-"}</div>
+                    <div className="mt-1 truncate text-sm text-[var(--color-muted)]">{tender.location || tender.sector_name || ""}</div>
+                  </td>
+                  <td className="px-4 py-5">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-muted)] px-3 py-1 text-sm font-medium text-[var(--color-ink)]">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
+                      {urgency?.label || tender.status || "Ouvert"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-5">
+                    <Link
+                      to={toTenderPath(tender.id)}
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-border-subtle)] px-4 text-sm font-semibold text-[var(--color-ink)] no-underline transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] motion-reduce:transition-none"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      Détail
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </Link>
+                  </td>
+                  <td className="px-4 py-5">
+                    <div className="flex items-center justify-end gap-1">
+                      {onToggleFavorite && (
+                        <FavoriteButton
+                          active={favoriteIds?.has(tender.id) ?? false}
+                          onToggle={() => onToggleFavorite(tender.id)}
+                          className="btn btn-ghost btn-xs btn-square rounded-full"
+                        />
+                      )}
+                      {tender.detail_url && (
+                        <a
+                          href={tender.detail_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="grid h-9 w-9 place-items-center rounded-full text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] motion-reduce:transition-none"
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="Voir sur le portail"
+                        >
+                          <ExternalLink size={15} aria-hidden="true" />
+                        </a>
+                      )}
                     </div>
-                  )}
-                </td>
-                <td className="text-sm max-w-48 truncate text-[var(--color-ink)]">{t.entity}</td>
-                <td>
-                  {t.category && (
-                    <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded ${CATEGORY_COLORS[t.category] || CATEGORY_FALLBACK}`}>
-                      {t.category}
-                    </span>
-                  )}
-                </td>
-                <td className="text-xs max-w-40 truncate text-[var(--color-muted)]">{t.sector_name}</td>
-                <td className="text-sm max-w-32 truncate">
-                  {t.location && (
-                    <span className="flex items-center gap-1 text-[var(--color-muted)]">
-                      <MapPin size={12} className="shrink-0" />
-                      {t.location}
-                    </span>
-                  )}
-                </td>
-                <td className={`text-sm whitespace-nowrap tabular-nums ${t.estimation ? "font-semibold text-[var(--color-ink)]" : "text-[var(--color-border)]"}`}>
-                  {t.estimation ? (
-                    <span className="flex items-center gap-1">
-                      <Banknote size={13} className="text-[var(--color-gold)] shrink-0" />
-                      {t.estimation}
-                    </span>
-                  ) : (
-                    <span className="text-xs">—</span>
-                  )}
-                </td>
-                <td className="text-sm whitespace-nowrap tabular-nums text-[var(--color-ink)]">
-                  {t.deadline}
-                </td>
-                <td>
-                  {urgency && urgencyStyle && (
-                    <span className={`flex items-center gap-1.5 text-xs ${urgencyStyle.textClass}`}>
-                      <span className={`status-dot ${urgencyStyle.dotClass}`}></span>
-                      {urgency.label}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <div className="flex items-center gap-0.5">
-                    {onToggleFavorite && (
-                      <FavoriteButton
-                        active={favoriteIds?.has(t.id) ?? false}
-                        onToggle={() => onToggleFavorite(t.id)}
-                        className="btn btn-ghost btn-xs btn-square"
-                      />
-                    )}
-                    {t.detail_url && (
-                      <a
-                        href={t.detail_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-ghost btn-xs btn-square text-[var(--color-muted)]"
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label="Voir sur le portail"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

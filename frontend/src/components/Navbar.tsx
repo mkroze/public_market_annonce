@@ -1,8 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, LogIn, LogOut, UserRound, Bell, ShieldCheck, Settings, Scale, BarChart3 } from "lucide-react";
+import { BarChart3, Bell, LogIn, LogOut, Menu, Scale, Search, Settings, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { isAdminRole } from "../admin/permissions";
-import MotionToggle from "./MotionToggle";
 import logoFull from "../assets/logo-full.svg";
 
 export default function Navbar() {
@@ -22,164 +21,96 @@ export default function Navbar() {
     { to: "/alerts", label: "Alertes", icon: Bell, public: false },
   ].filter((link) => link.public || user);
 
-  // Lien réservé : n'apparaît que pour un compte administrateur connecté.
-  // Le rôle est re-vérifié côté backend à chaque requête ; ceci ne gate que l'UI.
   const isAdmin = isAdminRole(user?.role);
-
-  const isActive = (path: string) =>
-    path === "/" ? pathname === "/" : pathname.startsWith(path);
+  const isActive = (path: string) => (path === "/" ? pathname === "/" : pathname.startsWith(path));
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[color-mix(in_srgb,var(--color-border-subtle)_60%,transparent)] bg-[var(--color-surface)]/75 shadow-card backdrop-blur-xl">
-      {/* Top bar — brand + auth */}
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
-        <Link to="/tenders" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:gap-2.5">
-          <img
-            src={logoFull}
-            alt="Marchés Publics Maroc"
-            className="h-5 w-auto max-w-[160px] min-w-0 shrink sm:h-6 sm:max-w-[210px]"
-          />
+    <header className="sticky top-0 z-50 bg-transparent px-3 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3">
+        <Link to="/" className="flex h-11 min-w-0 items-center no-underline" aria-label="Marchés Publics Maroc">
+          <img src={logoFull} alt="" className="h-5 w-auto max-w-[9rem] shrink sm:h-6 sm:max-w-[12rem]" aria-hidden="true" />
         </Link>
 
-        <nav className="ml-6 hidden flex-1 items-center gap-1 md:flex" aria-label="Navigation principale">
-          {navLinks.map((l) => {
-            const active = isActive(l.to);
+        {/* Floating glass "dock" — a white-tinted frosted pill (slightly visible),
+            with blue tab labels; icons are white and shift to yellow on the active
+            tab, which is marked by a soft white fill (flat, no elevation). */}
+        <nav
+          aria-label="Navigation principale"
+          className="hidden items-center gap-1 rounded-full border border-white/15 bg-primary/10 p-1.5 shadow-[0_20px_44px_-26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-xl md:flex"
+        >
+          {navLinks.map((link) => {
+            const active = isActive(link.to);
             return (
               <Link
-                key={l.to}
-                to={l.to}
-                className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all motion-reduce:transition-none ${
+                key={link.to}
+                to={link.to}
+                aria-current={active ? "page" : undefined}
+                className={`group inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[var(--color-neutral)] no-underline transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-warning)] motion-reduce:transition-none ${
                   active
-                    ? "bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-primary)_18%,transparent)]"
-                    : "text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
+                    ? "bg-white/30"
+                    : "hover:bg-white/15"
                 }`}
+                title={link.label}
               >
-                <l.icon size={14} />
-                {l.label}
+                <link.icon size={17} aria-hidden="true" className={active ? "text-[var(--color-warning)]" : "text-primary/80"} />
+                {link.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <MotionToggle className="hidden sm:inline-grid" />
-          {/* Auth — desktop */}
+        <div className="flex shrink-0 items-center gap-2">
           {user ? (
             <div className="dropdown dropdown-end hidden md:block">
-              <div
+              <button
+                type="button"
                 tabIndex={0}
-                role="button"
-                className="btn btn-ghost btn-sm gap-1.5 normal-case font-sans"
+                className="grid h-11 w-11 place-items-center overflow-hidden rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-card transition-transform hover:-translate-y-0.5 motion-reduce:transition-none"
                 aria-label="Mon compte"
               >
-                <UserRound size={16} />
-                <span className="max-w-[10rem] truncate">{user.name || user.email}</span>
-              </div>
+                <UserRound size={18} aria-hidden="true" />
+              </button>
               <ul
                 tabIndex={0}
-                className="dropdown-content menu bg-[var(--color-ivory)] border border-[var(--color-border-subtle)] rounded w-56 p-1.5 mt-2 shadow-sm z-50"
+                className="dropdown-content menu z-50 mt-2 w-60 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2 shadow-pop"
               >
-                <li className="px-2 py-1.5 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
-                  {user.email}
-                </li>
-                <li>
-                  <Link to="/member/overview" className="text-sm">
-                    <UserRound size={14} />
-                    Espace membre
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/member/account" className="text-sm">
-                    <Settings size={14} />
-                    Profil & préférences
-                  </Link>
-                </li>
-                {isAdmin && (
-                  <li>
-                    <Link to="/admin" className="text-sm font-semibold text-[var(--color-crimson)]">
-                      <ShieldCheck size={14} />
-                      Espace admin
-                    </Link>
-                  </li>
-                )}
-                <li>
-                  <button type="button" onClick={handleLogout} className="text-sm">
-                    <LogOut size={14} />
-                    Se déconnecter
-                  </button>
-                </li>
+                <li className="px-3 py-2 text-xs text-[var(--color-muted)] pointer-events-none truncate">{user.email}</li>
+                <li><Link to="/member/overview"><UserRound size={14} />Espace membre</Link></li>
+                <li><Link to="/member/account"><Settings size={14} />Profil</Link></li>
+                {isAdmin && <li><Link to="/admin"><ShieldCheck size={14} />Admin</Link></li>}
+                <li><button type="button" onClick={handleLogout}><LogOut size={14} />Déconnexion</button></li>
               </ul>
             </div>
           ) : (
-            <Link to="/login" className="hidden md:inline-flex btn btn-primary btn-sm gap-1.5 normal-case font-sans">
-              <LogIn size={15} />
+            <Link to="/login" className="hidden h-11 items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-on-primary)] no-underline shadow-[0_14px_34px_-24px_rgba(0,35,111,0.8)] transition-transform hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] md:inline-flex motion-reduce:transition-none">
+              <LogIn size={16} className="text-[var(--color-warning)]" aria-hidden="true" />
               Se connecter
             </Link>
           )}
 
-          {/* Mobile menu */}
           <div className="dropdown dropdown-end md:hidden">
-            <div tabIndex={0} role="button" className="btn btn-ghost btn-sm btn-square">
-              <Menu size={18} />
-            </div>
-            <ul
-              tabIndex={0}
-              className="dropdown-content menu bg-[var(--color-ivory)] border border-[var(--color-border-subtle)] rounded w-56 p-1.5 mt-2 shadow-sm z-50"
-            >
-              {navLinks.map((l) => (
-                <li key={l.to}>
-                  <Link
-                    to={l.to}
-                    className={`text-sm ${isActive(l.to) ? "font-semibold text-[var(--color-primary)]" : ""}`}
-                  >
-                    <l.icon size={14} />
-                    {l.label}
+            <button tabIndex={0} type="button" className="grid h-11 w-11 place-items-center rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card" aria-label="Menu">
+              <Menu size={18} aria-hidden="true" />
+            </button>
+            <ul tabIndex={0} className="dropdown-content menu z-50 mt-2 w-60 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2 shadow-pop">
+              {navLinks.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className={isActive(link.to) ? "font-semibold text-[var(--color-primary)]" : ""}>
+                    <link.icon size={14} />
+                    {link.label}
                   </Link>
                 </li>
               ))}
               <li className="my-1 border-t border-[var(--color-border-subtle)]" aria-hidden="true"></li>
               {user ? (
                 <>
-                  <li className="px-2 py-1 text-xs text-[var(--color-slate)] font-sans truncate pointer-events-none">
-                    {user.email}
-                  </li>
-                  <li>
-                    <Link to="/member/overview" className="text-sm">
-                      <UserRound size={14} />
-                      Espace membre
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/account" className="text-sm">
-                      <Settings size={14} />
-                      Profil & préférences
-                    </Link>
-                  </li>
-                  {isAdmin && (
-                    <li>
-                      <Link to="/admin" className="text-sm font-semibold text-[var(--color-crimson)]">
-                        <ShieldCheck size={14} />
-                        Espace admin
-                      </Link>
-                    </li>
-                  )}
-                  <li>
-                    <button type="button" onClick={handleLogout} className="text-sm">
-                      <LogOut size={14} />
-                      Se déconnecter
-                    </button>
-                  </li>
+                  <li><Link to="/member/overview"><UserRound size={14} />Espace membre</Link></li>
+                  <li><Link to="/member/account"><Settings size={14} />Profil</Link></li>
+                  {isAdmin && <li><Link to="/admin"><ShieldCheck size={14} />Admin</Link></li>}
+                  <li><button type="button" onClick={handleLogout}><LogOut size={14} />Déconnexion</button></li>
                 </>
               ) : (
-                <li>
-                  <Link
-                    to="/login"
-                    className={`text-sm ${isActive("/login") ? "font-semibold text-[var(--color-primary)]" : ""}`}
-                  >
-                    <LogIn size={14} />
-                    Se connecter
-                  </Link>
-                </li>
+                <li><Link to="/login"><LogIn size={14} />Se connecter</Link></li>
               )}
             </ul>
           </div>

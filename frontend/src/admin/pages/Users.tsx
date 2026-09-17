@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { ShieldX, ShieldCheck } from "lucide-react";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { ShieldX, ShieldCheck, ChevronRight, ChevronDown } from "lucide-react";
 import { getUsers, setUserStatus, setUserRole, ApiError } from "../api";
 import type { AdminUser } from "../types";
 import { useAuth } from "../../lib/auth";
@@ -10,6 +10,14 @@ import { UserStatusBadge, RoleBadge } from "../components/StatusBadge";
 import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
 import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
+import UserClassificationDetail from "../components/UserClassificationDetail";
+
+const VERDICT_LABEL: Record<string, { label: string; cls: string }> = {
+  clear: { label: "Clear", cls: "text-[var(--color-emerald,#047857)]" },
+  risk: { label: "À clarifier", cls: "text-[var(--color-gold)]" },
+  blocked: { label: "Exclusion", cls: "text-[var(--color-crimson)]" },
+  unknown: { label: "—", cls: "text-[var(--color-slate)]" },
+};
 
 const ROLES = ["user", "support", "auditor", "operator", "admin", "owner"];
 
@@ -23,9 +31,11 @@ export default function Users() {
   const [statusFilter, setStatusFilter] = useState("");
   const [q, setQ] = useState("");
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const canManageRole = can(user?.role, "users.manage_role");
   const canSuspend = can(user?.role, "users.suspend");
+  const canEditProfile = can(user?.role, "users.edit_profile");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -130,6 +140,7 @@ export default function Users() {
               <thead>
                 <tr className="text-left text-[var(--color-slate)] border-b border-[var(--color-border-subtle)]">
                   <th scope="col" className="px-4 py-2 font-medium">User</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Éligibilité</th>
                   <th scope="col" className="px-4 py-2 font-medium">Role</th>
                   <th scope="col" className="px-4 py-2 font-medium">Status</th>
                   <th scope="col" className="px-4 py-2 font-medium">MFA</th>
@@ -141,11 +152,35 @@ export default function Users() {
               <tbody>
                 {users.map((u) => {
                   const isSelf = u.id === user?.id;
+                  const cls = u.classification;
+                  const expanded = expandedId === u.id;
+                  const verdict = VERDICT_LABEL[cls?.standing_verdict ?? "unknown"] ?? VERDICT_LABEL.unknown;
+                  const pct = Math.round((cls?.completeness ?? 0) * 100);
                   return (
-                    <tr key={u.id} className="border-b border-[var(--color-border-subtle)] last:border-0 hover:bg-[var(--color-ivory-dim)]/40">
+                    <Fragment key={u.id}>
+                    <tr className="border-b border-[var(--color-border-subtle)] last:border-0 hover:bg-[var(--color-ivory-dim)]/40">
                       <td className="px-4 py-2">
                         <div className="text-[var(--color-charcoal)] font-medium">{u.email}{isSelf && <span className="text-xs text-[var(--color-slate)]"> (you)</span>}</div>
                         <div className="text-xs text-[var(--color-slate)]">{u.name || "—"}{u.company ? ` · ${u.company}` : ""}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : u.id)}
+                          aria-expanded={expanded}
+                          className="flex items-center gap-1.5 text-left rounded hover:text-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)]"
+                          title="Voir / corriger la classification d'éligibilité"
+                        >
+                          {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />}
+                          <span className="min-w-0">
+                            <span className="block text-[var(--color-charcoal)]">
+                              {pct}%{cls?.is_pme ? " · PME" : ""}
+                            </span>
+                            <span className={`block text-xs ${verdict.cls}`}>
+                              {cls?.categories?.length ? cls.categories.join(", ") : "non renseigné"}
+                            </span>
+                          </span>
+                        </button>
                       </td>
                       <td className="px-4 py-2">
                         {canManageRole && !isSelf ? (
@@ -180,6 +215,14 @@ export default function Users() {
                         </button>
                       </td>
                     </tr>
+                    {expanded && (
+                      <tr>
+                        <td colSpan={8} className="p-0">
+                          <UserClassificationDetail userId={u.id} canEdit={canEditProfile} onChanged={load} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

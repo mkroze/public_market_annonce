@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LockKeyhole, Inbox, SearchX } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  BriefcaseBusiness,
+  Building2,
+  Hammer,
+  Inbox,
+  Laptop,
+  Layers,
+  Package,
+  Scale,
+  SearchX,
+  X,
+} from "lucide-react";
 import {
   getTenders,
   exportTenders,
@@ -12,11 +25,9 @@ import {
 import type { TenderListResponse, TenderFilters } from "../lib/types";
 import FilterBar from "../components/FilterBar";
 import TenderCard from "../components/TenderCard";
-import TenderTable from "../components/TenderTable";
 import Pagination from "../components/Pagination";
 import ExportDropdown from "../components/ExportDropdown";
 import ToastContainer, { createToast, type ToastData } from "../components/Toast";
-import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import { getTenderUrgency } from "../lib/tenderUtils";
 import { useAuth } from "../lib/auth";
@@ -28,30 +39,82 @@ const STATUS_SEGMENTS = [
   { key: "all", label: "Toutes", filters: { status: "" } },
 ] as const;
 
-function SummaryTile({
-  label,
-  value,
-  tone = "primary",
+const CATEGORY_TILES = [
+  { label: "Travaux", icon: Hammer },
+  { label: "Fournitures", icon: Package },
+  { label: "Services", icon: BriefcaseBusiness },
+  { label: "Informatique", icon: Laptop },
+  { label: "Architecture", icon: Building2 },
+  { label: "Conseil", icon: Scale },
+] as const;
+
+const SORT_OPTIONS = [
+  { value: "deadline", label: "Date limite" },
+  { value: "publication_date", label: "Publication" },
+  { value: "estimation", label: "Estimation" },
+  { value: "entity", label: "Acheteur" },
+  { value: "location", label: "Localisation" },
+  { value: "title", label: "Objet" },
+  { value: "scraped_at", label: "Import" },
+];
+
+const FILTER_LABELS: Partial<Record<keyof TenderFilters, string>> = {
+  q: "Recherche",
+  sector: "Domaine",
+  entity: "Acheteur",
+  location: "Ville",
+  procedure_type: "Procédure",
+};
+
+// Chip keys shown as removable tokens. Category and status are represented by
+// the toolbar rail/segments, so they are intentionally excluded here.
+const CHIP_KEYS: (keyof TenderFilters)[] = ["q", "sector", "entity", "location", "procedure_type"];
+
+/** Compact horizontal category filter — navy active state, gold accent icon,
+ *  scrolls on narrow screens. Replaces the old oversized gradient tiles. */
+function CategoryStrip({
+  activeCategory,
+  onSelect,
 }: {
-  label: string;
-  value: number | string;
-  tone?: "primary" | "warning" | "neutral";
+  activeCategory?: string;
+  onSelect: (category: string) => void;
 }) {
-  const dot =
-    tone === "warning"
-      ? "bg-[var(--color-warning)]"
-      : tone === "neutral"
-        ? "bg-[var(--color-border)]"
-        : "bg-[var(--color-primary)]";
+  const chipClass = (active: boolean) =>
+    `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-warning)] motion-reduce:transition-none ${
+      active
+        ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+        : "border-[var(--color-border-subtle)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+    }`;
 
   return (
-    <div className="hover-lift institutional-panel px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--color-muted)]">
-        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-bold tabular-nums text-[var(--color-ink)]">{value}</div>
-    </div>
+    <nav aria-label="Types de marchés" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <button
+        type="button"
+        aria-pressed={!activeCategory}
+        aria-label="Tous les types de marchés"
+        className={chipClass(!activeCategory)}
+        onClick={() => onSelect("")}
+      >
+        <Layers size={15} className={!activeCategory ? "text-[var(--color-warning)]" : ""} aria-hidden="true" />
+        Toutes
+      </button>
+      {CATEGORY_TILES.map((tile) => {
+        const active = activeCategory === tile.label;
+        return (
+          <button
+            key={tile.label}
+            type="button"
+            aria-pressed={active}
+            aria-label={`Filtrer par ${tile.label}`}
+            className={chipClass(active)}
+            onClick={() => onSelect(active ? "" : tile.label)}
+          >
+            <tile.icon size={15} className={active ? "text-[var(--color-warning)]" : ""} aria-hidden="true" />
+            {tile.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -125,7 +188,7 @@ export default function Tenders() {
       if (wasFavorite) await removeFavorite(id);
       else await addFavorite(id);
       addToast(
-        wasFavorite ? "Retiré de vos consultations suivies." : "Ajouté à vos consultations suivies.",
+        wasFavorite ? "Retiré de vos consultations suivies." : "Ajouté à vos onsultations suivies.",
         "success",
       );
     } catch {
@@ -195,10 +258,6 @@ export default function Tenders() {
   }, [filters]);
 
   const urgentSegmentActive = searchParams.get("urgent") === "true" && filters.status === "en_cours";
-  const viewMode = searchParams.get("view") === "expert" ? "expert" : "guided";
-
-  // Un résultat vide « à cause des filtres » n'est pas un catalogue vide : on
-  // distingue les deux pour proposer la bonne action (réinitialiser vs patienter).
   const filtersActive =
     Boolean(
       filters.q ||
@@ -211,21 +270,17 @@ export default function Tenders() {
     filters.status !== "en_cours" ||
     urgentSegmentActive;
 
-  function setViewMode(mode: "guided" | "expert") {
-    const params = new URLSearchParams(searchParams);
-    params.set("view", mode);
-    setSearchParams(params);
-  }
-
   function resetFilters() {
-    const params = new URLSearchParams();
-    params.set("view", viewMode);
-    setSearchParams(params);
+    setSearchParams(new URLSearchParams());
   }
 
   function updateFilters(newFilters: Partial<TenderFilters>, keepUrgent = urgentSegmentActive) {
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([k, v]) => {
+      if (k === "status" && v === "") {
+        params.set(k, "");
+        return;
+      }
       if (v === undefined || v === null || v === "") return;
       if (k === "page" && Number(v) <= 1) return;
       if (k === "per_page" && Number(v) === 20) return;
@@ -234,20 +289,23 @@ export default function Tenders() {
       params.set(k, String(v));
     });
     if (keepUrgent && newFilters.status === "en_cours") params.set("urgent", "true");
-    params.set("view", viewMode);
     setSearchParams(params);
   }
 
-  function selectStatusSegment(segment: (typeof STATUS_SEGMENTS)[number]) {
-    updateFilters(
-      { ...filters, ...segment.filters, page: 1 },
-      segment.key === "urgent",
-    );
+  function selectCategory(category: string) {
+    updateFilters({ ...filters, category, sector: "", page: 1 });
   }
 
-  function handleSort(field: string) {
-    const newOrder = filters.sort === field && filters.order === "asc" ? "desc" : "asc";
-    updateFilters({ ...filters, sort: field, order: newOrder, page: 1 });
+  function selectStatusSegment(segment: (typeof STATUS_SEGMENTS)[number]) {
+    updateFilters({ ...filters, ...segment.filters, page: 1 }, segment.key === "urgent");
+  }
+
+  function changeSort(sort: string) {
+    updateFilters({ ...filters, sort, page: 1 });
+  }
+
+  function toggleOrder() {
+    updateFilters({ ...filters, order: (filters.order || "asc") === "asc" ? "desc" : "asc", page: 1 });
   }
 
   async function handleExport(format: "csv" | "excel" | "json") {
@@ -261,243 +319,271 @@ export default function Tenders() {
     }
   }
 
-  const displayedTenders = useMemo(
-    () =>
-      urgentSegmentActive
-        ? result?.data.filter((tender) => getTenderUrgency(tender.deadline)?.tone === "critical") || []
-        : result?.data || [],
-    [result, urgentSegmentActive],
-  );
+  // Hide stale expired consultations when browsing the default "En cours" view,
+  // and narrow to critical deadlines for the "Urgentes" segment.
+  const hideExpired = filters.status === "en_cours";
+  const displayedTenders = useMemo(() => {
+    let list = result?.data ?? [];
+    if (hideExpired) list = list.filter((tender) => !getTenderUrgency(tender.deadline)?.expired);
+    if (urgentSegmentActive) list = list.filter((tender) => getTenderUrgency(tender.deadline)?.tone === "critical");
+    return list;
+  }, [result, hideExpired, urgentSegmentActive]);
 
-  const pageSummary = useMemo(() => {
-    const tenders = result?.data || [];
-    const active = tenders.filter((tender) => tender.status === "en_cours").length;
-    const urgent = tenders.filter((tender) => getTenderUrgency(tender.deadline)?.tone === "critical").length;
-    const expired = tenders.filter((tender) => tender.status === "cloture").length;
-    return { active, urgent, expired, shown: displayedTenders.length };
-  }, [result, displayedTenders.length]);
-
-  // Catalogue réellement vide (aucune donnée, aucun filtre) : on masque tout le
-  // cockpit (stats à zéro, bandeau, onglets, filtres) pour une page calme.
   const catalogEmpty = Boolean(result) && !loading && !error && result!.total === 0 && !filtersActive;
 
+  const activeChips = useMemo(
+    () =>
+      CHIP_KEYS.map((key) => ({ key, value: filters[key] })).filter(
+        (item): item is { key: keyof TenderFilters; value: string } =>
+          item.value !== undefined && item.value !== null && String(item.value) !== "",
+      ),
+    [filters],
+  );
+
+  function removeFilter(key: keyof TenderFilters) {
+    updateFilters({ ...filters, [key]: "", page: 1 } as Partial<TenderFilters>);
+  }
+
+  const resultCount =
+    result && !loading ? (urgentSegmentActive ? displayedTenders.length : result.total) : null;
+
+  const showActions = Boolean(result) && !loading && !error && result!.total > 0 && Boolean(user);
+
   return (
-    <div className="px-4 py-6 sm:px-6 sm:py-8 space-y-5">
-      <Breadcrumbs items={[{ label: "Consultations" }]} />
-
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
-            Marchés publics
-          </p>
-          <h1 className="mt-1 text-3xl font-bold leading-tight text-[var(--color-ink)]">Consultations</h1>
-          {result && !loading && !catalogEmpty && (
-            <p className="mt-1 text-sm text-[var(--color-muted)] tabular-nums">
-              {urgentSegmentActive
-                ? `${displayedTenders.length} consultation${displayedTenders.length !== 1 ? "s" : ""} urgente${displayedTenders.length !== 1 ? "s" : ""} sur cette page`
-                : `${result.total.toLocaleString("fr-FR")} résultats`}
-            </p>
-          )}
-        </div>
-        {result && !loading && result.total > 0 && (
-          user ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {filtersActive && (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm font-sans font-semibold"
-                  onClick={() => setSaveOpen((v) => !v)}
-                >
-                  Enregistrer cette recherche
-                </button>
-              )}
-              {filtersActive && (
-                <Link
-                  to={`/alerts?${searchParams.toString()}`}
-                  className="btn btn-outline btn-sm font-sans font-semibold"
-                >
-                  Créer une alerte
-                </Link>
-              )}
-              <ExportDropdown total={result.total} onExport={handleExport} />
+    <div className="px-4 pb-8 pt-5 sm:px-6 sm:pt-7">
+      <div className="mx-auto max-w-[1440px] space-y-6">
+        {user && saveOpen && filtersActive && (
+          <div className="rounded-[1.4rem] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-4 py-3 shadow-card sm:flex sm:items-end sm:gap-3">
+            <div className="flex-1">
+              <label htmlFor="save-search-name" className="text-xs font-semibold text-[var(--color-muted)]">
+                Nom de la recherche
+              </label>
+              <input
+                id="save-search-name"
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Ex. Travaux électriques à Casablanca"
+                className="mt-1 h-11 w-full rounded-full border border-[var(--color-border-subtle)] bg-white px-4 text-sm outline-none focus:border-[var(--color-primary)]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveSearch();
+                }}
+              />
             </div>
-          ) : (
-            <Link
-              to="/login"
-              state={{ from: "/tenders" }}
-              className="btn btn-outline btn-sm gap-1.5 normal-case font-sans"
-            >
-              <LockKeyhole size={14} />
-              Exporter après connexion
-            </Link>
-          )
-        )}
-      </section>
-
-      {user && saveOpen && filtersActive && (
-        <div className="institutional-panel flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label htmlFor="save-search-name" className="text-xs font-semibold text-[var(--color-muted)]">
-              Nom de la recherche
-            </label>
-            <input
-              id="save-search-name"
-              type="text"
-              value={saveName}
-              onChange={(e) => setSaveName(e.target.value)}
-              placeholder="Ex. Travaux électriques à Casablanca"
-              className="input input-sm input-bordered mt-1 w-full"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveSearch();
-              }}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={savingSearch || !saveName.trim()}
-              onClick={handleSaveSearch}
-            >
-              Enregistrer
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setSaveOpen(false);
-                setSaveName("");
-              }}
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {result && !loading && !catalogEmpty && (
-        <section className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryTile label="Sur cette page" value={pageSummary.shown} />
-          <SummaryTile label="En cours" value={pageSummary.active} />
-          <SummaryTile label="Urgentes" value={pageSummary.urgent} tone="warning" />
-          <SummaryTile label="Expirées" value={pageSummary.expired} tone="neutral" />
-        </section>
-      )}
-
-      {!catalogEmpty && (
-      <>
-      <div className="institutional-panel px-4 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-ink)]">Comparez les opportunités avant d'ouvrir le détail.</p>
-            <p className="text-xs text-[var(--color-muted)]">La vue guidée met en avant le délai, le lieu, le budget et les points à vérifier.</p>
-          </div>
-          <div className="join">
-            <button type="button" aria-pressed={viewMode === "guided"} className={`btn join-item btn-sm rounded ${viewMode === "guided" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("guided")}>Guidée</button>
-            <button type="button" aria-pressed={viewMode === "expert"} className={`btn join-item btn-sm rounded ${viewMode === "expert" ? "btn-primary" : "btn-ghost"}`} onClick={() => setViewMode("expert")}>Tableau</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2" aria-label="Statut des consultations">
-        {STATUS_SEGMENTS.map((segment) => {
-          const active =
-            segment.key === "urgent"
-              ? urgentSegmentActive
-              : segment.key === "active"
-                ? filters.status === "en_cours" && !urgentSegmentActive
-                : filters.status === segment.filters.status && !urgentSegmentActive;
-          return (
-            <button
-              key={segment.key}
-              type="button"
-              aria-pressed={active}
-              className={`rounded-full px-4 py-1.5 font-sans text-sm font-semibold transition-all motion-reduce:transition-none ${
-                active
-                  ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-card"
-                  : "bg-[var(--color-surface)] text-[var(--color-muted)] ring-1 ring-[color-mix(in_srgb,var(--color-border-subtle)_70%,transparent)] hover:text-[var(--color-ink)] hover:ring-[var(--color-primary)]"
-              }`}
-              onClick={() => selectStatusSegment(segment)}
-            >
-              {segment.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <FilterBar filters={filters} onChange={updateFilters} />
-      </>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      ) : error ? (
-        <div className="border border-[var(--color-danger)] border-l-4 rounded-lg px-4 py-3">
-          <p className="font-sans text-sm text-[var(--color-ink)]">{error}</p>
-          <button className="btn btn-sm btn-primary mt-3" onClick={() => updateFilters({ ...filters })}>
-            Réessayer
-          </button>
-        </div>
-      ) : result && displayedTenders.length === 0 ? (
-        filtersActive ? (
-          <EmptyState
-            icon={SearchX}
-            title="Aucune consultation ne correspond à vos critères."
-            description="Élargissez ou réinitialisez vos filtres pour voir plus de résultats."
-            action={
-              <button className="btn btn-sm btn-primary" onClick={resetFilters}>
-                Réinitialiser les filtres
+            <div className="mt-3 flex gap-2 sm:mt-0">
+              <button
+                type="button"
+                className="h-11 rounded-full bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-on-primary)] disabled:opacity-40"
+                disabled={savingSearch || !saveName.trim()}
+                onClick={handleSaveSearch}
+              >
+                Enregistrer
               </button>
-            }
-          />
-        ) : (
-          <EmptyState
-            size="md"
-            icon={Inbox}
-            title="Aucune consultation disponible pour le moment."
-            description="De nouvelles consultations sont ajoutées régulièrement. Revenez bientôt."
-          />
-        )
-      ) : result ? (
-        <>
-          {viewMode === "guided" ? (
-            <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-4">
-              {displayedTenders.map((tender) => (
-                <TenderCard
-                  key={tender.id}
-                  tender={tender}
-                  compact
-                  isFavorite={favoriteIds.has(tender.id)}
-                  onToggleFavorite={toggleFavorite}
-                />
-              ))}
+              <button
+                type="button"
+                className="h-11 rounded-full px-4 text-sm font-medium text-[var(--color-muted)]"
+                onClick={() => {
+                  setSaveOpen(false);
+                  setSaveName("");
+                }}
+              >
+                Annuler
+              </button>
             </div>
-          ) : (
-            <TenderTable
-              tenders={displayedTenders}
-              sort={filters.sort || "deadline"}
-              order={filters.order || "asc"}
-              onSort={handleSort}
-              favoriteIds={favoriteIds}
-              onToggleFavorite={toggleFavorite}
-            />
-          )}
-          {/* La segmentation « Urgentes » filtre la page courante côté client :
-              paginer n'aurait pas de sens, on la masque dans ce mode. */}
-          {!urgentSegmentActive && (
-            <Pagination
-              page={result.page}
-              pages={result.pages}
-              total={result.total}
-              onPageChange={(p) => updateFilters({ ...filters, page: p })}
-            />
-          )}
-        </>
-      ) : null}
+          </div>
+        )}
 
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        {!catalogEmpty && (
+          <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[18rem_minmax(0,1fr)]">
+            <FilterBar filters={filters} onChange={updateFilters} />
+
+            <section aria-label="Consultations" className="min-w-0 space-y-5">
+              {/* Title + actions — shifted alongside the filter panel */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h1 className="text-2xl font-semibold leading-tight tracking-[0] text-[var(--color-ink)] sm:text-3xl">
+                  {resultCount === null
+                    ? "Consultations"
+                    : `${resultCount.toLocaleString("fr-FR")} consultation${resultCount !== 1 ? "s" : ""} trouvée${resultCount !== 1 ? "s" : ""}`}
+                </h1>
+
+                {showActions && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {filtersActive && (
+                      <button
+                        type="button"
+                        className="h-10 rounded-full border border-[var(--color-border-subtle)] px-4 text-sm font-semibold text-[var(--color-ink)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                        onClick={() => setSaveOpen((value) => !value)}
+                      >
+                        Enregistrer
+                      </button>
+                    )}
+                    {filtersActive && (
+                      <Link
+                        to={`/alerts?${searchParams.toString()}`}
+                        className="inline-flex h-10 items-center rounded-full border border-[var(--color-border-subtle)] px-4 text-sm font-semibold text-[var(--color-ink)] no-underline transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                      >
+                        Créer une alerte
+                      </Link>
+                    )}
+                    <ExportDropdown total={result!.total} onExport={handleExport} />
+                  </div>
+                )}
+              </div>
+
+              {/* Badges toolbar — shifted alongside the filter panel */}
+              <div className="space-y-3 border-b border-[var(--color-border-subtle)] pb-4">
+                <CategoryStrip activeCategory={filters.category} onSelect={selectCategory} />
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  {/* Status segments */}
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Statut des consultations">
+                    {STATUS_SEGMENTS.map((segment) => {
+                      const active =
+                        segment.key === "urgent"
+                          ? urgentSegmentActive
+                          : segment.key === "active"
+                            ? filters.status === "en_cours" && !urgentSegmentActive
+                            : filters.status === segment.filters.status && !urgentSegmentActive;
+                      return (
+                        <button
+                          key={segment.key}
+                          type="button"
+                          aria-pressed={active}
+                          aria-label={`Statut ${segment.label}`}
+                          className={`inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-warning)] motion-reduce:transition-none ${
+                            active
+                              ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                              : "border-[var(--color-border-subtle)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                          }`}
+                          onClick={() => selectStatusSegment(segment)}
+                        >
+                          {segment.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Sort + direction */}
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
+                      <span className="hidden sm:inline">Trier par</span>
+                      <select
+                        className="h-9 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3.5 text-sm font-medium text-[var(--color-ink)] outline-none transition-colors hover:border-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                        value={filters.sort || "deadline"}
+                        onChange={(event) => changeSort(event.target.value)}
+                        aria-label="Trier par"
+                      >
+                        {SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={toggleOrder}
+                      className="grid h-9 w-9 place-items-center rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] text-[var(--color-ink)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-warning)]"
+                      aria-label={(filters.order || "asc") === "asc" ? "Ordre ascendant" : "Ordre descendant"}
+                      title={(filters.order || "asc") === "asc" ? "Croissant" : "Décroissant"}
+                    >
+                      {(filters.order || "asc") === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active filter chips */}
+                {activeChips.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeChips.map(({ key, value }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-3 text-xs font-medium text-[var(--color-ink)] transition-colors hover:border-[var(--color-primary)] motion-reduce:transition-none"
+                        onClick={() => removeFilter(key)}
+                        aria-label={`Retirer le filtre ${FILTER_LABELS[key]}`}
+                      >
+                        <span className="text-[var(--color-muted)]">{FILTER_LABELS[key]} :</span>
+                        {String(value)}
+                        <X size={13} aria-hidden="true" />
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="h-8 rounded-full px-2.5 text-xs font-semibold text-[var(--color-ink)] underline decoration-[var(--color-warning)] decoration-2 underline-offset-4 transition-colors hover:text-[var(--color-primary)]"
+                      onClick={resetFilters}
+                    >
+                      Tout effacer
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="flex justify-center py-16">
+                  <span className="loading loading-spinner loading-lg text-[var(--color-primary)]"></span>
+                </div>
+              ) : error ? (
+                <div className="rounded-[1.4rem] border border-[var(--color-danger)] bg-[var(--color-surface)] px-4 py-4">
+                  <p className="text-sm text-[var(--color-ink)]">{error}</p>
+                  <button
+                    className="mt-3 rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)]"
+                    onClick={() => updateFilters({ ...filters })}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              ) : result && displayedTenders.length === 0 ? (
+                filtersActive ? (
+                  <EmptyState
+                    icon={SearchX}
+                    title="Aucune consultation ne correspond à vos critères."
+                    description="Élargissez ou réinitialisez vos filtres."
+                    action={
+                      <button
+                        className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-on-primary)]"
+                        onClick={resetFilters}
+                      >
+                        Réinitialiser
+                      </button>
+                    }
+                  />
+                ) : (
+                  <EmptyState size="md" icon={Inbox} title="Aucune consultation disponible pour le moment." />
+                )
+              ) : result ? (
+                <>
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
+                    {displayedTenders.map((tender) => (
+                      <TenderCard
+                        key={tender.id}
+                        tender={tender}
+                        compact
+                        isFavorite={favoriteIds.has(tender.id)}
+                        onToggleFavorite={toggleFavorite}
+                      />
+                    ))}
+                  </div>
+                  {!urgentSegmentActive && (
+                    <Pagination
+                      page={result.page}
+                      pages={result.pages}
+                      total={result.total}
+                      onPageChange={(p) => updateFilters({ ...filters, page: p })}
+                    />
+                  )}
+                </>
+              ) : null}
+            </section>
+          </div>
+        )}
+
+        {catalogEmpty && (
+          <EmptyState size="md" icon={Inbox} title="Aucune consultation disponible pour le moment." />
+        )}
+
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
     </div>
   );
 }

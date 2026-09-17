@@ -104,6 +104,128 @@ class ProfileHelpersTest(unittest.TestCase):
         self.assertEqual(p["sectors"], [])
 
 
+class SectorCategoryTest(unittest.TestCase):
+    def test_prefix_maps_to_category(self):
+        self.assertEqual(eligibility.sector_category("1.12"), "Travaux")
+        self.assertEqual(eligibility.sector_category("2.18"), "Fournitures")
+        self.assertEqual(eligibility.sector_category("3.1"), "Services")
+        self.assertEqual(eligibility.sector_category("9.9"), "")
+        self.assertEqual(eligibility.sector_category(""), "")
+
+    def test_derive_categories_dedupes_and_orders(self):
+        self.assertEqual(
+            eligibility.derive_categories(["1.12", "1.10", "3.1"]),
+            ["Travaux", "Services"],
+        )
+        self.assertEqual(eligibility.derive_categories([]), [])
+
+
+class RegionDeriveTest(unittest.TestCase):
+    def test_known_cities(self):
+        self.assertEqual(eligibility.derive_region("Casablanca"), "Casablanca-Settat")
+        self.assertEqual(eligibility.derive_region("FÈS"), "Fès-Meknès")
+        self.assertEqual(eligibility.derive_region(" salé "), "Rabat-Salé-Kénitra")
+        self.assertEqual(eligibility.derive_region("Laâyoune"), "Laâyoune-Sakia El Hamra")
+
+    def test_unknown_city_is_empty(self):
+        self.assertEqual(eligibility.derive_region("Springfield"), "")
+        self.assertEqual(eligibility.derive_region(""), "")
+
+
+class StandingVerdictTest(unittest.TestCase):
+    def test_no_answers_unknown(self):
+        self.assertEqual(eligibility.evaluate_standing({}), "unknown")
+
+    def test_exclusion_oui_blocks(self):
+        self.assertEqual(eligibility.evaluate_standing({"liquidation": "oui"}), "blocked")
+
+    def test_capacity_non_blocks(self):
+        self.assertEqual(eligibility.evaluate_standing({"capacite-juridique": "non"}), "blocked")
+
+    def test_uncertain_exclusion_is_risk(self):
+        answers = {qid: "non" if kind == "exclusion" else "oui"
+                   for qid, kind in eligibility.STANDING_QUESTIONS}
+        answers["exclusion-152"] = "nsp"
+        self.assertEqual(eligibility.evaluate_standing(answers), "risk")
+
+    def test_all_clear(self):
+        answers = {qid: "non" if kind == "exclusion" else "oui"
+                   for qid, kind in eligibility.STANDING_QUESTIONS}
+        self.assertEqual(eligibility.evaluate_standing(answers), "clear")
+
+    def test_partial_is_unknown(self):
+        self.assertEqual(
+            eligibility.evaluate_standing({"capacite-juridique": "oui"}), "unknown"
+        )
+
+
+class ClassifyTest(unittest.TestCase):
+    def test_empty_profile(self):
+        c = eligibility.classify(eligibility.parse_profile({}))
+        self.assertEqual(c["completeness"], 0.0)
+        self.assertEqual(c["activity_fit"]["categories"], [])
+        self.assertIsNone(c["capacity_scale"]["is_pme"])
+        self.assertEqual(c["standing"]["verdict"], "unknown")
+        self.assertEqual(c["derived"], {})
+
+    def test_categories_derived_from_sectors(self):
+        c = eligibility.classify(_profile(sectors=["1.12", "1.13"]))
+        self.assertEqual(c["activity_fit"]["categories"], ["Travaux"])
+        self.assertEqual(c["activity_fit"]["categories_source"], "derived")
+        self.assertEqual(c["derived"]["categories"], ["Travaux"])
+
+    def test_user_categories_win_over_derived(self):
+        c = eligibility.classify(_profile(sectors=["1.12"], categories=["Services"]))
+        self.assertEqual(c["activity_fit"]["categories"], ["Services"])
+        self.assertEqual(c["activity_fit"]["categories_source"], "user")
+        self.assertNotIn("categories", c["derived"])
+
+    def test_size_derives_revenue_ceiling_and_pme(self):
+        c = eligibility.classify(_profile(size_band="pme"))
+        cap = c["capacity_scale"]
+        self.assertEqual(cap["revenue_band"], "1m_10m")
+        self.assertEqual(cap["revenue_band_source"], "derived")
+        self.assertEqual(cap["contract_ceiling"], 20_000_000)
+        self.assertTrue(cap["is_pme"])
+        self.assertEqual(c["derived"]["revenue_band"], "1m_10m")
+        self.assertEqual(c["derived"]["contract_max"], 20_000_000)
+
+    def test_grande_is_not_pme(self):
+        c = eligibility.classify(_profile(size_band="grande"))
+        self.assertFalse(c["capacity_scale"]["is_pme"])
+        self.assertIsNone(c["capacity_scale"]["contract_ceiling"])
+
+    def test_auto_entrepreneur_caps_ceiling_and_is_pme(self):
+        c = eligibility.classify(_profile(legal_form="auto_entrepreneur", size_band="eti"))
+        # legal form overrides the size default: PME-eligible, ceiling capped.
+        self.assertTrue(c["capacity_scale"]["is_pme"])
+        self.assertEqual(c["capacity_scale"]["contract_ceiling"],
+                         eligibility.AUTO_ENTREPRENEUR_CEILING)
+
+    def test_user_contract_max_not_overwritten(self):
+        c = eligibility.classify(_profile(size_band="pme", contract_max=7_000_000))
+        self.assertEqual(c["capacity_scale"]["contract_ceiling"], 7_000_000)
+        self.assertEqual(c["capacity_scale"]["contract_ceiling_source"], "user")
+        self.assertNotIn("contract_max", c["derived"])
+
+    def test_qualification_hint_for_travaux(self):
+        c = eligibility.classify(_profile(sectors=["1.12"]))
+        self.assertTrue(c["qualifications"]["candidate_families"])
+
+    def test_summary_and_completeness(self):
+        profile = _profile(
+            legal_form="sarl", sectors=["1.12"], size_band="pme", hq_city="Casablanca",
+            standing={qid: "non" if kind == "exclusion" else "oui"
+                      for qid, kind in eligibility.STANDING_QUESTIONS},
+        )
+        c = eligibility.classify(profile)
+        self.assertIn("SARL", c["summary"])
+        self.assertIn("Travaux", c["summary"])
+        self.assertIn("Casablanca-Settat", c["summary"])
+        self.assertEqual(c["completeness"], 0.8)  # 4 of 5 groups (no qualifications held)
+        self.assertEqual(c["standing"]["verdict"], "clear")
+
+
 class CatalogEligibleOnlyTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         import database

@@ -362,10 +362,13 @@ export async function updateAlert(
 }
 
 export async function deleteAlert(id: number): Promise<void> {
-  await fetch(`${BASE}/alerts/${id}`, {
+  const res = await fetch(`${BASE}/alerts/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw new Error(body.detail || body.error || `API error: ${res.status}`);
 }
 
 export async function previewAlert(data: Partial<AlertPreference>): Promise<AlertPreview> {

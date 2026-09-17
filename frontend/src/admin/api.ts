@@ -4,11 +4,13 @@
 
 import type {
   AdminOverview, AdminTender, Paginated, BatchResult,
-  AdminUser, RoleInfo, AuditEvent, ImportRun, DceExtractionStatus,
+  AdminUser, AdminUserDetail, RoleInfo, AuditEvent, ImportRun, DceExtractionStatus,
   EmailSettings, EmailSettingsPatch,
   WebsiteCost, WebsiteCostPayload, WebsiteCostSummary,
   ImportsStatus, DceCacheStatus, ScrapePreview, PipelineStage, SteerAction, SteerResult,
+  CronJob, CronUpdatePayload,
 } from "./types";
+import type { CompanyProfile } from "../lib/types";
 
 const BASE = "/api/admin";
 
@@ -111,6 +113,21 @@ export const setUserStatus = (id: number, status: string) =>
 
 export const setUserRole = (id: number, role: string) =>
   request<{ id: number; role: string }>(`/users/${id}/role`, { method: "PATCH", body: { role } });
+
+export const getUserDetail = (id: number) =>
+  request<AdminUserDetail>(`/users/${id}`);
+
+export const overrideUserProfile = (id: number, body: Partial<CompanyProfile>) =>
+  request<AdminUserDetail>(`/users/${id}/profile`, { method: "PATCH", body });
+
+// ── Cron jobs (editable schedules) ──
+export const getCron = () => request<{ data: CronJob[] }>("/cron");
+
+export const updateCron = (job: string, body: CronUpdatePayload) =>
+  request<CronJob>(`/cron/${job}`, { method: "PATCH", body });
+
+export const runCron = (job: string) =>
+  request<{ status: string }>(`/cron/${job}/run`, { method: "POST" });
 
 // ── Roles ──
 export const getRoles = () =>

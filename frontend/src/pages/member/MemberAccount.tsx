@@ -11,6 +11,7 @@ import type {
 } from "../../lib/types";
 import { useAuth } from "../../lib/auth";
 import { applyThemePreference } from "../../lib/theme";
+import EligibilityWizard from "./EligibilityWizard";
 
 const themes: { value: ThemePreference; label: string; description: string }[] = [
   { value: "system", label: "Système", description: "Suit les préférences de votre appareil." },
@@ -116,6 +117,12 @@ export default function MemberAccount() {
 
   function patchProfile(patch: Partial<CompanyProfile>) {
     setProfile((current) => ({ ...current, ...patch }));
+  }
+
+  function handleWizardSaved(updated: AccountProfile) {
+    setAccount(updated);
+    updateUser(updated);
+    if (updated.profile) setProfile({ ...EMPTY_PROFILE, ...updated.profile });
   }
 
   async function handleProfileSubmit(e: React.FormEvent) {
@@ -230,10 +237,12 @@ export default function MemberAccount() {
         </dl>
       </section>
 
+      <EligibilityWizard account={account} onSaved={handleWizardSaved} />
+
       <section className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5">
         <div className="flex items-center gap-2">
           <Building2 size={18} className="text-[var(--color-primary)]" aria-hidden />
-          <h2 className="text-lg font-semibold text-[var(--color-ink)]">Profil entreprise</h2>
+          <h2 className="text-lg font-semibold text-[var(--color-ink)]">Profil entreprise — édition détaillée</h2>
         </div>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Ces informations restent privées. Elles facilitent vos procédures légales et permettent

@@ -7,6 +7,14 @@ import type { GuidanceTone } from "./tenderGuidance";
  * Tailwind codées en dur (emerald/amber/red) qui juraient sur fond sombre.
  */
 
+// Point coloré du ton — pastille douce « statut » partagée (cartes + tableau).
+export const TONE_DOT: Record<GuidanceTone, string> = {
+  positive: "bg-[var(--color-tone-positive)]",
+  warning: "bg-[var(--color-tone-warning)]",
+  critical: "bg-[var(--color-tone-critical)]",
+  neutral: "bg-[var(--color-border)]",
+};
+
 // Petit badge coloré (texte de la couleur du ton).
 export const TONE_BADGE: Record<GuidanceTone, string> = {
   positive: "border-[var(--color-tone-positive)] bg-[var(--color-tone-positive-soft)] text-[var(--color-tone-positive)]",

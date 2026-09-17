@@ -17,6 +17,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+import eligibility
+import scheduler
 from database import get_db
 from emailer import email_is_configured, send_email
 from pipeline_control import SCRAPE, DCE_CACHE, DCE_EXTRACTION
@@ -41,7 +43,7 @@ ALL_PERMISSIONS = [
     "tenders.view", "tenders.moderate", "tenders.export",
     "imports.view", "imports.run", "imports.retry",
     "audit.view", "audit.export",
-    "users.view", "users.suspend", "users.manage_role",
+    "users.view", "users.suspend", "users.manage_role", "users.edit_profile",
     "roles.view",
     "settings.view", "settings.manage",
     "costs.view", "costs.manage",
@@ -54,7 +56,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "tenders.view", "tenders.moderate", "tenders.export",
         "imports.view", "imports.run", "imports.retry",
         "audit.view", "audit.export",
-        "users.view", "roles.view",
+        "users.view", "users.edit_profile", "roles.view",
         "costs.view", "costs.manage",
     },
     "operator": {
@@ -660,6 +662,79 @@ async def admin_import_control(action: str, request: Request, user=Depends(requi
                                  request=request, user=user, target_type="import")
 
 
+# ── Cron jobs (editable recurring-job schedules) ─────────────────────────────
+
+async def _job_running_states() -> dict:
+    """Live running flag per job, from the existing per-stage locks/controls."""
+    from main import scrape_lock
+    from dce_cache import dce_cache_lock
+    return {
+        "scrape_digest": scrape_lock.locked(),
+        "dce_cache": dce_cache_lock.locked(),
+        "dce_extraction": DCE_EXTRACTION.running,
+    }
+
+
+class CronUpdate(BaseModel):
+    """Partial edit of a job's schedule; only provided fields are written."""
+    enabled: bool | None = None
+    schedule_kind: str | None = None
+    hour: int | None = None
+    interval_minutes: int | None = None
+
+
+@router.get("/cron")
+async def admin_cron(user=Depends(require_admin("imports.view"))):
+    db = await get_db()
+    try:
+        jobs = await scheduler.list_schedules(db)
+    finally:
+        await db.close()
+    running = await _job_running_states()
+    for j in jobs:
+        j["running"] = bool(running.get(j["job"]))
+    return {"data": jobs}
+
+
+@router.patch("/cron/{job}")
+async def admin_cron_update(job: str, req: CronUpdate, request: Request,
+                            user=Depends(require_admin("imports.run"))):
+    if job not in scheduler.VALID_JOBS:
+        raise HTTPException(status_code=404, detail="Unknown job")
+    db = await get_db()
+    try:
+        before = await scheduler.get_schedule(db, job) or {}
+        provided = req.model_dump(exclude_none=True)
+        try:
+            updated = await scheduler.update_schedule(db, job, provided, updated_by=user["email"])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        await log_audit(
+            db, actor=user, action="cron.update", target_type="job", target_id=job,
+            request=request,
+            before={k: before.get(k) for k in ("enabled", "schedule_kind", "hour", "interval_minutes")},
+            after=provided,
+        )
+        return updated
+    finally:
+        await db.close()
+
+
+@router.post("/cron/{job}/run")
+async def admin_cron_run(job: str, request: Request, user=Depends(require_admin("imports.run"))):
+    if job not in scheduler.VALID_JOBS:
+        raise HTTPException(status_code=404, detail="Unknown job")
+    started = await scheduler.run_job(job, actor_email=user["email"], base_url=str(request.base_url))
+    if not started:
+        raise HTTPException(status_code=409, detail="Job already running, or cannot start (missing prerequisite)")
+    db = await get_db()
+    try:
+        await log_audit(db, actor=user, action="cron.run", target_type="job", target_id=job, request=request)
+    finally:
+        await db.close()
+    return {"status": "started"}
+
+
 # ── DCE cache control ────────────────────────────────────────────────────────
 
 def _launch_dce_cache(actor_email: str):
@@ -1052,6 +1127,35 @@ async def admin_archive_cost(
 
 # ── Users ────────────────────────────────────────────────────────────────────
 
+# Columns safe to expose to admins (never password_hash / token internals).
+_USER_LIST_COLUMNS = (
+    "id", "email", "name", "company", "plan", "role", "status", "last_login",
+    "mfa_enabled", "invited_by", "created_at",
+)
+
+
+def _classification_summary(profile: dict) -> dict:
+    """Compact classification for the users list — enough to triage eligibility
+    at a glance without shipping the full per-group payload per row."""
+    c = eligibility.classify(profile)
+    return {
+        "summary": c["summary"],
+        "completeness": c["completeness"],
+        "is_pme": c["capacity_scale"]["is_pme"],
+        "categories": c["activity_fit"]["categories"],
+        "standing_verdict": c["standing"]["verdict"],
+        "legal_form_label": c["legal_identity"]["legal_form_label"],
+        "size_band_label": c["capacity_scale"]["size_band_label"],
+    }
+
+
+def _user_public(row: dict) -> dict:
+    """A users row reduced to admin-safe fields + compact classification."""
+    out = {col: row.get(col) for col in _USER_LIST_COLUMNS}
+    out["classification"] = _classification_summary(eligibility.parse_profile(row))
+    return out
+
+
 @router.get("/users")
 async def admin_users(
     role: str = Query(""),
@@ -1071,12 +1175,29 @@ async def admin_users(
             params.extend([f"%{q}%"] * 3)
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         rows = await (await db.execute(
-            f"""SELECT id, email, name, company, plan, role, status, last_login,
-                       mfa_enabled, invited_by, created_at
-                FROM users {where} ORDER BY created_at DESC""",
-            params,
+            f"SELECT * FROM users {where} ORDER BY created_at DESC", params,
         )).fetchall()
-        return {"data": [dict(r) for r in rows]}
+        return {"data": [_user_public(dict(r)) for r in rows]}
+    finally:
+        await db.close()
+
+
+@router.get("/users/{user_id}")
+async def admin_user_detail(user_id: int, user=Depends(require_admin("users.view"))):
+    """Full eligibility profile + derived classification for one user."""
+    db = await get_db()
+    try:
+        row = await (await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        row = dict(row)
+        profile = eligibility.parse_profile(row)
+        return {
+            **{col: row.get(col) for col in _USER_LIST_COLUMNS},
+            "phone": row.get("phone", "") or "",
+            "profile": profile,
+            "classification": eligibility.classify(profile),
+        }
     finally:
         await db.close()
 
@@ -1135,6 +1256,79 @@ async def admin_change_role(user_id: int, req: UserRolePatch, request: Request, 
             request=request, before={"role": target["role"]}, after={"role": req.role},
         )
         return {"id": user_id, "role": req.role}
+    finally:
+        await db.close()
+
+
+class AdminProfileOverride(BaseModel):
+    """Admin override of a user's company/eligibility profile. Same partial
+    semantics as the member PATCH — every field optional, only provided keys
+    written. `standing` carries the art. 27 questionnaire answers."""
+    legal_form: str | None = None
+    ice: str | None = None
+    rc_number: str | None = None
+    rc_city: str | None = None
+    if_number: str | None = None
+    cnss_number: str | None = None
+    patente_number: str | None = None
+    hq_city: str | None = None
+    sectors: list | None = None
+    categories: list | None = None
+    qualifications: list | None = None
+    certifications: list | None = None
+    coverage_regions: list | None = None
+    keywords: str | None = None
+    size_band: str | None = None
+    revenue_band: str | None = None
+    contract_min: int | None = None
+    contract_max: int | None = None
+    bids_in_groupement: bool | None = None
+    preferred_procedures: list | None = None
+    eligibility_filter_default: bool | None = None
+    standing: dict | None = None
+
+
+@router.patch("/users/{user_id}/profile")
+async def admin_edit_user_profile(
+    user_id: int, req: AdminProfileOverride, request: Request,
+    user=Depends(require_admin("users.edit_profile")),
+):
+    """Admin override of a user's eligibility profile. Progressive (only provided
+    fields written), validated against the same allowlists, and audit-logged.
+    Returns the refreshed detail (profile + derived classification)."""
+    provided = req.model_dump(exclude_none=True)
+    try:
+        set_clauses, params = eligibility.serialize_profile_update(provided)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    db = await get_db()
+    try:
+        row = await (await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        row = dict(row)
+        before_profile = eligibility.parse_profile(row)
+
+        if set_clauses:
+            params.append(user_id)
+            await db.execute(f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?", params)
+            await log_audit(
+                db, actor=user, action="user.profile_edit", target_type="user",
+                target_id=user_id, request=request,
+                before={k: before_profile.get(k) for k in provided},
+                after=provided,
+            )
+            await db.commit()
+
+        row = dict(await (await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))).fetchone())
+        profile = eligibility.parse_profile(row)
+        return {
+            **{col: row.get(col) for col in _USER_LIST_COLUMNS},
+            "phone": row.get("phone", "") or "",
+            "profile": profile,
+            "classification": eligibility.classify(profile),
+        }
     finally:
         await db.close()
 

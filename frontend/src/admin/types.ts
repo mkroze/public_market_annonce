@@ -1,3 +1,5 @@
+import type { CompanyProfile, EligibilityClassification } from "../lib/types";
+
 export interface ImportRun {
   id: number;
   started_at: string;
@@ -220,6 +222,18 @@ export interface BatchResult {
   result: "success" | "partial" | "failure";
 }
 
+// Compact classification shipped with each users-list row (backend
+// admin._classification_summary). Full detail comes from GET /users/{id}.
+export interface ClassificationSummary {
+  summary: string;
+  completeness: number;
+  is_pme: boolean | null;
+  categories: string[];
+  standing_verdict: string;
+  legal_form_label: string;
+  size_band_label: string;
+}
+
 export interface AdminUser {
   id: number;
   email: string;
@@ -232,12 +246,57 @@ export interface AdminUser {
   mfa_enabled: number;
   invited_by: number | null;
   created_at: string;
+  classification: ClassificationSummary;
+}
+
+// GET /users/{id}: the admin-safe identity fields + full profile + the complete
+// derived classification (not the compact list summary).
+export interface AdminUserDetail {
+  id: number;
+  email: string;
+  name: string;
+  company: string;
+  plan: string;
+  role: string;
+  status: string;
+  last_login: string | null;
+  mfa_enabled: number;
+  invited_by: number | null;
+  created_at: string;
+  phone: string;
+  profile: CompanyProfile;
+  classification: EligibilityClassification;
 }
 
 export interface RoleInfo {
   name: string;
   description: string;
   permissions: string[];
+}
+
+// One editable recurring-job schedule (backend scheduler._row_view + running).
+export type ScheduleKind = "daily" | "interval";
+
+export interface CronJob {
+  job: string;
+  label: string;
+  enabled: boolean;
+  schedule_kind: ScheduleKind;
+  hour: number;
+  interval_minutes: number;
+  last_run_at: string | null;
+  last_status: string | null;
+  next_run_at: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  running: boolean;
+}
+
+export interface CronUpdatePayload {
+  enabled?: boolean;
+  schedule_kind?: ScheduleKind;
+  hour?: number;
+  interval_minutes?: number;
 }
 
 export interface AuditEvent {

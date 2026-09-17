@@ -13,6 +13,7 @@ PROFILE_COLUMNS = {
     "qualifications_json", "certifications_json", "coverage_regions_json",
     "profile_keywords", "size_band", "revenue_band", "contract_min", "contract_max",
     "bids_in_groupement", "preferred_procedures_json", "eligibility_filter_default",
+    "standing_json",
 }
 
 
@@ -106,6 +107,36 @@ class CompanyProfileApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(updated2["profile"]["hq_city"], "Casablanca")
         self.assertEqual(updated2["profile"]["legal_form"], "sarl")
         self.assertEqual(updated2["profile"]["sectors"], ["1.12"])
+
+    async def test_account_view_exposes_derived_classification(self):
+        import main
+
+        account = await main.get_account(self.authorization)
+        self.assertIn("classification", account)
+        self.assertEqual(account["classification"]["completeness"], 0.0)
+
+        updated = await main.update_account_profile(
+            main.ProfileUpdate(legal_form="sarl", sectors=["1.12"], size_band="pme"),
+            self.authorization,
+        )
+        classification = updated["classification"]
+        # Categories are derived from the sector prefix; PME status from size.
+        self.assertEqual(classification["activity_fit"]["categories"], ["Travaux"])
+        self.assertEqual(classification["activity_fit"]["categories_source"], "derived")
+        self.assertTrue(classification["capacity_scale"]["is_pme"])
+        self.assertEqual(classification["derived"]["categories"], ["Travaux"])
+
+    async def test_standing_roundtrips_and_drives_verdict(self):
+        import main
+        import eligibility
+
+        answers = {qid: ("non" if kind == "exclusion" else "oui")
+                   for qid, kind in eligibility.STANDING_QUESTIONS}
+        updated = await main.update_account_profile(
+            main.ProfileUpdate(standing=answers), self.authorization,
+        )
+        self.assertEqual(updated["profile"]["standing"], answers)
+        self.assertEqual(updated["classification"]["standing"]["verdict"], "clear")
 
     async def test_update_profile_rejects_invalid_legal_form(self):
         import main

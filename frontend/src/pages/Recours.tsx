@@ -1,9 +1,28 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, Landmark, XCircle } from "lucide-react";
-import PageShell from "../components/PageShell";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, CalendarClock, CheckCircle2, Gavel, Landmark, XCircle } from "lucide-react";
 import { RECOURSE_MOTIFS } from "../lib/procedures";
 
 type WindowState = "open" | "closing" | "expired";
+
+type IconType = ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+
+/** Highlight pill — signature headline treatment (new-hot-design.md §2.2). */
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-[1.15rem] bg-[var(--color-primary-soft)] px-3 py-0.5 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+      {children}
+    </span>
+  );
+}
+
+const FRAME =
+  "overflow-hidden rounded-[1.75rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_80%,transparent)] bg-[var(--color-surface)] shadow-card";
+
+const LABEL = "text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-light)]";
+
+const CONTROL =
+  "h-11 w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-ink)] transition-colors focus:border-[var(--color-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary)_25%,transparent)] sm:w-72";
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -24,7 +43,7 @@ function windowState(deadline: Date): WindowState {
   return Math.ceil((end.getTime() - now.getTime()) / 86400000) <= 2 ? "closing" : "open";
 }
 
-const stateUi: Record<WindowState, { icon: typeof CheckCircle2; label: string; className: string }> = {
+const stateUi: Record<WindowState, { icon: IconType; label: string; className: string }> = {
   open: { icon: CheckCircle2, label: "Délai ouvert", className: "border-[var(--color-success)] text-[var(--color-success)]" },
   closing: { icon: AlertTriangle, label: "Délai proche", className: "border-[var(--color-warning)] text-[var(--color-warning)]" },
   expired: { icon: XCircle, label: "Délai expiré", className: "border-[var(--color-danger)] text-[var(--color-danger)]" },
@@ -35,12 +54,12 @@ function DeadlineCard({ title, deadline, detail }: { title: string; deadline: Da
   const UiIcon = stateUi[state].icon;
 
   return (
-    <section className={`rounded-xl border-2 bg-[var(--color-surface)] p-5 shadow-card ${stateUi[state].className}`}>
-      <div className="flex items-center gap-2">
-        <UiIcon size={16} aria-hidden="true" />
-        <p className="editorial-label">{stateUi[state].label}</p>
+    <section className={`rounded-[1.5rem] border-2 bg-[var(--color-surface)] p-5 shadow-card ${stateUi[state].className}`}>
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-current px-2.5 py-1">
+        <UiIcon size={13} aria-hidden="true" />
+        <span className="text-xs font-semibold uppercase tracking-[0.08em]">{stateUi[state].label}</span>
       </div>
-      <h2 className="mt-2 text-base font-bold text-[var(--color-ink)]">{title}</h2>
+      <h2 className="mt-3 text-base font-bold text-[var(--color-ink)]">{title}</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
         Jusqu'au <strong className="text-[var(--color-ink)]">{formatDate(deadline)}</strong>
       </p>
@@ -67,43 +86,52 @@ export default function Recours({ embedded = false }: { embedded?: boolean }) {
 
   const content = (
     <div className="space-y-6">
-      <section className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5 shadow-card">
-        <h2 className="text-lg font-bold text-[var(--color-ink)]">Que souhaitez-vous contester ?</h2>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {RECOURSE_MOTIFS.map((item) => {
-            const active = item.id === motifId;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setMotifId(item.id)}
-                className={`min-h-11 rounded-xl border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none ${
-                  active
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
-                    : "border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] hover:border-[var(--color-border)]"
-                }`}
-              >
-                <span className="block text-sm font-semibold text-[var(--color-ink)]">{item.label}</span>
-                <span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">{item.description}</span>
-              </button>
-            );
-          })}
+      {/* ─── Motif + date ─────────────────────────────────────── */}
+      <section className={FRAME}>
+        <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] px-5 py-4">
+          <Gavel size={17} className="text-[var(--color-primary)]" aria-hidden="true" />
+          <h2 className="text-sm font-black uppercase tracking-[0.06em] text-[var(--color-ink)]">
+            Que souhaitez-vous contester ?
+          </h2>
         </div>
+        <div className="px-5 py-5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {RECOURSE_MOTIFS.map((item) => {
+              const active = item.id === motifId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setMotifId(item.id)}
+                  className={`min-h-11 rounded-xl border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transition-none ${
+                    active
+                      ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
+                      : "border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] hover:border-[var(--color-border)]"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-[var(--color-ink)]">{item.label}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">{item.description}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="mt-5">
-          <label htmlFor="recours-reference-date" className="label-academic mb-1.5 block">
-            {dateLabel}
-          </label>
-          <input
-            id="recours-reference-date"
-            type="date"
-            className="institutional-control min-h-11 w-full px-3 text-sm text-[var(--color-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] sm:w-72"
-            value={refDate}
-            onChange={(event) => setRefDate(event.target.value)}
-          />
+          <div className="mt-5">
+            <label htmlFor="recours-reference-date" className={`mb-1.5 block ${LABEL}`}>
+              {dateLabel}
+            </label>
+            <input
+              id="recours-reference-date"
+              type="date"
+              className={CONTROL}
+              value={refDate}
+              onChange={(event) => setRefDate(event.target.value)}
+            />
+          </div>
         </div>
       </section>
 
+      {/* ─── Computed deadlines ───────────────────────────────── */}
       {parsedDate ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <DeadlineCard
@@ -118,23 +146,27 @@ export default function Recours({ embedded = false }: { embedded?: boolean }) {
           />
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] p-4 text-sm text-[var(--color-muted)]">
-          <CalendarClock size={16} aria-hidden="true" />
+        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-4 py-4 text-sm text-[var(--color-muted)]">
+          <CalendarClock size={16} className="text-[var(--color-primary)]" aria-hidden="true" />
           Saisissez une date pour calculer les délais.
         </div>
       )}
 
+      {/* ─── Reference notes ──────────────────────────────────── */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5 shadow-card">
-          <h2 className="text-base font-bold text-[var(--color-ink)]">Réclamation administrative</h2>
+        <div className={`${FRAME} p-5`}>
+          <h2 className="flex items-center gap-2 text-base font-bold text-[var(--color-ink)]">
+            <Landmark size={16} className="text-[var(--color-primary)]" aria-hidden="true" />
+            Réclamation administrative
+          </h2>
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
             Le maître d'ouvrage dispose d'un délai de réponse. La suspension éventuelle dépend du motif et
             des conditions prévues par les textes.
           </p>
         </div>
-        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5 shadow-card">
+        <div className={`${FRAME} p-5`}>
           <h2 className="flex items-center gap-2 text-base font-bold text-[var(--color-ink)]">
-            <Landmark size={15} className="text-[var(--color-primary)]" aria-hidden="true" />
+            <Gavel size={16} className="text-[var(--color-primary)]" aria-hidden="true" />
             Saisine de la CNCP
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
@@ -143,20 +175,44 @@ export default function Recours({ embedded = false }: { embedded?: boolean }) {
           </p>
         </div>
       </section>
+
+      <p className="border-t border-[var(--color-border-subtle)] pt-4 text-xs leading-relaxed text-[var(--color-muted-light)]">
+        Délais indicatifs calculés à partir de la date saisie. Les jours ouvrables, notifications et voies de
+        recours exactes dépendent des textes applicables et des circonstances du dossier.
+      </p>
     </div>
   );
 
   if (embedded) return content;
 
   return (
-    <PageShell
-      title="Assistant recours"
-      section="Préparation"
-      lead="Calculez les délais indicatifs de réclamation et de saisine CNCP."
-      width="wide"
-      breadcrumbs={[{ label: "Préparer", to: "/guide" }, { label: "Recours" }]}
-    >
-      {content}
-    </PageShell>
+    <div className="px-3 py-3 sm:px-5 sm:py-4">
+      {/* ─── Header card ──────────────────────────────────────── */}
+      <section className={`mx-auto ${FRAME}`} aria-labelledby="recours-title">
+        <div className="px-5 py-7 sm:px-8">
+          <Link
+            to="/guide"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)] transition-colors hover:border-[var(--color-border)] hover:text-[var(--color-primary-strong)]"
+          >
+            <Gavel size={14} aria-hidden="true" />
+            Préparer votre candidature
+          </Link>
+
+          <h1
+            id="recours-title"
+            className="mt-4 max-w-2xl text-[clamp(1.7rem,3.4vw,3rem)] font-semibold leading-[1.12] tracking-[0] text-[var(--color-ink)]"
+          >
+            Calculez vos <Pill>recours</Pill>.
+          </h1>
+
+          <p className="mt-4 max-w-[42rem] text-base leading-7 text-[var(--color-muted)]">
+            Calculez les délais indicatifs de réclamation et de saisine CNCP.
+          </p>
+        </div>
+      </section>
+
+      {/* ─── Body ─────────────────────────────────────────────── */}
+      <div className="mt-6">{content}</div>
+    </div>
   );
 }

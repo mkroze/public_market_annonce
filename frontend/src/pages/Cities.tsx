@@ -1,11 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpDown, Activity, ExternalLink, MapPin, Search } from "lucide-react";
+import { Activity, ExternalLink, MapPin, Search } from "lucide-react";
 import { getCities } from "../lib/api";
 import type { CityStats } from "../lib/types";
 import MoroccoMap from "../components/MoroccoMap";
 
 type SortKey = "total" | "active" | "rate";
+
+const FRAME =
+  "overflow-hidden rounded-[1.75rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_80%,transparent)] bg-[var(--color-surface)] shadow-card";
+
+const GRID_FRAME =
+  "grid gap-px overflow-hidden rounded-[1.75rem] border border-[color-mix(in_srgb,var(--color-border-subtle)_80%,transparent)] bg-[var(--color-border-subtle)] shadow-card";
+
+const LABEL = "text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-light)]";
+const SECTION_TITLE = "text-sm font-black uppercase tracking-[0.06em] text-[var(--color-ink)]";
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-[1.15rem] bg-[var(--color-primary-soft)] px-3 py-0.5 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+      {children}
+    </span>
+  );
+}
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -56,7 +73,6 @@ export default function Cities({ embedded = false }: { embedded?: boolean }) {
       });
   }, [cities, query, sortKey]);
 
-  const maxTotal = Math.max(...cities.map((city) => city.total), 1);
   const topDistribution = filteredCities.slice(0, 10);
   const regionTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -69,86 +85,93 @@ export default function Cities({ embedded = false }: { embedded?: boolean }) {
       .slice(0, 6);
   }, [cities]);
 
+  const KPIS = [
+    { label: "Villes suivies", value: metrics.cityCount.toLocaleString("fr-FR"), accent: "text-[var(--color-ink)]" },
+    { label: "Consultations", value: metrics.total.toLocaleString("fr-FR"), accent: "text-[var(--color-primary)]" },
+    { label: "Actives", value: metrics.active.toLocaleString("fr-FR"), accent: "text-[var(--color-warning)]" },
+    { label: "Top 5", value: formatPercent(metrics.concentration), accent: "text-[var(--color-ink)]" },
+  ];
+
   return (
-    <div className={embedded ? "pt-2 space-y-6" : "px-4 sm:px-6 py-8 space-y-6"}>
+    <div className={embedded ? "space-y-6 pt-2" : "space-y-6 px-3 py-3 sm:px-5 sm:py-4"}>
       {!embedded && (
-        <div>
-          <h1 className="font-display text-2xl font-bold text-[var(--color-charcoal)]">Villes</h1>
-          <p className="text-[var(--color-slate)] font-sans text-sm mt-1">
-            Marches publics par ville
-          </p>
-        </div>
+        <section className={`mx-auto ${FRAME}`} aria-labelledby="cities-title">
+          <div className="px-5 py-7 sm:px-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+              <MapPin size={14} aria-hidden="true" />
+              Villes · Maroc
+            </div>
+            <h1
+              id="cities-title"
+              className="mt-4 max-w-2xl text-[clamp(1.7rem,3.4vw,3rem)] font-semibold leading-[1.12] tracking-[0] text-[var(--color-ink)]"
+            >
+              Les marchés publics, <Pill>ville par ville</Pill>.
+            </h1>
+            <p className="mt-4 max-w-[42rem] text-base leading-7 text-[var(--color-muted)]">
+              Où se concentrent les consultations publiques : classement, carte et régions les plus actives.
+            </p>
+          </div>
+        </section>
       )}
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-6 h-6 border-2 border-[var(--color-crimson)] border-t-transparent rounded-full animate-spin"></div>
+          <span className="loading loading-spinner loading-lg text-[var(--color-primary)]"></span>
         </div>
       ) : cities.length === 0 ? (
-        <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory-dim)] p-4 text-[var(--color-slate)] font-sans text-sm">
-          Aucune ville trouvee.
+        <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-5 py-4 text-sm text-[var(--color-muted)]">
+          Aucune ville trouvée.
         </div>
       ) : (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px border border-[var(--color-border-subtle)] rounded overflow-hidden">
-            <div className="bg-[var(--color-surface)] px-5 py-4">
-              <div className="label-academic">Villes suivies</div>
-              <div className="text-2xl font-bold font-display tabular-nums text-[var(--color-charcoal)] mt-1">
-                {metrics.cityCount.toLocaleString("fr-FR")}
+        <>
+          {/* KPI strip */}
+          <div className={`grid-cols-2 lg:grid-cols-4 ${GRID_FRAME}`}>
+            {KPIS.map((kpi) => (
+              <div key={kpi.label} className="bg-[var(--color-surface)] px-5 py-4">
+                <div className={LABEL}>{kpi.label}</div>
+                <div className={`mt-1.5 text-2xl font-semibold tabular-nums ${kpi.accent}`}>{kpi.value}</div>
               </div>
-            </div>
-            <div className="bg-[var(--color-surface)] px-5 py-4">
-              <div className="label-academic">Consultations</div>
-              <div className="text-2xl font-bold font-display tabular-nums text-[var(--color-crimson)] mt-1">
-                {metrics.total.toLocaleString("fr-FR")}
-              </div>
-            </div>
-            <div className="bg-[var(--color-surface)] px-5 py-4">
-              <div className="label-academic">Actives</div>
-              <div className="text-2xl font-bold font-display tabular-nums text-[var(--color-gold)] mt-1">
-                {metrics.active.toLocaleString("fr-FR")}
-              </div>
-            </div>
-            <div className="bg-[var(--color-surface)] px-5 py-4">
-              <div className="label-academic">Top 5</div>
-              <div className="text-2xl font-bold font-display tabular-nums text-[var(--color-charcoal)] mt-1">
-                {formatPercent(metrics.concentration)}
-              </div>
-            </div>
+            ))}
           </div>
 
-          <section className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)]">
-            <div className="px-5 py-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
-              <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">Carte des consultations</h2>
-              <p className="font-sans text-sm text-[var(--color-slate)] mt-0.5">
-                Seules les principales villes sont affichees. Liste complete dans le classement ci-dessous.
-              </p>
+          {/* Map */}
+          <section className={FRAME}>
+            <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] px-5 py-4">
+              <MapPin size={17} className="text-[var(--color-primary)]" aria-hidden="true" />
+              <div>
+                <h2 className={SECTION_TITLE}>Carte des consultations</h2>
+                <p className="mt-0.5 text-sm text-[var(--color-muted)]">
+                  Principales villes affichées — liste complète dans le classement ci-dessous.
+                </p>
+              </div>
             </div>
             <div className="p-5">
               <MoroccoMap cities={cities} />
             </div>
           </section>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5">
-            <section className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)]">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-5 py-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-ivory-dim)]">
+          {/* Ranking + aside */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className={FRAME}>
+              <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-border-subtle)] px-5 py-4 lg:flex-row lg:items-center">
                 <div>
-                  <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">Classement des villes</h2>
-                  <p className="font-sans text-sm text-[var(--color-slate)] mt-0.5">
-                    {filteredCities.length.toLocaleString("fr-FR")} villes affichees
+                  <h2 className={SECTION_TITLE}>Classement des villes</h2>
+                  <p className="mt-0.5 text-sm text-[var(--color-muted)]">
+                    {filteredCities.length.toLocaleString("fr-FR")} villes affichées
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <label className="relative block">
-                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-slate)]" />
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted-light)]" aria-hidden="true" />
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Rechercher une ville"
-                      className="w-full sm:w-64 h-9 pl-9 pr-3 rounded border border-[var(--color-border-subtle)] bg-[var(--color-ivory)] font-sans text-sm text-[var(--color-charcoal)]"
+                      aria-label="Rechercher une ville"
+                      className="h-10 w-full rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] pl-9 pr-4 text-sm text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-muted-light)] focus:border-[var(--color-primary)] sm:w-64"
                     />
                   </label>
-                  <div className="inline-flex h-9 rounded border border-[var(--color-border-subtle)] overflow-hidden bg-[var(--color-ivory)]">
+                  <div className="inline-flex overflow-hidden rounded-full border border-[var(--color-border-subtle)]">
                     {([
                       ["total", "Total"],
                       ["active", "Actives"],
@@ -158,10 +181,11 @@ export default function Cities({ embedded = false }: { embedded?: boolean }) {
                         key={key}
                         type="button"
                         onClick={() => setSortKey(key)}
-                        className={`px-3 font-sans text-sm border-l first:border-l-0 border-[var(--color-border-subtle)] ${
+                        aria-pressed={sortKey === key}
+                        className={`h-10 border-l border-[var(--color-border-subtle)] px-4 text-sm font-semibold transition-colors first:border-l-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-warning)] motion-reduce:transition-none ${
                           sortKey === key
-                            ? "bg-[var(--color-crimson)] text-[var(--color-on-primary)]"
-                            : "text-[var(--color-slate)] hover:text-[var(--color-charcoal)]"
+                            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                            : "bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
                         }`}
                       >
                         {label}
@@ -172,51 +196,46 @@ export default function Cities({ embedded = false }: { embedded?: boolean }) {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full font-sans text-sm">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr>
-                      <th className="px-5 py-3 text-left">Ville</th>
-                      <th className="px-3 py-3 text-left hidden md:table-cell">Region</th>
-                      <th className="px-3 py-3 text-right">Total</th>
-                      <th className="px-3 py-3 text-right">Actives</th>
-                      <th className="px-3 py-3 text-right hidden sm:table-cell">Taux</th>
-                      <th className="px-5 py-3 text-right">
-                        <ArrowUpDown size={14} className="inline text-[var(--color-slate)]" />
-                      </th>
+                    <tr className="border-b border-[var(--color-border-subtle)] text-xs font-semibold uppercase tracking-[0.06em] text-[var(--color-muted-light)]">
+                      <th className="px-5 py-3 text-left font-semibold">Ville</th>
+                      <th className="hidden px-3 py-3 text-left font-semibold md:table-cell">Région</th>
+                      <th className="px-3 py-3 text-right font-semibold">Total</th>
+                      <th className="px-3 py-3 text-right font-semibold">Actives</th>
+                      <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Taux</th>
+                      <th className="px-5 py-3 text-right font-semibold"><span className="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCities.map((city) => {
                       const rate = city.total > 0 ? (city.active / city.total) * 100 : 0;
                       return (
-                        <tr key={city.name} className="border-b border-[var(--color-border-subtle)] last:border-b-0">
+                        <tr
+                          key={city.name}
+                          className="border-b border-[var(--color-border-subtle)] transition-colors last:border-b-0 hover:bg-[var(--color-surface-muted)]"
+                        >
                           <td className="px-5 py-3">
                             <Link
                               to={`/cities/${encodeURIComponent(city.name)}`}
-                              className="inline-flex items-center gap-2 font-semibold text-[var(--color-charcoal)] hover:text-[var(--color-crimson)]"
+                              className="inline-flex items-center gap-2 font-semibold text-[var(--color-ink)] no-underline transition-colors hover:text-[var(--color-primary)]"
                             >
-                              <MapPin size={15} className="text-[var(--color-crimson)] shrink-0" />
+                              <MapPin size={15} className="shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
                               <span>{city.name}</span>
                             </Link>
                           </td>
-                          <td className="px-3 py-3 text-[var(--color-slate)] hidden md:table-cell">{city.region || "Autre"}</td>
-                          <td className="px-3 py-3 text-right tabular-nums font-semibold text-[var(--color-charcoal)]">{city.total}</td>
-                          <td className="px-3 py-3 text-right tabular-nums font-semibold text-[var(--color-crimson)]">{city.active}</td>
-                          <td className="px-3 py-3 text-right hidden sm:table-cell">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1.5 rounded bg-[var(--color-ivory-deep)]">
-                                <div className="h-1.5 rounded bg-[var(--color-gold)]" style={{ width: `${Math.min(rate, 100)}%` }} />
-                              </div>
-                              <span className="w-9 tabular-nums text-[var(--color-slate)]">{formatPercent(rate)}</span>
-                            </div>
-                          </td>
+                          <td className="hidden px-3 py-3 text-[var(--color-muted)] md:table-cell">{city.region || "Autre"}</td>
+                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--color-ink)]">{city.total}</td>
+                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--color-primary)]">{city.active}</td>
+                          <td className="hidden px-3 py-3 text-right tabular-nums text-[var(--color-muted)] sm:table-cell">{formatPercent(rate)}</td>
                           <td className="px-5 py-3 text-right">
                             <Link
                               to={`/tenders?location=${encodeURIComponent(city.name)}`}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded border border-[var(--color-border-subtle)] text-[var(--color-slate)] hover:text-[var(--color-crimson)] hover:border-[var(--color-border)]"
+                              className="inline-grid h-8 w-8 place-items-center rounded-full border border-[var(--color-border-subtle)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border)] hover:text-[var(--color-primary)]"
                               title="Voir les consultations"
+                              aria-label={`Voir les consultations à ${city.name}`}
                             >
-                              <ExternalLink size={14} />
+                              <ExternalLink size={14} aria-hidden="true" />
                             </Link>
                           </td>
                         </tr>
@@ -227,65 +246,61 @@ export default function Cities({ embedded = false }: { embedded?: boolean }) {
               </div>
             </section>
 
-            <aside className="space-y-5">
-              <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-5">
+            <aside className="space-y-6">
+              <div className={`${FRAME} p-5`}>
                 <div className="flex items-center gap-2">
-                  <Activity size={17} className="text-[var(--color-crimson)]" />
-                  <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">Signal principal</h2>
+                  <Activity size={17} className="text-[var(--color-primary)]" aria-hidden="true" />
+                  <h2 className={SECTION_TITLE}>Signal principal</h2>
                 </div>
-                <div className="divider-academic my-4"></div>
-                <div className="space-y-4">
+                <div className="mt-4 space-y-4">
                   <div>
-                    <div className="label-academic">Ville dominante</div>
-                    <div className="font-display text-2xl font-bold text-[var(--color-charcoal)] mt-1">
+                    <div className={LABEL}>Ville dominante</div>
+                    <div className="mt-1 text-2xl font-semibold text-[var(--color-ink)]">
                       {metrics.topCity?.name || "Aucune"}
                     </div>
                     {metrics.topCity && (
-                      <p className="font-sans text-sm text-[var(--color-slate)] mt-1">
+                      <p className="mt-1 text-sm text-[var(--color-muted)]">
                         {metrics.topCity.total.toLocaleString("fr-FR")} consultations, {metrics.topCity.active.toLocaleString("fr-FR")} actives
                       </p>
                     )}
                   </div>
                   <div>
-                    <div className="label-academic">Regions les plus actives</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className={LABEL}>Régions les plus actives</div>
+                    <ul className="mt-2 flex flex-wrap gap-2">
                       {regionTotals.map(([region, total]) => (
-                        <span
+                        <li
                           key={region}
-                          className="inline-flex items-center gap-2 rounded border border-[var(--color-border-subtle)] px-2.5 py-1 font-sans text-xs text-[var(--color-charcoal)]"
+                          className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-ink)]"
                         >
                           {region}
-                          <strong className="tabular-nums text-[var(--color-crimson)]">{total}</strong>
-                        </span>
+                          <strong className="tabular-nums text-[var(--color-primary)]">{total}</strong>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 </div>
               </div>
 
-              <div className="border border-[var(--color-border-subtle)] rounded bg-[var(--color-ivory)] p-5">
-                <h2 className="font-display text-lg font-bold text-[var(--color-charcoal)]">Distribution</h2>
-                <div className="divider-academic my-4"></div>
-                <div className="space-y-3">
+              <div className={`${FRAME} p-5`}>
+                <h2 className={SECTION_TITLE}>Distribution</h2>
+                <ul className="mt-4 flex flex-wrap gap-2">
                   {topDistribution.map((city) => (
-                    <div key={city.name}>
-                      <div className="flex items-center justify-between gap-3 font-sans text-sm">
-                        <span className="truncate text-[var(--color-charcoal)]">{city.name}</span>
-                        <span className="tabular-nums font-semibold text-[var(--color-crimson)]">{city.total}</span>
-                      </div>
-                      <div className="mt-1 h-1.5 rounded bg-[var(--color-ivory-deep)]">
-                        <div
-                          className="h-1.5 rounded bg-[var(--color-crimson)]"
-                          style={{ width: `${Math.max((city.total / maxTotal) * 100, 3)}%` }}
-                        />
-                      </div>
-                    </div>
+                    <li
+                      key={city.name}
+                      title={`${city.name} — ${city.total.toLocaleString("fr-FR")} consultations`}
+                      className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface)] py-1 pl-3 pr-1.5 transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]"
+                    >
+                      <span className="max-w-[9rem] truncate text-sm text-[var(--color-ink)]">{city.name}</span>
+                      <span className="rounded-full bg-[var(--color-primary-soft)] px-2 py-0.5 text-xs font-bold tabular-nums text-[var(--color-primary)]">
+                        {city.total.toLocaleString("fr-FR")}
+                      </span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             </aside>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

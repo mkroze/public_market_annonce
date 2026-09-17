@@ -278,6 +278,22 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_website_costs_category ON website_costs(category);
         CREATE INDEX IF NOT EXISTS idx_website_costs_currency ON website_costs(currency);
         CREATE INDEX IF NOT EXISTS idx_website_costs_archived ON website_costs(archived_at);
+
+        -- Editable schedules for the recurring background jobs (scrape+digest,
+        -- DCE cache warm, DCE extraction). Persisted so the admin can retune the
+        -- cadence at runtime without a redeploy; the scheduler loop reads this
+        -- live each tick. One row per job key.
+        CREATE TABLE IF NOT EXISTS job_schedules (
+            job TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            schedule_kind TEXT NOT NULL DEFAULT 'daily',   -- daily | interval
+            hour INTEGER NOT NULL DEFAULT 7,               -- for kind=daily (Africa/Casablanca)
+            interval_minutes INTEGER NOT NULL DEFAULT 60,  -- for kind=interval
+            last_run_at TEXT,
+            last_status TEXT,                              -- ok | failed | running
+            updated_at TEXT DEFAULT (datetime('now')),
+            updated_by TEXT
+        );
     """)
 
     # ── Migrations for pre-existing tables ──────────────────────────────────
@@ -318,6 +334,9 @@ async def init_db():
     await _add_column_if_missing(db, "users", "bids_in_groupement", "bids_in_groupement INTEGER DEFAULT 0")
     await _add_column_if_missing(db, "users", "preferred_procedures_json", "preferred_procedures_json TEXT DEFAULT '[]'")
     await _add_column_if_missing(db, "users", "eligibility_filter_default", "eligibility_filter_default INTEGER DEFAULT 0")
+    # art. 27 self-declaration answers ({question_id: "oui"|"non"|"nsp"}); feeds
+    # the eligibility classification (standing verdict), not the catalog hide rule.
+    await _add_column_if_missing(db, "users", "standing_json", "standing_json TEXT DEFAULT '{}'")
 
     # tenders: admin moderation state
     await _add_column_if_missing(db, "tenders", "admin_status", "admin_status TEXT DEFAULT 'active'")

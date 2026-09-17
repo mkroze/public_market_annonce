@@ -3,14 +3,14 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck,
   Settings, Plug, Receipt, LogOut, Menu, X, ExternalLink, Database, FileSearch,
-  AlertTriangle,
+  AlertTriangle, Clock,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, can, type NavItem } from "./permissions";
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck, Settings, Plug, Receipt,
-  Database, FileSearch,
+  Database, FileSearch, Clock,
 };
 
 const ENV = import.meta.env.MODE === "production" ? "production" : "development";

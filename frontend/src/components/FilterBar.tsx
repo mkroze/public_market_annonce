@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Search, X } from "lucide-react";
+import type { ReactNode } from "react";
+import { RotateCcw, Search } from "lucide-react";
 import { getFilters } from "../lib/api";
 import type { FiltersResponse, TenderFilters } from "../lib/types";
 
@@ -8,48 +9,19 @@ interface Props {
   onChange: (filters: Partial<TenderFilters>) => void;
 }
 
-const CONTROL_CLASS =
-  "institutional-control w-full px-3 py-2 font-sans text-sm transition-colors motion-reduce:transition-none";
+const FIELD_CLASS =
+  "h-11 w-full rounded-full border border-[var(--color-border-subtle)] bg-white px-4 text-sm text-[var(--color-ink)] outline-none transition-colors focus:border-[var(--color-primary)]";
 
-const KEY_LABELS: Record<string, string> = {
-  q: "Recherche",
-  category: "Type d'achat",
-  sector: "Domaine",
-  entity: "Acheteur",
-  location: "Localisation",
-  status: "Statut",
-  procedure_type: "Procédure",
-};
+const SECTION_LABEL = "mb-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-light)]";
 
-const FILTER_KEYS: (keyof TenderFilters)[] = [
-  "q",
-  "category",
-  "sector",
-  "entity",
-  "location",
-  "status",
-  "procedure_type",
-];
-
-const SORT_OPTIONS = [
-  { value: "deadline", label: "Date limite" },
-  { value: "publication_date", label: "Publication" },
-  { value: "estimation", label: "Estimation" },
-  { value: "entity", label: "Acheteur" },
-  { value: "location", label: "Localisation" },
-  { value: "title", label: "Objet" },
-  { value: "scraped_at", label: "Import" },
-];
-
-const STATUS_LABELS: Record<string, string> = {
-  en_cours: "En cours",
-  cloture: "Clôturé",
-};
+// Category and status now live in the catalog toolbar; the sidebar owns the
+// finer-grained facets to stay lighter than the results column.
+const FILTER_KEYS: (keyof TenderFilters)[] = ["q", "category", "sector", "entity", "location", "status", "procedure_type"];
 
 const PROCEDURE_LABELS: Record<string, string> = {
   AOO: "Appel d'offres ouvert",
   AOS: "Appel d'offres simplifié",
-  AMI: "Appel à manifestation d'intérêt",
+  AMI: "Manifestation d'intérêt",
   CONCA: "Concours",
   CONSA: "Consultation architecturale",
 };
@@ -77,19 +49,22 @@ function filterSignature(filters: Partial<TenderFilters>) {
   );
 }
 
-function labelForStatus(status: string) {
-  return STATUS_LABELS[status] || status;
-}
-
 function labelForProcedure(procedure: string) {
   return PROCEDURE_LABELS[procedure] || procedure;
+}
+
+function FilterSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-[var(--color-border-subtle)] pt-5 first:border-t-0 first:pt-0">
+      <h3 className={SECTION_LABEL}>{title}</h3>
+      {children}
+    </section>
+  );
 }
 
 export default function FilterBar({ filters, onChange }: Props) {
   const [options, setOptions] = useState<FiltersResponse | null>(null);
   const [draft, setDraft] = useState<Partial<TenderFilters>>(() => normalizeFilters(filters));
-  const [open, setOpen] = useState(false);
-  // La recherche est toujours visible (hors panneau) et gère son propre état.
   const [search, setSearch] = useState(filters.q || "");
 
   useEffect(() => {
@@ -106,30 +81,20 @@ export default function FilterBar({ filters, onChange }: Props) {
     setSearch(filters.q || "");
   }, [filters.q]);
 
-  // Nom lisible d'une valeur de filtre (le secteur est stocké en code).
-  function labelForValue(key: keyof TenderFilters, value: string): string {
-    if (key === "status") return labelForStatus(value);
-    if (key === "procedure_type") return labelForProcedure(value);
-    if (key === "sector") return options?.sectors.find((s) => s.code === value)?.name || value;
-    return value;
-  }
-
-  function applySearch(e?: React.FormEvent) {
-    e?.preventDefault();
-    onChange({ ...normalizeFilters(filters), q: search, page: 1 });
-  }
-
-  const activeFilters = useMemo(
+  // Status defaults to "en_cours"; only count it as an active filter when the
+  // user has moved it off the default (that control lives in the toolbar).
+  const hasActiveFilters = useMemo(
     () =>
-      FILTER_KEYS.filter((key) => {
+      FILTER_KEYS.some((key) => {
         const value = filters[key];
+        if (key === "status") return Boolean(value) && value !== "en_cours";
         return value !== undefined && value !== null && String(value) !== "";
       }),
     [filters],
   );
 
-  const hasActiveFilters = activeFilters.length > 0;
-  const hasDraftChanges = filterSignature(draft) !== filterSignature(filters);
+  const searchChanged = search !== (filters.q || "");
+  const hasDraftChanges = filterSignature(draft) !== filterSignature(filters) || searchChanged;
 
   function updateDraft(patch: Partial<TenderFilters>) {
     setDraft((current) => ({ ...current, ...patch, page: 1 }));
@@ -137,7 +102,6 @@ export default function FilterBar({ filters, onChange }: Props) {
 
   function applyFilters(e?: React.FormEvent) {
     e?.preventDefault();
-    // La recherche visible fait foi pour `q`, indépendamment du brouillon.
     onChange({ ...normalizeFilters(draft), q: search, page: 1 });
   }
 
@@ -148,7 +112,7 @@ export default function FilterBar({ filters, onChange }: Props) {
       sector: "",
       entity: "",
       location: "",
-      status: "",
+      status: "en_cours",
       procedure_type: "",
       sort: filters.sort || "deadline",
       order: filters.order || "asc",
@@ -156,261 +120,133 @@ export default function FilterBar({ filters, onChange }: Props) {
       per_page: 20,
     };
     setSearch("");
-    setDraft((current) => ({ ...cleared, sort: current.sort, order: current.order }));
+    setDraft(cleared);
     onChange(cleared);
   }
 
-  function removeFilter(key: keyof TenderFilters) {
-    const patch = { [key]: "", page: 1 } as Partial<TenderFilters>;
-    setDraft((current) => ({ ...current, ...patch }));
-    onChange({ ...filters, ...patch });
-  }
-
-  // Le tri s'applique immédiatement, sans passer par le brouillon.
-  function changeSort(sort: string) {
-    onChange({ ...filters, sort, page: 1 });
-  }
-
-  function toggleOrder() {
-    onChange({ ...filters, order: (filters.order || "asc") === "asc" ? "desc" : "asc", page: 1 });
-  }
-
-  const categories =
-    options?.categories.map((category) => category.name).filter(Boolean) || [
-      "Travaux",
-      "Fournitures",
-      "Services",
-    ];
-
   return (
-    <section className="institutional-panel overflow-hidden">
-      {/* Always-visible search */}
-      <form onSubmit={applySearch} className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] p-3">
-        <div className="relative flex-1">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]"
-          />
-          <input
-            type="search"
-            aria-label="Rechercher une consultation"
-            placeholder="Activité, mot-clé, acheteur…"
-            className="institutional-control w-full py-2 pl-10 pr-3 font-sans text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary btn-sm rounded shrink-0">
-          Rechercher
-        </button>
-      </form>
-
-      {/* Control row — FILTRES + / TRIER + */}
-      <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border-subtle)] px-3 py-3 sm:px-4">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="inline-flex items-center gap-1.5 editorial-label text-[var(--color-ink)] hover:text-[var(--color-primary)] transition-colors motion-reduce:transition-none"
-        >
-          Filtres
-          <Plus
-            size={14}
-            className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-45" : ""}`}
-          />
-          {hasActiveFilters && (
-            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-warning)] px-1 text-[10px] font-bold text-[var(--color-ink)]">
-              {activeFilters.length}
-            </span>
-          )}
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline editorial-label text-[var(--color-muted)]">Trier</span>
-          <select
-            className="border-0 bg-transparent font-sans text-sm font-medium text-[var(--color-ink)] rounded focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] cursor-pointer"
-            value={filters.sort || "deadline"}
-            onChange={(e) => changeSort(e.target.value)}
-            aria-label="Trier par"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+    <aside
+      aria-label="Filtres du catalogue"
+      className="overflow-hidden rounded-[1.6rem] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-card lg:sticky lg:top-4 lg:-mt-2 lg:flex lg:max-h-[calc(100vh-2rem)] lg:flex-col lg:self-start"
+    >
+      <form onSubmit={applyFilters} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border-subtle)] px-5 py-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.04em] text-[var(--color-ink)]">Filtres</h2>
           <button
             type="button"
-            onClick={toggleOrder}
-            className="btn btn-ghost btn-xs btn-square"
-            aria-label={(filters.order || "asc") === "asc" ? "Ordre ascendant" : "Ordre descendant"}
-            title={(filters.order || "asc") === "asc" ? "Croissant" : "Décroissant"}
-          >
-            {(filters.order || "asc") === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Active filter chips */}
-      {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-subtle)] px-3 py-3 sm:px-4">
-          {activeFilters.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-muted)] px-2.5 py-1 font-sans text-xs text-[var(--color-ink)] hover:border-[var(--color-primary)] transition-colors motion-reduce:transition-none"
-              onClick={() => removeFilter(key)}
-              title="Retirer ce filtre"
-            >
-              {KEY_LABELS[key] || key}: {labelForValue(key, String(filters[key]))}
-              <X size={12} />
-            </button>
-          ))}
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 editorial-label text-[var(--color-accent)] hover:underline"
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
             onClick={clearAll}
+            disabled={!hasActiveFilters && !searchChanged}
+            aria-label="Réinitialiser les filtres"
           >
-            <RotateCcw size={12} /> Réinitialiser
+            <RotateCcw size={14} aria-hidden="true" />
+            Réinitialiser
           </button>
         </div>
-      )}
 
-      {/* Collapsible advanced panel */}
-      {open && (
-        <form
-          onSubmit={applyFilters}
-          className="border-t border-[var(--color-border-subtle)] px-5 py-6 space-y-5 sm:px-6 lg:px-8"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Type d'achat</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.category || ""}
-                onChange={(e) => updateDraft({ category: e.target.value, sector: "" })}
-              >
-                <option value="">Toutes catégories</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          <FilterSection title="Recherche">
+            <label className="relative block">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" aria-hidden="true" />
+              <input
+                type="search"
+                aria-label="Rechercher une consultation"
+                placeholder="Mot-clé, acheteur, référence..."
+                className="h-11 w-full rounded-full border border-[var(--color-border-subtle)] bg-white pl-11 pr-4 text-sm outline-none transition-colors focus:border-[var(--color-primary)]"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </label>
+          </FilterSection>
 
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Domaine d'activité</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.sector || ""}
-                onChange={(e) => updateDraft({ sector: e.target.value })}
-              >
-                <option value="">Tous secteurs</option>
-                {options?.sectors.map((sector) => (
-                  <option key={sector.code} value={sector.code}>
-                    {sector.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Localisation</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.location || ""}
-                onChange={(e) => updateDraft({ location: e.target.value })}
-              >
-                <option value="">Toutes localisations</option>
-                {options?.locations.map((location) => (
-                  <option key={location} value={location}>
-                    {location}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Acheteur</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.entity || ""}
-                onChange={(e) => updateDraft({ entity: e.target.value })}
-              >
-                <option value="">Tous acheteurs</option>
-                {options?.entities.map((entity) => (
-                  <option key={entity} value={entity}>
-                    {entity}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Statut</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.status || ""}
-                onChange={(e) => updateDraft({ status: e.target.value })}
-              >
-                <option value="">Tous statuts</option>
-                {(options?.statuses || ["en_cours"]).map((status) => (
-                  <option key={status} value={status}>
-                    {labelForStatus(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Procédure</span>
-              <select
-                className={CONTROL_CLASS}
-                value={draft.procedure_type || ""}
-                onChange={(e) => updateDraft({ procedure_type: e.target.value })}
-              >
-                <option value="">Toutes procédures</option>
-                {options?.procedure_types.map((procedure) => (
-                  <option key={procedure} value={procedure}>
-                    {labelForProcedure(procedure)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1.5">
-              <span className="editorial-label text-[var(--color-muted)]">Par page</span>
-              <select
-                className={CONTROL_CLASS}
-                value={String(draft.per_page || 20)}
-                onChange={(e) => updateDraft({ per_page: Number(e.target.value) })}
-              >
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-1">
-            <button
-              type="button"
-              onClick={clearAll}
-              className="editorial-label text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          <FilterSection title="Domaine">
+            <select
+              aria-label="Domaine"
+              className={FIELD_CLASS}
+              value={draft.sector || ""}
+              onChange={(event) => updateDraft({ sector: event.target.value })}
             >
-              Réinitialiser
-            </button>
-            <button
-              type="submit"
-              disabled={!hasDraftChanges}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-[var(--color-on-primary)] shadow-card transition-all hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              <option value="">Tous domaines</option>
+              {options?.sectors.map((sector) => (
+                <option key={sector.code} value={sector.code}>
+                  {sector.name}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
+
+          <FilterSection title="Localisation">
+            <select
+              aria-label="Localisation"
+              className={FIELD_CLASS}
+              value={draft.location || ""}
+              onChange={(event) => updateDraft({ location: event.target.value })}
             >
-              {hasDraftChanges ? "Appliquer" : "Filtres appliqués"}
-            </button>
-          </div>
-        </form>
-      )}
-    </section>
+              <option value="">Toutes villes</option>
+              {options?.locations.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
+
+          <FilterSection title="Acheteur">
+            <select
+              aria-label="Acheteur"
+              className={FIELD_CLASS}
+              value={draft.entity || ""}
+              onChange={(event) => updateDraft({ entity: event.target.value })}
+            >
+              <option value="">Tous acheteurs</option>
+              {options?.entities.map((entity) => (
+                <option key={entity} value={entity}>
+                  {entity}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
+
+          <FilterSection title="Procédure">
+            <select
+              aria-label="Procédure"
+              className={FIELD_CLASS}
+              value={draft.procedure_type || ""}
+              onChange={(event) => updateDraft({ procedure_type: event.target.value })}
+            >
+              <option value="">Toutes procédures</option>
+              {options?.procedure_types.map((procedure) => (
+                <option key={procedure} value={procedure}>
+                  {labelForProcedure(procedure)}
+                </option>
+              ))}
+            </select>
+          </FilterSection>
+
+          <FilterSection title="Par page">
+            <select
+              aria-label="Résultats par page"
+              className={FIELD_CLASS}
+              value={String(draft.per_page || 20)}
+              onChange={(event) => updateDraft({ per_page: Number(event.target.value) })}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </FilterSection>
+        </div>
+
+        <div className="shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-5 py-4">
+          <button
+            type="submit"
+            disabled={!hasDraftChanges}
+            className="h-11 w-full rounded-full bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-on-primary)] shadow-[0_16px_36px_-24px_rgba(0,35,111,0.82)] transition-all hover:-translate-y-0.5 hover:bg-[var(--color-primary-strong)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:hover:transform-none"
+          >
+            Appliquer
+          </button>
+        </div>
+      </form>
+    </aside>
   );
 }

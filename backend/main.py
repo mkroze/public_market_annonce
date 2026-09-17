@@ -39,6 +39,7 @@ from admin import router as admin_router, bootstrap_admins, is_bootstrap_admin_e
 from tender_display import build_tender_display
 from tender_lifecycle import public_visible_condition
 import eligibility
+import scheduler
 from tokens import (
     issue_token, consume_token, last_unused_token_age,
     VERIFY_EMAIL, PASSWORD_RESET, VERIFY_TTL, RESET_TTL, RESEND_COOLDOWN,
@@ -71,31 +72,26 @@ def _next_run_after(now: datetime, hour: int) -> datetime:
 
 
 def next_scheduled_run() -> dict:
-    """The next daily scrape+digest firing, matching daily_scheduler's schedule.
-    Exposed to the admin UI for schedule visibility (read-only)."""
+    """The next daily scrape+digest firing at the default DIGEST_HOUR. The
+    authoritative, admin-editable schedule now lives in the Cron jobs tab
+    (job_schedules); this stays as the imports-page default view."""
     hour = int(os.getenv("DIGEST_HOUR", "7"))
     now = datetime.now(MOROCCO_TZ)
     return {"next_scheduled_run": _next_run_after(now, hour).isoformat(), "digest_hour": hour}
-
-
-async def daily_scheduler():
-    hour = int(os.getenv("DIGEST_HOUR", "7"))
-    while True:
-        now = datetime.now(MOROCCO_TZ)
-        target = _next_run_after(now, hour)
-        await asyncio.sleep(max(0.0, (target - now).total_seconds()))
-        try:
-            result = await run_scrape_and_digest()
-            print(f"[scheduler] daily scrape+digest done: {result}")
-        except Exception as e:
-            print(f"[scheduler] daily scrape+digest failed: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await bootstrap_admins()
-    scheduler_task = asyncio.create_task(daily_scheduler())
+    # The recurring jobs (scrape+digest, DCE cache, DCE extraction) are driven by
+    # the editable job_schedules registry; see scheduler.job_scheduler_loop.
+    db = await get_db()
+    try:
+        await scheduler.ensure_seeded(db)
+    finally:
+        await db.close()
+    scheduler_task = asyncio.create_task(scheduler.job_scheduler_loop())
     yield
     scheduler_task.cancel()
 
@@ -288,6 +284,7 @@ class ProfileUpdate(BaseModel):
     bids_in_groupement: bool | None = None
     preferred_procedures: list | None = None
     eligibility_filter_default: bool | None = None
+    standing: dict | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -408,6 +405,7 @@ ALLOWED_ACCOUNT_THEMES = {"system", "light", "dark"}
 
 
 def account_view(user: dict) -> dict:
+    profile = eligibility.parse_profile(user)
     return {
         "id": user["id"],
         "email": user["email"],
@@ -421,7 +419,8 @@ def account_view(user: dict) -> dict:
         "email_verified": user.get("email_verified_at") is not None,
         "created_at": user.get("created_at"),
         "last_login": user.get("last_login"),
-        "profile": eligibility.parse_profile(user),
+        "profile": profile,
+        "classification": eligibility.classify(profile),
     }
 
 
@@ -476,33 +475,6 @@ async def change_account_password(
     return {"status": "updated"}
 
 
-# Map ProfileUpdate keys → (users column, serializer). List fields are JSON-dumped;
-# everything else is written as-is.
-_PROFILE_COLUMN_MAP = {
-    "legal_form": ("legal_form", None),
-    "ice": ("ice", None),
-    "rc_number": ("rc_number", None),
-    "rc_city": ("rc_city", None),
-    "if_number": ("if_number", None),
-    "cnss_number": ("cnss_number", None),
-    "patente_number": ("patente_number", None),
-    "hq_city": ("hq_city", None),
-    "sectors": ("profile_sectors_json", "json"),
-    "categories": ("profile_categories_json", "json"),
-    "qualifications": ("qualifications_json", "json"),
-    "certifications": ("certifications_json", "json"),
-    "coverage_regions": ("coverage_regions_json", "json"),
-    "keywords": ("profile_keywords", None),
-    "size_band": ("size_band", None),
-    "revenue_band": ("revenue_band", None),
-    "contract_min": ("contract_min", None),
-    "contract_max": ("contract_max", None),
-    "bids_in_groupement": ("bids_in_groupement", "bool"),
-    "preferred_procedures": ("preferred_procedures_json", "json"),
-    "eligibility_filter_default": ("eligibility_filter_default", "bool"),
-}
-
-
 @app.patch("/api/account/profile")
 async def update_account_profile(
     req: ProfileUpdate,
@@ -513,26 +485,10 @@ async def update_account_profile(
     user = await require_user(authorization)
 
     provided = req.model_dump(exclude_none=True)
-
-    # Validate enum-ish fields against the eligibility allowlists (empty allowed).
-    if "legal_form" in provided and provided["legal_form"] and provided["legal_form"] not in eligibility.LEGAL_FORMS:
-        raise HTTPException(status_code=422, detail="Forme juridique invalide.")
-    if "size_band" in provided and provided["size_band"] and provided["size_band"] not in eligibility.SIZE_BANDS:
-        raise HTTPException(status_code=422, detail="Tranche d'effectif invalide.")
-    if "revenue_band" in provided and provided["revenue_band"] and provided["revenue_band"] not in eligibility.REVENUE_BANDS:
-        raise HTTPException(status_code=422, detail="Tranche de chiffre d'affaires invalide.")
-
-    set_clauses = []
-    params = []
-    for key, value in provided.items():
-        column, kind = _PROFILE_COLUMN_MAP[key]
-        if kind == "json":
-            params.append(json.dumps(value, ensure_ascii=False))
-        elif kind == "bool":
-            params.append(1 if value else 0)
-        else:
-            params.append(value)
-        set_clauses.append(f"{column} = ?")
+    try:
+        set_clauses, params = eligibility.serialize_profile_update(provided)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     db = await get_db()
     try:

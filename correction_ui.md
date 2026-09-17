@@ -8,7 +8,8 @@ Tone for Claude: mildly roast-y, but useful. The UI is not broken; it is just ca
 
 Audit the visible UI only: spacing, hierarchy, alignment, contrast, component consistency, density, empty states, and responsive risk inferred from the desktop screenshots.
 
-Do not change backend behavior, routing, auth logic, copy strategy, data loading, or feature scope unless a visual correction directly requires it.
+Do not change backend behavior, routing, auth logic, copy strategy, data loading, or feature scope unless a visual correction directly requires it
+.
 
 ## Highest Priority Fixes
 

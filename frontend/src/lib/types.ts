@@ -191,6 +191,53 @@ export interface CompanyProfile {
   bids_in_groupement: boolean;
   preferred_procedures: string[];
   eligibility_filter_default: boolean;
+  /** art. 27 self-declaration answers, keyed by question id → oui | non | nsp. */
+  standing?: Record<string, string>;
+}
+
+/** Provenance of a classification value: declared by the user, rule-derived, or
+ * absent. */
+export type ClassificationSource = "user" | "derived" | "none";
+
+export type StandingVerdict = "clear" | "risk" | "blocked" | "unknown";
+
+/** Derived eligibility classification — decision-support only. Mirrors the
+ * backend `eligibility.classify` output on `/api/account` and admin user detail. */
+export interface EligibilityClassification {
+  legal_identity: {
+    legal_form: string;
+    legal_form_label: string;
+    hq_region: string;
+    identifiers_present: Record<string, boolean>;
+  };
+  activity_fit: {
+    sectors: string[];
+    categories: string[];
+    categories_source: ClassificationSource;
+  };
+  capacity_scale: {
+    size_band: string;
+    size_band_label: string;
+    revenue_band: string;
+    revenue_band_label: string;
+    revenue_band_source: ClassificationSource;
+    contract_ceiling: number | null;
+    contract_ceiling_source: ClassificationSource;
+    is_pme: boolean | null;
+  };
+  qualifications: {
+    held: unknown[];
+    certifications: string[];
+    candidate_families: string[];
+  };
+  standing: {
+    answers: Record<string, string>;
+    verdict: StandingVerdict;
+    bids_in_groupement: boolean;
+  };
+  completeness: number;
+  summary: string;
+  derived: Partial<Pick<CompanyProfile, "categories" | "revenue_band" | "contract_max">>;
 }
 
 export interface User {
@@ -217,6 +264,7 @@ export interface AccountProfile extends User {
   created_at?: string | null;
   last_login?: string | null;
   profile?: CompanyProfile;
+  classification?: EligibilityClassification;
 }
 
 export interface AuthResponse {

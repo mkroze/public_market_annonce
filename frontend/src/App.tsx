@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-route
 import { AuthProvider, useAuth } from "./lib/auth";
 import Navbar from "./components/Navbar";
 import VerificationBanner from "./components/VerificationBanner";
+import Home from "./pages/Home";
 import Tenders from "./pages/Tenders";
 import TenderDetail from "./pages/TenderDetail";
 import Login from "./pages/Login";
@@ -177,8 +178,8 @@ function PublicLayout() {
           <Route path="/legal/conditions" element={<Terms />} />
           <Route path="/legal/cookies" element={<Cookies />} />
 
-          <Route path="/" element={<Navigate to="/tenders" replace />} />
-          <Route path="*" element={<Navigate to="/tenders" replace />} />
+          <Route path="/" element={<Home />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <Footer />
