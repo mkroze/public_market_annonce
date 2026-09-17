@@ -2,12 +2,9 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  ClipboardCheck,
-  FileSearch,
   Gavel,
   Layers3,
   Scale,
-  Search,
   ShieldCheck,
 } from "lucide-react";
 
@@ -29,24 +26,6 @@ const HERO_LINKS = [
     icon: Gavel,
     title: "Délais de recours maîtrisés",
     description: "Situez les fenêtres de réclamation et de saisine CNCP.",
-  },
-] as const;
-
-const STEPS = [
-  {
-    icon: Search,
-    title: "Choisir une consultation",
-    description: "Repérez un appel d'offres, ouvrez sa fiche et gardez le règlement à portée de main.",
-  },
-  {
-    icon: FileSearch,
-    title: "Lire les exigences",
-    description: "Identifiez les pièces, garanties, délais et contraintes de la procédure.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "Préparer le dossier",
-    description: "Transformez l'analyse en plan de préparation clair, priorisé et vérifiable.",
   },
 ] as const;
 

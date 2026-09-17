@@ -1,37 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Mail } from "lucide-react";
-import logoFull from "../assets/logo-full.svg";
-
-const columns = [
-  {
-    title: "Explorer",
-    links: [
-      { to: "/tenders", label: "Consultations" },
-      { to: "/stats", label: "Statistiques" },
-      { to: "/sectors", label: "Secteurs" },
-      { to: "/cities", label: "Villes" },
-    ],
-  },
-  {
-    title: "Ressources",
-    links: [
-      { to: "/guide", label: "Préparer ma candidature" },
-      { to: "/faq", label: "FAQ" },
-      { to: "/about", label: "À propos" },
-      { to: "/contact", label: "Contact" },
-    ],
-  },
-] as const;
-
-const secondaryLinks = [
-  { to: "/legal/mentions-legales", label: "Mentions légales" },
-  { to: "/legal/confidentialite", label: "Confidentialité" },
-  { to: "/legal/conditions", label: "CGU" },
-] as const;
 
 export default function Footer() {
-  const year = new Date().getFullYear();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
 

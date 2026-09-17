@@ -56,7 +56,7 @@ function DeadlineCard({ title, deadline, detail }: { title: string; deadline: Da
   return (
     <section className={`rounded-[1.5rem] border-2 bg-[var(--color-surface)] p-5 shadow-card ${stateUi[state].className}`}>
       <div className="inline-flex items-center gap-1.5 rounded-full border border-current px-2.5 py-1">
-        <UiIcon size={13} aria-hidden="true" />
+        <UiIcon size={13} aria-hidden />
         <span className="text-xs font-semibold uppercase tracking-[0.08em]">{stateUi[state].label}</span>
       </div>
       <h2 className="mt-3 text-base font-bold text-[var(--color-ink)]">{title}</h2>
