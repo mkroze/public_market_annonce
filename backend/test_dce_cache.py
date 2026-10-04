@@ -288,5 +288,35 @@ class WarmAllBackoffTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second["status"], "done")  # nothing left -> finished
 
 
+class DceCacheTraceTest(DceCacheCapAndClearTest):
+    """Automatic deletions leave a trace for the admin Workflows view."""
+
+    async def test_eviction_is_audited_as_system_event(self):
+        import json
+        await self.db.execute(
+            "CREATE TABLE admin_audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_email TEXT, "
+            "actor_role TEXT, action TEXT, target_type TEXT, result TEXT, after_json TEXT)"
+        )
+        with patch.object(dce_cache, "DCE_CACHE_MAX_BYTES", 100):
+            await dce_cache._store(self.db, "T1", b"x" * 60, "a.zip")
+            await dce_cache._store(self.db, "T2", b"y" * 60, "b.zip")
+
+        rows = await (await self.db.execute("SELECT * FROM admin_audit_logs")).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["action"], rows[0]["actor_role"]), ("dce_cache.evict", "system"))
+        after = json.loads(rows[0]["after_json"])
+        self.assertEqual(after, {"reason": "size_cap", "removed": 1, "freed_bytes": 60, "tender_ids": ["T1"]})
+
+    async def test_clear_outdated_reports_orphans_separately(self):
+        orphan = os.path.join(self.cachedir, "deadbeef.zip")
+        os.makedirs(self.cachedir, exist_ok=True)
+        with open(orphan, "wb") as f:
+            f.write(b"z" * 25)
+        with patch.object(dce_cache, "DCE_CACHE_PRUNE_ORPHANS", True):
+            res = await dce_cache.clear_dce_cache(self.db, mode="outdated")
+        self.assertEqual((res["orphans_removed"], res["orphan_bytes"]), (1, 25))
+        self.assertEqual((res["removed"], res["freed_bytes"]), (1, 25))
+
+
 if __name__ == "__main__":
     unittest.main()

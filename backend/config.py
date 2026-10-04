@@ -54,7 +54,7 @@ DCE_WARM_MAX_DOWNLOADS = int(os.getenv("DCE_WARM_MAX_DOWNLOADS", "30"))
 # tender is archived, past its deadline, or gone from the catalog (see
 # dce_cache._STALE_TENDER_IDS). Orphan files (a ZIP on disk with no matching
 # 'ok' row, e.g. left by a crash mid-write) are also pruned. This is enforced by
-# the "outdated" clear mode and the periodic janitor.
+# the "outdated" clear mode and the periodic janitor (dce_cache_cleanup job).
 DCE_CACHE_PRUNE_ORPHANS = os.getenv("DCE_CACHE_PRUNE_ORPHANS", "1").strip().lower() in ("1", "true", "yes", "on")
 
 # DCE extraction pipeline. Recap markdown lives next to the ZIP cache on /app/data.

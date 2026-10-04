@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "./AdminLayout";
 import Dashboard from "./pages/Dashboard";
+import Workflows from "./pages/Workflows";
 import Scrape from "./pages/Scrape";
 import DceCache from "./pages/DceCache";
 import DceExtraction from "./pages/DceExtraction";
@@ -28,6 +29,7 @@ export default function AdminApp() {
     <AdminLayout>
       <Routes>
         <Route index element={<Dashboard />} />
+        <Route path="workflows" element={<Workflows />} />
         <Route path="scrape" element={<Scrape />} />
         <Route path="dce-cache" element={<DceCache />} />
         <Route path="dce-extraction" element={<DceExtraction />} />

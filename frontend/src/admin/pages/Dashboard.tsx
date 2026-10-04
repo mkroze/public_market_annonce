@@ -1,16 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Database, Globe, RefreshCw, ChevronRight, CalendarClock } from "lucide-react";
-import { getOverview, getImports, getDceCache, getDceExtraction, ApiError } from "../api";
+import { getOverview, getImports, getDceCache, getDceExtraction, updateCron, ApiError } from "../api";
 import type { AdminOverview } from "../types";
 import { PageHeader, Panel, MetricCard, fmtDate } from "../components/ui";
 import { LoadingState, FailedState, DeniedState } from "../components/StateBlock";
 import { ImportStatusBadge } from "../components/StatusBadge";
+import { useAuth } from "../../lib/auth";
+import { can } from "../permissions";
+import ToastContainer from "../../components/Toast";
+import { useToasts } from "../components/useToasts";
 
 interface PipelineSummary { cached: number; extracted: number; nextRun: string | null; }
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toasts, push, dismiss } = useToasts();
+  const canSchedule = can(user?.role, "imports.run");
   const [data, setData] = useState<AdminOverview | null>(null);
   const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +39,19 @@ export default function Dashboard() {
 
   useEffect(load, []);
 
+  // Hourly on = interval schedule (60 min); off = back to the daily run.
+  async function setHourly(hourly: boolean) {
+    try {
+      await updateCron("tender_stats", hourly
+        ? { enabled: true, schedule_kind: "interval", interval_minutes: 60 }
+        : { enabled: true, schedule_kind: "daily" });
+      setData((cur) => cur && { ...cur, freshness: { ...cur.freshness, tender_stats_hourly: hourly } });
+      push(hourly ? "Tender counts will be recomputed every hour" : "Tender counts back to the daily computation", "success");
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Could not change the schedule", "error");
+    }
+  }
+
   if (loading) return <LoadingState label="Loading dashboard" />;
   if (error?.status === 403) return <DeniedState message={error.message} />;
   if (error || !data) return <FailedState message={error?.message} onRetry={load} />;
@@ -47,8 +67,17 @@ export default function Dashboard() {
       />
 
       {/* Freshness */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <MetricCard label="Tenders" value={f.tender_count.toLocaleString("fr-FR")} sub={`Source: ${f.source}`} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+        <MetricCard
+          label="Tenders (all)"
+          value={f.tender_count.toLocaleString("fr-FR")}
+          sub={`Includes everything, even archived and past-deadline tenders. Source: ${f.source}`}
+        />
+        <MetricCard
+          label="Tenders (current)"
+          value={f.active_tender_count.toLocaleString("fr-FR")}
+          sub="Up-to-date tenders only: not archived, deadline not passed."
+        />
         <MetricCard
           label="Detail coverage"
           value={`${f.detail_coverage_pct}%`}
@@ -57,6 +86,24 @@ export default function Dashboard() {
         />
         <MetricCard label="Last scrape" value={<span className="text-base">{fmtDate(f.last_scraped_at)}</span>} sub="Newest tender timestamp" />
         <MetricCard label="Last success" value={<span className="text-base">{fmtDate(f.last_successful_import_at)}</span>} sub="Completed import" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-sans text-[var(--color-slate)] -mt-2 mb-5">
+        <span>
+          Tender counts computed <strong className="text-[var(--color-charcoal)] font-semibold">{fmtDate(f.tender_stats_computed_at)}</strong>
+          {" "}— automatically {f.tender_stats_hourly ? "every hour" : "every day at the scrape's hour"}.
+        </span>
+        <label className="inline-flex items-center gap-2 text-sm text-[var(--color-charcoal)]">
+          <input
+            type="checkbox"
+            className="toggle toggle-sm"
+            disabled={!canSchedule}
+            title={!canSchedule ? "Requires imports.run permission" : undefined}
+            checked={f.tender_stats_hourly}
+            onChange={(e) => setHourly(e.target.checked)}
+          />
+          Recompute every hour
+        </label>
       </div>
 
       {/* Data pipeline funnel: scraped → cached → extracted */}
@@ -164,6 +211,8 @@ export default function Dashboard() {
           </button>
         </div>
       </Panel>
+
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

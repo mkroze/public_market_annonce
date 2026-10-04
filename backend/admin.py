@@ -212,6 +212,62 @@ async def bootstrap_admins():
         await db.close()
 
 
+# ── Tender counts (scheduled snapshot shown on the dashboard) ────────────────
+
+_TENDER_STATS_KEY = "tender_stats"
+
+
+async def compute_tender_stats(db, updated_by: str | None = None) -> dict:
+    """Count the tenders now and store the snapshot (app_settings) the dashboard
+    reads. Caller owns the db."""
+    cur = await db.execute(
+        # Current = not archived and deadline not passed (a tender with no
+        # parseable deadline counts as current — the complement of `stale`).
+        """SELECT COUNT(*),
+                  COALESCE(SUM(CASE WHEN COALESCE(admin_status, 'active') != 'archived'
+                                     AND (COALESCE(deadline_date, '') = '' OR deadline_date >= date('now'))
+                                    THEN 1 ELSE 0 END), 0),
+                  datetime('now')
+           FROM tenders"""
+    )
+    total, current, now = await cur.fetchone()
+    stats = {"tender_count": total, "active_tender_count": current, "computed_at": now}
+    await db.execute(
+        """INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES (?, ?, datetime('now'), ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+               updated_at = excluded.updated_at, updated_by = excluded.updated_by""",
+        (_TENDER_STATS_KEY, json.dumps(stats), updated_by),
+    )
+    await db.commit()
+    return stats
+
+
+async def get_tender_stats(db) -> dict | None:
+    """The last stored snapshot, or None before the first computation."""
+    row = await (await db.execute(
+        "SELECT value FROM app_settings WHERE key = ?", (_TENDER_STATS_KEY,)
+    )).fetchone()
+    try:
+        return json.loads(row["value"]) if row else None
+    except ValueError:
+        return None
+
+
+async def refresh_tender_stats(actor_email: str | None = None) -> dict:
+    """Job ``tender_stats``: recompute the dashboard tender counts."""
+    from main import scrape_lock
+
+    # A scrape fired on the same tick already holds the lock: wait for it so the
+    # snapshot includes the tenders it ingests.
+    async with scrape_lock:
+        pass
+    db = await get_db()
+    try:
+        return await compute_tender_stats(db, updated_by=actor_email)
+    finally:
+        await db.close()
+
+
 # ── Overview dashboard ───────────────────────────────────────────────────────
 
 @router.get("/overview")
@@ -224,7 +280,13 @@ async def admin_overview(request: Request, user=Depends(require_admin("overview.
         last_row = await (await db.execute("SELECT * FROM scrape_log ORDER BY id DESC LIMIT 1")).fetchone()
         last_import = dict(last_row) if last_row else None
 
-        tender_count = await scalar("SELECT COUNT(*) FROM tenders")
+        # Tender counts come from the scheduled snapshot (job ``tender_stats``),
+        # computed on the spot only when none exists yet.
+        stats = await get_tender_stats(db) or await compute_tender_stats(db)
+        tender_count = stats["tender_count"]
+        active_tender_count = stats["active_tender_count"]
+        await scheduler.ensure_seeded(db)
+        stats_schedule = await scheduler.get_schedule(db, "tender_stats") or {}
         detail_count = await scalar("SELECT COUNT(*) FROM tender_details")
         last_scraped = await scalar("SELECT MAX(scraped_at) FROM tenders")
         last_success = await scalar("SELECT MAX(finished_at) FROM scrape_log WHERE status = 'done'")
@@ -257,6 +319,10 @@ async def admin_overview(request: Request, user=Depends(require_admin("overview.
             "last_import": last_import,
             "freshness": {
                 "tender_count": tender_count,
+                "active_tender_count": active_tender_count,
+                "tender_stats_computed_at": stats["computed_at"],
+                "tender_stats_hourly": bool(stats_schedule.get("enabled"))
+                                       and stats_schedule.get("schedule_kind") == "interval",
                 "detail_count": detail_count,
                 "detail_coverage_pct": coverage,
                 "last_scraped_at": last_scraped,
@@ -369,6 +435,10 @@ async def admin_tenders(
         await db.close()
 
 
+# How many tender ids one audit row keeps (the counts are always exact).
+_AUDIT_MAX_IDS = 50
+
+
 class BatchRequest(BaseModel):
     action: str  # mark_reviewed | flag | archive | restore | retry_detail
     ids: list[str]
@@ -449,7 +519,8 @@ async def admin_tenders_batch(
             db, actor=user, action=f"tender.batch.{req.action}",
             target_type="tender", target_id=f"{len(updated)}/{len(req.ids)}",
             result=result, request=request,
-            after={"updated": len(updated), "failed": len(failed)},
+            after={"updated": len(updated), "failed": len(failed),
+                   "ids": updated[:_AUDIT_MAX_IDS]},
         )
         return {"action": req.action, "updated": updated, "failed": failed, "result": result}
     finally:
@@ -486,6 +557,14 @@ async def admin_cleanup_expired_tenders(
                  AND COALESCE(deadline_date, '') != ''
                  AND deadline_date < date('now')"""
         )).fetchone())[0]
+        sample_ids = [r["id"] for r in await (await db.execute(
+            """SELECT id FROM tenders
+               WHERE COALESCE(admin_status, 'active') != 'archived'
+                 AND COALESCE(deadline_date, '') != ''
+                 AND deadline_date < date('now')
+               ORDER BY id LIMIT ?""",
+            (_AUDIT_MAX_IDS,),
+        )).fetchall()]
         cur = await db.execute(
             """UPDATE tenders
                SET admin_status = 'archived',
@@ -519,6 +598,7 @@ async def admin_cleanup_expired_tenders(
             after={
                 "matched": matched,
                 "archived": archived,
+                "ids": sample_ids,
                 "clear_dce_cache": clear_dce_cache,
                 "dce_removed": dce_removed,
                 "dce_freed_bytes": dce_freed,
@@ -540,6 +620,13 @@ async def admin_cleanup_expired_tenders(
 
 _STEER_ACTIONS = ("pause", "resume", "cancel")
 
+# Audit target_type of each pipeline -> its run-history table.
+_RUN_TABLES = {
+    "import": "scrape_log",
+    "dce_cache": "dce_cache_log",
+    "dce_extraction": "dce_extraction_log",
+}
+
 
 async def _steer_pipeline(control, action: str, is_active: bool, *, request: Request,
                           user: dict, target_type: str) -> dict:
@@ -555,8 +642,13 @@ async def _steer_pipeline(control, action: str, is_active: bool, *, request: Req
     getattr(control, action)()
     db = await get_db()
     try:
+        # Tie the action to the run it steered (None for a no-op resume).
+        run = await (await db.execute(
+            f"SELECT id FROM {_RUN_TABLES[target_type]} WHERE status = 'running' ORDER BY id DESC LIMIT 1"
+        )).fetchone()
         await log_audit(db, actor=user, action=f"{target_type}.{action}",
-                        target_type=target_type, request=request)
+                        target_type=target_type, target_id=run["id"] if run else None,
+                        request=request)
     finally:
         await db.close()
     return {"status": action, "paused": control.paused, "cancel_requested": control.cancel_requested}
@@ -667,11 +759,12 @@ async def admin_import_control(action: str, request: Request, user=Depends(requi
 async def _job_running_states() -> dict:
     """Live running flag per job, from the existing per-stage locks/controls."""
     from main import scrape_lock
-    from dce_cache import dce_cache_lock
+    from dce_cache import dce_cache_lock, dce_cleanup_lock
     return {
         "scrape_digest": scrape_lock.locked(),
         "dce_cache": dce_cache_lock.locked(),
         "dce_extraction": DCE_EXTRACTION.running,
+        "dce_cache_cleanup": dce_cleanup_lock.locked(),
     }
 
 
@@ -735,6 +828,253 @@ async def admin_cron_run(job: str, request: Request, user=Depends(require_admin(
     return {"status": "started"}
 
 
+# ── Workflows (one view over the three pipelines + their audit trail) ────────
+
+_WORKFLOWS = (
+    # scheduler job key, steer URL segment, audit target_type
+    ("scrape_digest", "imports", "import"),
+    ("dce_cache", "dce-cache", "dce_cache"),
+    ("dce_extraction", "dce-extraction", "dce_extraction"),
+)
+
+# The scheduled outdated-cache cleanup has no run table and nothing to steer:
+# its history is the ``dce_cache.cleanup`` audit rows.
+_CLEANUP_JOB = "dce_cache_cleanup"
+
+# Per-table counters surfaced as a run's ``details``.
+_RUN_COUNTERS = {
+    "scrape_log": ("tenders_found", "tenders_new", "tenders_updated", "tenders_skipped"),
+    "dce_cache_log": ("total", "cached", "skipped", "failed", "pauses"),
+    "dce_extraction_log": ("total", "enqueued", "skipped", "failed"),
+}
+
+# Audit actions shown in the workflows journal -> (workflow, kind). Launch
+# actions (import.run, dce_cache.run, cron.run, ...) are left out on purpose:
+# the run row they create is the journal entry. ``cron.update`` takes its
+# workflow from the audited job key.
+_AUDIT_EVENTS = {
+    **{f"{target}.{action}": (job, "control")
+       for job, _stage, target in _WORKFLOWS for action in _STEER_ACTIONS},
+    "dce_cache.clear": ("dce_cache", "deletion"),
+    "dce_cache.evict": ("dce_cache", "deletion"),
+    "dce_cache.cleanup": (_CLEANUP_JOB, "deletion"),
+    "tender.batch.archive": ("tenders", "archive"),
+    "tender.cleanup.expired_archive": ("tenders", "archive"),
+    "tender.batch.restore": ("tenders", "restore"),
+    "cron.update": (None, "config"),
+}
+
+# Rows read per source before merging. The journal is merged and paginated in
+# memory, so it covers the most recent rows of each source, not all history.
+_EVENT_SOURCE_LIMIT = 500
+
+
+def _run_event(job: str, table: str, row: dict) -> dict:
+    actor = row.get("actor_email")
+    return {
+        "id": f"run:{job}:{row['id']}",
+        "at": row.get("started_at"),
+        "finished_at": row.get("finished_at"),
+        "workflow": job,
+        "kind": "run",
+        "action": f"{job}.run",
+        "origin": "manual" if actor and actor != scheduler.SCHEDULER_ACTOR else "scheduled",
+        "actor": actor,
+        "status": row.get("status"),
+        "run_id": row["id"],
+        "error": row.get("error"),
+        "details": {k: row.get(k) for k in _RUN_COUNTERS[table] if row.get(k) is not None},
+    }
+
+
+def _json_or_none(text):
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
+
+
+def _audit_event(row: dict) -> dict:
+    workflow, kind = _AUDIT_EVENTS[row["action"]]
+    after = _json_or_none(row.get("after_json"))
+    details = after if isinstance(after, dict) else {}
+    target_id = row.get("target_id")
+    run_id = None
+    if kind == "config":
+        workflow = target_id
+        details = {"before": _json_or_none(row.get("before_json")), "after": after}
+    elif kind == "control" and target_id and target_id.isdigit():
+        run_id = int(target_id)
+    if row.get("actor_email") == scheduler.SCHEDULER_ACTOR:
+        origin = "scheduled"
+    elif row.get("actor_role") == "system":
+        origin = "system"
+    else:
+        origin = "manual"
+    return {
+        "id": f"audit:{row['id']}",
+        "at": row.get("created_at"),
+        "finished_at": None,
+        "workflow": workflow,
+        "kind": kind,
+        "action": row["action"],
+        "origin": origin,
+        "actor": row.get("actor_email"),
+        "status": row.get("result"),
+        "run_id": run_id,
+        "error": None,
+        "details": details,
+    }
+
+
+@router.get("/workflows")
+async def admin_workflows(user=Depends(require_admin("imports.view"))):
+    """Live state of every pipeline: running/paused, progress, last run, schedule."""
+    running = await _job_running_states()
+    controls = {"scrape_digest": SCRAPE, "dce_cache": DCE_CACHE, "dce_extraction": DCE_EXTRACTION}
+    db = await get_db()
+    try:
+        schedules = {j["job"]: j for j in await scheduler.list_schedules(db)}
+        data = []
+        for job, stage, target in _WORKFLOWS:
+            table = _RUN_TABLES[target]
+            last = await (await db.execute(f"SELECT * FROM {table} ORDER BY id DESC LIMIT 1")).fetchone()
+            active = bool(running.get(job))
+            control = controls[job]
+            data.append({
+                "key": job,
+                "label": scheduler.JOB_LABELS[job],
+                "stage": stage,
+                "active": active,
+                "paused": control.paused if active else False,
+                "cancel_requested": control.cancel_requested if active else False,
+                "progress": dict(control.progress) if active else None,
+                "last_run": _run_event(job, table, dict(last)) if last else None,
+                "schedule": schedules.get(job),
+            })
+        cleanup = await (await db.execute(
+            "SELECT * FROM admin_audit_logs WHERE action = 'dce_cache.cleanup' ORDER BY id DESC LIMIT 1"
+        )).fetchone()
+        data.append({
+            "key": _CLEANUP_JOB,
+            "label": scheduler.JOB_LABELS[_CLEANUP_JOB],
+            "stage": None,
+            "active": bool(running.get(_CLEANUP_JOB)),
+            "paused": False,
+            "cancel_requested": False,
+            "progress": None,
+            "last_run": _audit_event(dict(cleanup)) if cleanup else None,
+            "schedule": schedules.get(_CLEANUP_JOB),
+        })
+        # The tender-count job keeps no history: its last run is the stored snapshot.
+        snapshot = await (await db.execute(
+            "SELECT value, updated_by FROM app_settings WHERE key = ?", (_TENDER_STATS_KEY,)
+        )).fetchone()
+        stats = _json_or_none(snapshot["value"]) if snapshot else None
+        last_stats = None
+        if isinstance(stats, dict):
+            actor = snapshot["updated_by"]
+            if actor == scheduler.SCHEDULER_ACTOR:
+                origin = "scheduled"
+            else:
+                # No actor: computed on the spot by the first dashboard load.
+                origin = "manual" if actor else "system"
+            last_stats = {
+                "id": "run:tender_stats",
+                "at": stats.get("computed_at"),
+                "finished_at": None,
+                "workflow": "tender_stats",
+                "kind": "run",
+                "action": "tender_stats.run",
+                "origin": origin,
+                "actor": actor,
+                "status": "done",
+                "run_id": None,
+                "error": None,
+                "details": {k: stats.get(k) for k in ("tender_count", "active_tender_count")},
+            }
+        data.append({
+            "key": "tender_stats",
+            "label": scheduler.JOB_LABELS["tender_stats"],
+            "stage": None,
+            "active": False,
+            "paused": False,
+            "cancel_requested": False,
+            "progress": None,
+            "last_run": last_stats,
+            "schedule": schedules.get("tender_stats"),
+        })
+        return {"data": data}
+    finally:
+        await db.close()
+
+
+@router.get("/workflows/events")
+async def admin_workflow_events(
+    workflow: str = Query(""),
+    kind: str = Query(""),  # comma-separated: run,control,deletion,archive,restore,config
+    origin: str = Query(""),
+    status: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    user=Depends(require_admin("imports.view")),
+):
+    """One chronological journal: pipeline runs merged with the audited actions
+    that steer, clean up, or reschedule them (newest first)."""
+    kinds = {k.strip() for k in kind.split(",") if k.strip()}
+
+    def window(column: str) -> tuple[list[str], list]:
+        conditions, params = [], []
+        if date_from:
+            conditions.append(f"{column} >= ?"); params.append(date_from)
+        if date_to:
+            conditions.append(f"date({column}) <= ?"); params.append(date_to)
+        return conditions, params
+
+    events: list[dict] = []
+    db = await get_db()
+    try:
+        if not kinds or "run" in kinds:
+            conditions, params = window("started_at")
+            where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            for job, _stage, target in _WORKFLOWS:
+                table = _RUN_TABLES[target]
+                rows = await (await db.execute(
+                    f"SELECT * FROM {table} {where} ORDER BY id DESC LIMIT ?",
+                    params + [_EVENT_SOURCE_LIMIT],
+                )).fetchall()
+                events.extend(_run_event(job, table, dict(r)) for r in rows)
+        if kinds != {"run"}:
+            conditions, params = window("created_at")
+            conditions.append(f"action IN ({','.join('?' * len(_AUDIT_EVENTS))})")
+            rows = await (await db.execute(
+                f"""SELECT * FROM admin_audit_logs WHERE {' AND '.join(conditions)}
+                    ORDER BY id DESC LIMIT ?""",
+                params + list(_AUDIT_EVENTS) + [_EVENT_SOURCE_LIMIT],
+            )).fetchall()
+            events.extend(_audit_event(dict(r)) for r in rows)
+    finally:
+        await db.close()
+
+    events = [
+        e for e in events
+        if (not workflow or e["workflow"] == workflow)
+        and (not kinds or e["kind"] in kinds)
+        and (not origin or e["origin"] == origin)
+        and (not status or e["status"] == status)
+    ]
+    events.sort(key=lambda e: (e["at"] or "", e["id"]), reverse=True)
+    total = len(events)
+    offset = (page - 1) * per_page
+    return {
+        "total": total, "page": page, "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page,
+        "data": events[offset:offset + per_page],
+    }
+
+
 # ── DCE cache control ────────────────────────────────────────────────────────
 
 def _launch_dce_cache(actor_email: str):
@@ -794,7 +1134,8 @@ async def admin_clear_dce_cache(request: Request, mode: str = Query("all"), user
     db = await get_db()
     try:
         result = await clear_dce_cache(db, mode=clear_mode)
-        await log_audit(db, actor=user, action="dce_cache.clear", target_type="dce_cache", request=request)
+        await log_audit(db, actor=user, action="dce_cache.clear", target_type="dce_cache",
+                        request=request, after=result)
     finally:
         await db.close()
     return result

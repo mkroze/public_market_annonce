@@ -409,11 +409,15 @@ class CronApiTest(unittest.TestCase):
         self.owner_id = run(_make_user("owner@x.com", role="owner"))
         self.owner_headers = _auth(self.owner_id, "owner@x.com")
 
-    def test_list_returns_three_jobs_with_running_flag(self):
+    def test_list_returns_all_jobs_with_running_flag(self):
         r = self.client.get("/api/admin/cron", headers=self.owner_headers)
         self.assertEqual(r.status_code, 200)
         jobs = {j["job"]: j for j in r.json()["data"]}
-        self.assertEqual(set(jobs), {"scrape_digest", "dce_cache", "dce_extraction"})
+        self.assertEqual(set(jobs), {"scrape_digest", "dce_cache", "dce_extraction", "dce_cache_cleanup", "tender_stats"})
+        self.assertTrue(jobs["tender_stats"]["enabled"])
+        self.assertEqual(jobs["tender_stats"]["schedule_kind"], "daily")
+        self.assertFalse(jobs["dce_cache_cleanup"]["enabled"])
+        self.assertEqual(jobs["dce_cache_cleanup"]["schedule_kind"], "daily")
         self.assertIn("running", jobs["dce_cache"])
         self.assertIn("next_run_at", jobs["scrape_digest"])
         self.assertTrue(jobs["scrape_digest"]["enabled"])
@@ -629,6 +633,32 @@ class BatchTest(unittest.TestCase):
 
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["failure_queues"]["stale_records"], 1)
+        # All rows vs. current only (T1 from setUp has no deadline, so it is current).
+        self.assertEqual(r.json()["freshness"]["tender_count"], 4)
+        self.assertEqual(r.json()["freshness"]["active_tender_count"], 2)
+
+    def test_overview_tender_counts_are_a_snapshot_until_recomputed(self):
+        first = self.client.get("/api/admin/overview", headers=self.headers).json()["freshness"]
+        self.assertEqual((first["tender_count"], first["active_tender_count"]), (1, 1))
+        self.assertIsNotNone(first["tender_stats_computed_at"])
+        self.assertFalse(first["tender_stats_hourly"])
+
+        run(self._seed_lifecycle_tender("LATER", "01/01/2099 10:00"))
+        run(self._seed_lifecycle_tender("LATER-OLD", "01/01/2020 10:00"))
+        stale = self.client.get("/api/admin/overview", headers=self.headers).json()["freshness"]
+        self.assertEqual(stale["tender_count"], 1)  # not recomputed on page load
+
+        stats = run(admin.refresh_tender_stats(actor_email="scheduler"))
+        self.assertEqual((stats["tender_count"], stats["active_tender_count"]), (3, 2))
+        fresh = self.client.get("/api/admin/overview", headers=self.headers).json()["freshness"]
+        self.assertEqual((fresh["tender_count"], fresh["active_tender_count"]), (3, 2))
+
+    def test_overview_reports_hourly_tender_stats_schedule(self):
+        r = self.client.patch("/api/admin/cron/tender_stats", headers=self.headers,
+                              json={"enabled": True, "schedule_kind": "interval", "interval_minutes": 60})
+        self.assertEqual(r.status_code, 200)
+        fresh = self.client.get("/api/admin/overview", headers=self.headers).json()["freshness"]
+        self.assertTrue(fresh["tender_stats_hourly"])
 
     def test_admin_tenders_filters_by_deadline_state_and_returns_lifecycle_fields(self):
         run(self._seed_lifecycle_tender("OLD-FILTER", "01/01/2020 10:00"))
@@ -1020,6 +1050,219 @@ class PipelineSteerTest(unittest.TestCase):
         r = self.client.get("/api/admin/scrape/preview",
                             headers=_auth(uid, "prev-plain@x.com"))
         self.assertEqual(r.status_code, 403)
+
+
+async def _audit_rows(action):
+    db = await database.get_db()
+    rows = await (await db.execute(
+        "SELECT * FROM admin_audit_logs WHERE action = ? ORDER BY id", (action,)
+    )).fetchall()
+    await db.close()
+    return [dict(r) for r in rows]
+
+
+async def _seed_runs():
+    db = await database.get_db()
+    await db.execute(
+        "INSERT INTO scrape_log (started_at, finished_at, status, actor_email, trigger, tenders_found, tenders_new) "
+        "VALUES ('2026-09-01 07:00:00', '2026-09-01 07:05:00', 'done', 'scheduler', 'scheduled', 40, 3)"
+    )
+    await db.execute(
+        "INSERT INTO dce_cache_log (started_at, finished_at, status, actor_email, total, cached) "
+        "VALUES ('2026-09-02 09:00:00', '2026-09-02 09:10:00', 'stopped', 'wf-owner@x.com', 10, 4)"
+    )
+    await db.commit()
+    await db.close()
+
+
+class WorkflowsApiTest(unittest.TestCase):
+    """The unified workflows view: live state + merged run/audit journal."""
+
+    def setUp(self):
+        run(_reset_db())
+        self.client = TestClient(main.app)
+        self.owner_id = run(_make_user("wf-owner@x.com", role="owner"))
+        self.headers = _auth(self.owner_id, "wf-owner@x.com")
+
+    def tearDown(self):
+        import pipeline_control as pc
+        pc.SCRAPE.end()
+        pc.DCE_CACHE.end()
+        pc.DCE_EXTRACTION.end()
+
+    def _events(self, **params):
+        r = self.client.get("/api/admin/workflows/events", headers=self.headers, params=params)
+        self.assertEqual(r.status_code, 200)
+        return r.json()
+
+    def test_lists_workflows_with_state_and_schedule(self):
+        run(_seed_runs())
+        r = self.client.get("/api/admin/workflows", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        flows = {w["key"]: w for w in r.json()["data"]}
+        self.assertEqual(set(flows), {"scrape_digest", "dce_cache", "dce_extraction", "dce_cache_cleanup", "tender_stats"})
+        self.assertIsNone(flows["tender_stats"]["last_run"])  # no snapshot yet
+        self.assertTrue(flows["tender_stats"]["schedule"]["enabled"])
+        self.assertIsNone(flows["dce_cache_cleanup"]["stage"])
+        self.assertIsNone(flows["dce_cache_cleanup"]["last_run"])
+        self.assertFalse(flows["dce_cache_cleanup"]["schedule"]["enabled"])
+        self.assertFalse(flows["scrape_digest"]["active"])
+        self.assertEqual(flows["scrape_digest"]["stage"], "imports")
+        self.assertTrue(flows["scrape_digest"]["schedule"]["enabled"])
+        self.assertEqual(flows["scrape_digest"]["last_run"]["origin"], "scheduled")
+        self.assertEqual(flows["dce_cache"]["last_run"]["origin"], "manual")
+        self.assertEqual(flows["dce_cache"]["last_run"]["details"]["cached"], 4)
+        self.assertIsNone(flows["dce_extraction"]["last_run"])
+
+    def test_active_workflow_reports_paused_and_progress(self):
+        import pipeline_control as pc
+        pc.DCE_EXTRACTION.begin({"total": 5, "enqueued": 2})
+        pc.DCE_EXTRACTION.pause()
+        flows = {w["key"]: w for w in
+                 self.client.get("/api/admin/workflows", headers=self.headers).json()["data"]}
+        self.assertTrue(flows["dce_extraction"]["active"])
+        self.assertTrue(flows["dce_extraction"]["paused"])
+        self.assertEqual(flows["dce_extraction"]["progress"]["total"], 5)
+
+    def test_requires_imports_view(self):
+        uid = run(_make_user("wf-plain@x.com", role="user"))
+        headers = _auth(uid, "wf-plain@x.com")
+        self.assertEqual(self.client.get("/api/admin/workflows", headers=headers).status_code, 403)
+        self.assertEqual(self.client.get("/api/admin/workflows/events", headers=headers).status_code, 403)
+
+    def test_events_merge_runs_and_audit_newest_first(self):
+        run(_seed_runs())
+        cleared = {"removed": 7, "freed_bytes": 1234, "mode": "outdated",
+                   "orphans_removed": 2, "orphan_bytes": 34}
+        with patch("dce_cache.clear_dce_cache", new=AsyncMock(return_value=cleared)):
+            r = self.client.post("/api/admin/dce-cache/clear?mode=outdated", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        self.client.patch("/api/admin/cron/dce_cache", headers=self.headers, json={"enabled": True})
+
+        body = self._events()
+        self.assertEqual(body["total"], 4)
+        ats = [e["at"] for e in body["data"]]
+        self.assertEqual(ats, sorted(ats, reverse=True))
+        by_action = {e["action"]: e for e in body["data"]}
+
+        clear = by_action["dce_cache.clear"]
+        self.assertEqual((clear["workflow"], clear["kind"], clear["origin"]),
+                         ("dce_cache", "deletion", "manual"))
+        self.assertEqual(clear["details"]["removed"], 7)
+        self.assertEqual(clear["details"]["mode"], "outdated")
+        self.assertEqual(clear["actor"], "wf-owner@x.com")
+
+        config = by_action["cron.update"]
+        self.assertEqual((config["workflow"], config["kind"]), ("dce_cache", "config"))
+        self.assertEqual(config["details"]["after"], {"enabled": True})
+
+        scrape = by_action["scrape_digest.run"]
+        self.assertEqual((scrape["kind"], scrape["origin"], scrape["status"]),
+                         ("run", "scheduled", "done"))
+        self.assertEqual(scrape["details"]["tenders_new"], 3)
+
+    def test_events_filters(self):
+        run(_seed_runs())
+        with patch("dce_cache.clear_dce_cache", new=AsyncMock(return_value={"removed": 1, "freed_bytes": 1, "mode": "all"})):
+            self.client.post("/api/admin/dce-cache/clear", headers=self.headers)
+
+        self.assertEqual([e["kind"] for e in self._events(kind="deletion,archive,restore")["data"]], ["deletion"])
+        self.assertEqual({e["workflow"] for e in self._events(workflow="dce_cache")["data"]}, {"dce_cache"})
+        self.assertEqual([e["action"] for e in self._events(origin="scheduled")["data"]], ["scrape_digest.run"])
+        self.assertEqual([e["action"] for e in self._events(status="stopped")["data"]], ["dce_cache.run"])
+        self.assertEqual([e["action"] for e in self._events(kind="run", date_to="2026-09-01")["data"]],
+                         ["scrape_digest.run"])
+        self.assertEqual([e["action"] for e in self._events(kind="run", date_from="2026-09-02")["data"]],
+                         ["dce_cache.run"])
+        page = self._events(per_page=1, page=2)
+        self.assertEqual((page["total"], page["pages"], len(page["data"])), (3, 3, 1))
+
+    def test_system_eviction_shows_as_system_deletion(self):
+        async def seed():
+            db = await database.get_db()
+            await db.execute(
+                "INSERT INTO admin_audit_logs (actor_email, actor_role, action, target_type, after_json) "
+                "VALUES ('system', 'system', 'dce_cache.evict', 'dce_cache', "
+                "'{\"removed\": 2, \"freed_bytes\": 50, \"reason\": \"size_cap\"}')"
+            )
+            await db.commit()
+            await db.close()
+        run(seed())
+        event = self._events()["data"][0]
+        self.assertEqual((event["kind"], event["origin"], event["workflow"]),
+                         ("deletion", "system", "dce_cache"))
+        self.assertEqual(event["details"]["removed"], 2)
+
+    def test_scheduled_cleanup_shows_on_its_workflow_card_and_in_journal(self):
+        import dce_cache
+        cleared = {"removed": 3, "freed_bytes": 90, "mode": "outdated",
+                   "orphans_removed": 0, "orphan_bytes": 0}
+        with patch("dce_cache.clear_dce_cache", new=AsyncMock(return_value=cleared)):
+            run(dce_cache.cleanup_outdated_dces(actor_email="scheduler"))
+
+        flows = {w["key"]: w for w in
+                 self.client.get("/api/admin/workflows", headers=self.headers).json()["data"]}
+        last = flows["dce_cache_cleanup"]["last_run"]
+        self.assertEqual((last["kind"], last["origin"], last["status"]), ("deletion", "scheduled", "success"))
+        self.assertEqual(last["details"]["removed"], 3)
+
+        events = self._events(workflow="dce_cache_cleanup", kind="deletion,archive,restore")["data"]
+        self.assertEqual([e["action"] for e in events], ["dce_cache.cleanup"])
+
+    def test_failed_cleanup_is_audited_as_failure(self):
+        import dce_cache
+        with patch("dce_cache.clear_dce_cache", new=AsyncMock(side_effect=OSError("disk gone"))):
+            with self.assertRaises(OSError):
+                run(dce_cache.cleanup_outdated_dces(actor_email="wf-owner@x.com"))
+        event = self._events(workflow="dce_cache_cleanup")["data"][0]
+        self.assertEqual((event["status"], event["origin"], event["actor"]),
+                         ("failure", "manual", "wf-owner@x.com"))
+        self.assertEqual(event["details"]["error"], "disk gone")
+
+    def test_cleanup_can_be_enabled_and_run_from_cron_api(self):
+        r = self.client.patch("/api/admin/cron/dce_cache_cleanup", headers=self.headers,
+                              json={"enabled": True})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["enabled"])
+        self.assertIsNotNone(r.json()["next_run_at"])
+        config = self._events(kind="config")["data"][0]
+        self.assertEqual(config["workflow"], "dce_cache_cleanup")
+
+    def test_tender_stats_card_shows_the_last_snapshot(self):
+        run(admin.refresh_tender_stats(actor_email="scheduler"))
+        flows = {w["key"]: w for w in
+                 self.client.get("/api/admin/workflows", headers=self.headers).json()["data"]}
+        last = flows["tender_stats"]["last_run"]
+        self.assertEqual((last["kind"], last["origin"], last["status"]), ("run", "scheduled", "done"))
+        self.assertEqual(last["details"], {"tender_count": 0, "active_tender_count": 0})
+        self.assertIsNotNone(last["at"])
+
+    def test_steer_audit_links_the_running_run(self):
+        import pipeline_control as pc
+        run(_running_extraction_log())
+        pc.DCE_EXTRACTION.begin()
+        r = self.client.post("/api/admin/dce-extraction/control/pause", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        rows = run(_audit_rows("dce_extraction.pause"))
+        self.assertEqual(rows[0]["target_id"], "1")
+        event = self._events(kind="control")["data"][0]
+        self.assertEqual((event["workflow"], event["run_id"]), ("dce_extraction", 1))
+
+    def test_batch_archive_audit_keeps_ids(self):
+        async def seed():
+            db = await database.get_db()
+            await db.execute(
+                "INSERT INTO tenders (id, reference, title, entity) VALUES ('WF1', 'REF', 'Title', 'Entity')"
+            )
+            await db.commit()
+            await db.close()
+        run(seed())
+        r = self.client.post("/api/admin/tenders/batch", headers=self.headers,
+                             json={"action": "archive", "ids": ["WF1"]})
+        self.assertEqual(r.status_code, 200)
+        event = self._events(kind="archive")["data"][0]
+        self.assertEqual(event["workflow"], "tenders")
+        self.assertEqual(event["details"]["ids"], ["WF1"])
 
 
 if __name__ == "__main__":

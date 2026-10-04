@@ -8,7 +8,7 @@ import type {
   EmailSettings, EmailSettingsPatch,
   WebsiteCost, WebsiteCostPayload, WebsiteCostSummary,
   ImportsStatus, DceCacheStatus, ScrapePreview, PipelineStage, SteerAction, SteerResult,
-  CronJob, CronUpdatePayload,
+  CronJob, CronUpdatePayload, WorkflowState, WorkflowEvent,
 } from "./types";
 import type { CompanyProfile } from "../lib/types";
 
@@ -128,6 +128,12 @@ export const updateCron = (job: string, body: CronUpdatePayload) =>
 
 export const runCron = (job: string) =>
   request<{ status: string }>(`/cron/${job}/run`, { method: "POST" });
+
+// ── Workflows (unified view: live state + run/audit journal) ──
+export const getWorkflows = () => request<{ data: WorkflowState[] }>("/workflows");
+
+export const getWorkflowEvents = (params: Record<string, string>) =>
+  request<Paginated<WorkflowEvent>>("/workflows/events", { params });
 
 // ── Roles ──
 export const getRoles = () =>

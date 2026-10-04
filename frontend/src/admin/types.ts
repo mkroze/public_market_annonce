@@ -165,6 +165,9 @@ export interface AdminOverview {
   last_import: ImportRun | null;
   freshness: {
     tender_count: number;
+    active_tender_count: number;
+    tender_stats_computed_at: string | null;
+    tender_stats_hourly: boolean;
     detail_count: number;
     detail_coverage_pct: number;
     last_scraped_at: string | null;
@@ -290,6 +293,40 @@ export interface CronJob {
   updated_at: string | null;
   updated_by: string | null;
   running: boolean;
+}
+
+// One pipeline on the Workflows page (backend admin.admin_workflows).
+export type WorkflowKey =
+  | "scrape_digest" | "dce_cache" | "dce_extraction" | "dce_cache_cleanup" | "tender_stats";
+export type WorkflowEventKind = "run" | "control" | "deletion" | "archive" | "restore" | "config";
+
+// One journal entry: a pipeline run, or an audited action that steered,
+// cleaned up, or rescheduled one (backend admin._run_event / _audit_event).
+export interface WorkflowEvent {
+  id: string;
+  at: string;
+  finished_at: string | null;
+  workflow: WorkflowKey | "tenders" | null;
+  kind: WorkflowEventKind;
+  action: string;
+  origin: "manual" | "scheduled" | "system";
+  actor: string | null;
+  status: string; // runs: running | done | failed | stopped — actions: success | partial | failure
+  run_id: number | null;
+  error: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface WorkflowState {
+  key: WorkflowKey;
+  label: string;
+  stage: PipelineStage | null; // null: nothing to pause/cancel (cache cleanup, tender count)
+  active: boolean;
+  paused: boolean;
+  cancel_requested: boolean;
+  progress: Record<string, number> | null;
+  last_run: WorkflowEvent | null;
+  schedule: CronJob | null;
 }
 
 export interface CronUpdatePayload {

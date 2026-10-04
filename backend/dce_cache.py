@@ -14,6 +14,7 @@ Two entry points:
 
 import asyncio
 import hashlib
+import json
 import os
 import random
 import shutil
@@ -38,6 +39,8 @@ from scraper import download_dce, ensure_tender_details
 
 # Only one warm-all run at a time (mirrors main.scrape_lock for imports).
 dce_cache_lock = asyncio.Lock()
+# Only one scheduled outdated-cache cleanup at a time.
+dce_cleanup_lock = asyncio.Lock()
 
 # "Outdated" cached DCEs = tenders that are archived, past their deadline, or no
 # longer in the catalog. Deadlines are stored as DD/MM/YYYY HH:MM, so reformat
@@ -88,15 +91,45 @@ async def _remove_entry(db, tender_id: str) -> int:
     return freed
 
 
+async def _log_system_event(db, action: str, after: dict, *, actor_email: str = "system",
+                            actor_role: str | None = "system", result: str = "success") -> None:
+    """Best-effort audit row for an automatic (non-admin) cache deletion, so the
+    admin Workflows view can show it. Never raises: tracing must not break a
+    download. Caller commits."""
+    try:
+        await db.execute(
+            """INSERT INTO admin_audit_logs
+               (actor_email, actor_role, action, target_type, result, after_json)
+               VALUES (?, ?, ?, 'dce_cache', ?, ?)""",
+            (actor_email, actor_role, action, result, json.dumps(after, ensure_ascii=False)),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# How many evicted tender ids one audit row keeps (the counts are always exact).
+_EVICT_LOG_MAX_IDS = 20
+
+
 async def _evict_to_fit(db, incoming: int) -> None:
     """Evict oldest-cached ZIPs until `incoming` bytes fit under the cap."""
+    evicted: list[str] = []
+    freed = 0
     while await cache_total_bytes(db) + incoming > DCE_CACHE_MAX_BYTES:
         oldest = await (await db.execute(
             "SELECT tender_id FROM dce_cache WHERE status = 'ok' ORDER BY cached_at ASC, rowid ASC LIMIT 1"
         )).fetchone()
         if not oldest:
             break
-        await _remove_entry(db, oldest["tender_id"])
+        freed += await _remove_entry(db, oldest["tender_id"])
+        evicted.append(oldest["tender_id"])
+    if evicted:
+        await _log_system_event(db, "dce_cache.evict", {
+            "reason": "size_cap",
+            "removed": len(evicted),
+            "freed_bytes": freed,
+            "tender_ids": evicted[:_EVICT_LOG_MAX_IDS],
+        })
     await db.commit()
 
 
@@ -393,7 +426,8 @@ async def clear_dce_cache(db, mode: str = "all") -> dict:
     mode="all"      -> wipe the entire cache (e.g. to force a fresh re-download).
     mode="outdated" -> only tenders that are archived, past deadline, or gone
                        ("périmé"), PLUS orphan files with no matching cache row.
-    Returns {"removed": n, "freed_bytes": b, "mode": mode}.
+    Returns {"removed": n, "freed_bytes": b, "mode": mode, "orphans_removed": o,
+    "orphan_bytes": ob}; the orphan figures are included in removed/freed_bytes.
     """
     query = _STALE_TENDER_IDS if mode == "outdated" else "SELECT tender_id FROM dce_cache"
     rows = await (await db.execute(query)).fetchall()
@@ -407,9 +441,37 @@ async def clear_dce_cache(db, mode: str = "all") -> dict:
 
     # In "outdated" cleanup, also sweep orphan files (rows already gone but the
     # ZIP lingered on the volume). "all" already removes every file it knows of.
+    orphan_files = orphan_bytes = 0
     if mode == "outdated":
         orphan_files, orphan_bytes = await prune_orphan_files(db)
         removed += orphan_files
         freed += orphan_bytes
 
-    return {"removed": removed, "freed_bytes": freed, "mode": mode}
+    return {"removed": removed, "freed_bytes": freed, "mode": mode,
+            "orphans_removed": orphan_files, "orphan_bytes": orphan_bytes}
+
+
+async def cleanup_outdated_dces(actor_email: str | None = None) -> dict:
+    """The periodic janitor (job ``dce_cache_cleanup``): drop cached DCEs whose
+    tender is archived, past its deadline, or gone — ``clear_dce_cache`` in
+    "outdated" mode — and audit the outcome for the admin Workflows journal."""
+    from scheduler import SCHEDULER_ACTOR  # lazy: scheduler imports this module
+
+    scheduled = actor_email in (None, SCHEDULER_ACTOR)
+    actor = {"actor_email": actor_email or SCHEDULER_ACTOR,
+             "actor_role": "system" if scheduled else None}
+    async with dce_cleanup_lock:
+        db = await get_db()
+        try:
+            try:
+                result = await clear_dce_cache(db, mode="outdated")
+            except Exception as e:  # noqa: BLE001
+                await _log_system_event(db, "dce_cache.cleanup", {"error": str(e)[:500]},
+                                        result="failure", **actor)
+                await db.commit()
+                raise
+            await _log_system_event(db, "dce_cache.cleanup", result, **actor)
+            await db.commit()
+            return result
+        finally:
+            await db.close()

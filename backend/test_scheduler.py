@@ -104,7 +104,7 @@ class SeedAndPersistTest(unittest.IsolatedAsyncioTestCase):
         database.DB_PATH = self._old
         os.unlink(self.tmp.name)
 
-    async def test_seed_creates_three_jobs(self):
+    async def test_seed_creates_all_jobs(self):
         import database
         db = await database.get_db()
         try:
@@ -140,6 +140,77 @@ class SeedAndPersistTest(unittest.IsolatedAsyncioTestCase):
                 await scheduler.update_schedule(db, "dce_cache", {"schedule_kind": "weekly"})
         finally:
             await db.close()
+
+
+class ScheduledRunTraceTest(SeedAndPersistTest):
+    async def test_tick_audits_each_scheduled_firing(self):
+        import database
+        from unittest.mock import AsyncMock, patch
+        db = await database.get_db()
+        try:
+            await scheduler.ensure_seeded(db)
+            await db.execute("UPDATE job_schedules SET enabled = 0 WHERE job != 'dce_cache'")
+            await db.execute("UPDATE job_schedules SET enabled = 1, schedule_kind = 'interval' WHERE job = 'dce_cache'")
+            await db.commit()
+        finally:
+            await db.close()
+
+        with patch.object(scheduler, "run_job", new=AsyncMock(return_value=True)):
+            fired = await scheduler.tick()
+        self.assertEqual(fired, ["dce_cache"])
+
+        db = await database.get_db()
+        try:
+            rows = await (await db.execute(
+                "SELECT actor_email, actor_role, target_id FROM admin_audit_logs WHERE action = 'cron.scheduled_run'"
+            )).fetchall()
+        finally:
+            await db.close()
+        self.assertEqual([tuple(r) for r in rows], [("scheduler", "system", "dce_cache")])
+
+
+class CleanupJobTest(unittest.IsolatedAsyncioTestCase):
+    def test_default_is_daily_and_disabled(self):
+        row = next(r for r in scheduler._default_rows() if r["job"] == "dce_cache_cleanup")
+        self.assertEqual((row["enabled"], row["schedule_kind"]), (0, "daily"))
+
+    async def test_busy_while_a_warm_all_run_holds_the_cache(self):
+        import dce_cache
+        self.assertFalse(await scheduler._job_is_busy("dce_cache_cleanup"))
+        async with dce_cache.dce_cache_lock:
+            self.assertTrue(await scheduler._job_is_busy("dce_cache_cleanup"))
+            self.assertFalse(await scheduler.run_job("dce_cache_cleanup"))
+
+    async def test_dispatches_to_the_outdated_cleanup(self):
+        from unittest.mock import MagicMock, patch
+        import dce_cache
+        with patch.object(dce_cache, "cleanup_outdated_dces", new=MagicMock()) as cleanup:
+            scheduler._job_coro("dce_cache_cleanup", actor_email="scheduler", base_url=None)
+        cleanup.assert_called_once_with(actor_email="scheduler")
+
+
+class TenderStatsJobTest(unittest.TestCase):
+    def test_default_is_daily_at_the_scrape_hour_and_enabled(self):
+        rows = {r["job"]: r for r in scheduler._default_rows()}
+        stats, scrape = rows["tender_stats"], rows["scrape_digest"]
+        self.assertEqual((stats["enabled"], stats["schedule_kind"]), (1, "daily"))
+        self.assertEqual(stats["hour"], scrape["hour"])
+        self.assertEqual(stats["interval_minutes"], 60)
+
+    def test_fires_after_the_scrape_within_a_tick(self):
+        self.assertLess(scheduler.VALID_JOBS.index("scrape_digest"),
+                        scheduler.VALID_JOBS.index("tender_stats"))
+        self.assertEqual(scheduler.VALID_JOBS[-1], "tender_stats")
+
+
+class JobTriggerTest(unittest.TestCase):
+    def test_run_now_by_an_admin_is_a_manual_scrape(self):
+        from unittest.mock import MagicMock, patch
+        import main
+        with patch.object(main, "run_scrape_and_digest", new=MagicMock()) as scrape:
+            scheduler._job_coro("scrape_digest", actor_email="admin@x.com", base_url=None)
+            scheduler._job_coro("scrape_digest", actor_email=scheduler.SCHEDULER_ACTOR, base_url=None)
+        self.assertEqual([c.kwargs["trigger"] for c in scrape.call_args_list], ["manual", "scheduled"])
 
 
 if __name__ == "__main__":

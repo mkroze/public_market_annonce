@@ -88,6 +88,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", permission: "overview.view" },
+  { label: "Workflows", path: "/admin/workflows", icon: "Workflow", permission: "imports.view", group: "Data pipeline" },
   { label: "Scrape", path: "/admin/scrape", icon: "DownloadCloud", permission: "imports.view", group: "Data pipeline" },
   { label: "DCE cache", path: "/admin/dce-cache", icon: "Database", permission: "imports.view", group: "Data pipeline" },
   { label: "DCE extraction", path: "/admin/dce-extraction", icon: "FileSearch", permission: "imports.view", group: "Data pipeline" },

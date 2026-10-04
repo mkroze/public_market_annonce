@@ -1,0 +1,66 @@
+{
+  "desktop": [
+    {
+      "start": 0.22,
+      "end": 2.56,
+      "text": "Trouvez les consultations qui vous concernent."
+    },
+    {
+      "start": 2.56,
+      "end": 7.21,
+      "text": "Filtrez selon votre activité."
+    },
+    {
+      "start": 7.21,
+      "end": 13.87,
+      "text": "Analysez l'opportunité."
+    },
+    {
+      "start": 13.87,
+      "end": 15.81,
+      "text": "Suivez-la en un clic."
+    },
+    {
+      "start": 15.81,
+      "end": 21.79,
+      "text": "Préparez votre réponse."
+    },
+    {
+      "start": 21.79,
+      "end": 24.16,
+      "text": "MP Maroc — de la veille à la préparation."
+    }
+  ],
+  "mobile": [
+    {
+      "start": 0.03,
+      "end": 1.84,
+      "text": "Trouvez les consultations qui vous concernent."
+    },
+    {
+      "start": 1.84,
+      "end": 4.68,
+      "text": "Filtrez selon votre activité."
+    },
+    {
+      "start": 4.68,
+      "end": 11.28,
+      "text": "Analysez l'opportunité."
+    },
+    {
+      "start": 11.28,
+      "end": 13.17,
+      "text": "Suivez-la en un clic."
+    },
+    {
+      "start": 13.17,
+      "end": 19.02,
+      "text": "Préparez votre réponse."
+    },
+    {
+      "start": 19.02,
+      "end": 21.36,
+      "text": "MP Maroc — de la veille à la préparation."
+    }
+  ]
+}

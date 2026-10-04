@@ -1,7 +1,8 @@
 """Editable recurring-job scheduler (the "cron jobs" the admin space steers).
 
 Replaces the single hardcoded daily scrape loop with a small, persisted job
-registry. Each job (``scrape_digest``, ``dce_cache``, ``dce_extraction``) has a
+registry. Each job (``scrape_digest``, ``dce_cache``, ``dce_extraction``,
+``dce_cache_cleanup``, ``tender_stats``) has a
 row in ``job_schedules`` with an ``enabled`` flag and either a *daily* firing
 hour or an *interval* cadence. The scheduler loop reads the table live each tick,
 so the admin can retune the cadence at runtime without a redeploy.
@@ -20,13 +21,20 @@ from database import get_db
 
 MOROCCO_TZ = ZoneInfo("Africa/Casablanca")
 
-VALID_JOBS = ("scrape_digest", "dce_cache", "dce_extraction")
+# Also the firing order inside one tick: ``tender_stats`` stays last so it
+# counts after a scrape that is due at the same time.
+VALID_JOBS = ("scrape_digest", "dce_cache", "dce_extraction", "dce_cache_cleanup", "tender_stats")
+
+# actor_email recorded on runs the scheduler loop fires by itself.
+SCHEDULER_ACTOR = "scheduler"
 VALID_KINDS = ("daily", "interval")
 
 JOB_LABELS = {
     "scrape_digest": "Scrape + digest e-mail",
     "dce_cache": "Mise en cache des DCE",
     "dce_extraction": "Extraction des DCE",
+    "dce_cache_cleanup": "Nettoyage du cache DCE (échéances dépassées)",
+    "tender_stats": "Calcul du nombre d'appels d'offres",
 }
 
 # How often the loop wakes to re-evaluate schedules. Small relative to the
@@ -47,7 +55,10 @@ def _default_hour() -> int:
 
 def _default_rows() -> list[dict]:
     """Seed defaults. Scrape keeps today's behavior (daily @ DIGEST_HOUR, on);
-    the DCE jobs are interval-based and OFF until an admin enables them."""
+    the DCE jobs are interval-based and OFF until an admin enables them; the
+    cache cleanup is daily (an hour before the scrape) and OFF by default too.
+    The tender count is recomputed daily at the scrape's hour (ON); the admin
+    dashboard can switch it to hourly (kind=interval, 60 min)."""
     hour = _default_hour()
     return [
         {"job": "scrape_digest", "enabled": 1, "schedule_kind": "daily",
@@ -56,6 +67,10 @@ def _default_rows() -> list[dict]:
          "hour": hour, "interval_minutes": 30},
         {"job": "dce_extraction", "enabled": 0, "schedule_kind": "interval",
          "hour": hour, "interval_minutes": 120},
+        {"job": "dce_cache_cleanup", "enabled": 0, "schedule_kind": "daily",
+         "hour": (hour - 1) % 24, "interval_minutes": 1440},
+        {"job": "tender_stats", "enabled": 1, "schedule_kind": "daily",
+         "hour": hour, "interval_minutes": 60},
     ]
 
 
@@ -220,6 +235,10 @@ async def _job_is_busy(job: str) -> bool:
     if job == "dce_extraction":
         from pipeline_control import DCE_EXTRACTION
         return DCE_EXTRACTION.running
+    if job == "dce_cache_cleanup":
+        # Never sweep files while a warm-all run is writing them.
+        from dce_cache import dce_cache_lock, dce_cleanup_lock
+        return dce_cache_lock.locked() or dce_cleanup_lock.locked()
     return False
 
 
@@ -227,7 +246,10 @@ def _job_coro(job: str, *, actor_email: str, base_url: str | None):
     """The awaitable that performs one run of ``job`` (or None if unrunnable)."""
     if job == "scrape_digest":
         from main import run_scrape_and_digest
-        return run_scrape_and_digest(actor_email=actor_email, trigger="scheduled")
+        # "Run now" from the admin Cron tab is a manual run; only the loop's own
+        # firings (actor "scheduler") are scheduled.
+        trigger = "scheduled" if actor_email == SCHEDULER_ACTOR else "manual"
+        return run_scrape_and_digest(actor_email=actor_email, trigger=trigger)
     if job == "dce_cache":
         from dce_cache import cache_all_dces
         return cache_all_dces(actor_email=actor_email)
@@ -236,6 +258,12 @@ def _job_coro(job: str, *, actor_email: str, base_url: str | None):
             return None
         from dce_extraction import extract_all_dces
         return extract_all_dces(base_url, actor_email=actor_email)
+    if job == "dce_cache_cleanup":
+        from dce_cache import cleanup_outdated_dces
+        return cleanup_outdated_dces(actor_email=actor_email)
+    if job == "tender_stats":
+        from admin import refresh_tender_stats
+        return refresh_tender_stats(actor_email=actor_email)
     return None
 
 
@@ -248,7 +276,7 @@ async def _supervise(job: str, coro) -> None:
         await _set_run_state(job, last_status="failed")
 
 
-async def run_job(job: str, *, actor_email: str = "scheduler", base_url: str | None = None) -> bool:
+async def run_job(job: str, *, actor_email: str = SCHEDULER_ACTOR, base_url: str | None = None) -> bool:
     """Launch one run of ``job`` in the background. Returns False (no-op) if the
     job is unknown, already running, or missing a prerequisite (base_url)."""
     if job not in VALID_JOBS:
@@ -261,6 +289,21 @@ async def run_job(job: str, *, actor_email: str = "scheduler", base_url: str | N
     await _set_run_state(job, last_run_at=datetime.now(MOROCCO_TZ).isoformat(), last_status="running")
     asyncio.create_task(_supervise(job, coro))
     return True
+
+
+async def _audit_scheduled_run(job: str) -> None:
+    """Audit an automatic firing, mirroring the ``cron.run`` row a manual
+    "run now" writes. Best-effort: a tracing failure must not stop the loop."""
+    from admin import log_audit  # lazy: admin imports this module
+    try:
+        db = await get_db()
+        try:
+            await log_audit(db, actor={"email": SCHEDULER_ACTOR, "role": "system"},
+                            action="cron.scheduled_run", target_type="job", target_id=job)
+        finally:
+            await db.close()
+    except Exception as e:  # noqa: BLE001
+        print(f"[scheduler] audit of scheduled run {job} failed: {e}")
 
 
 def _base_url() -> str:
@@ -277,10 +320,12 @@ async def tick() -> list[str]:
         await db.close()
     now = datetime.now(MOROCCO_TZ)
     fired = []
+    rows.sort(key=lambda r: VALID_JOBS.index(r["job"]) if r["job"] in VALID_JOBS else len(VALID_JOBS))
     for row in rows:
         if is_due(row, now):
-            if await run_job(row["job"], actor_email="scheduler", base_url=_base_url()):
+            if await run_job(row["job"], actor_email=SCHEDULER_ACTOR, base_url=_base_url()):
                 fired.append(row["job"])
+                await _audit_scheduled_run(row["job"])
     return fired
 
 
