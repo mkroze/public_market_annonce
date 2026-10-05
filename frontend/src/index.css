@@ -1,0 +1,628 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "academic";
+  default: true;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+  --radius-selector: 1rem;
+  --radius-field: 0.7rem;
+  --radius-box: 1.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --color-app-bg: #f9f9ff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f3ff;
+  --color-surface-raised: #e7eefe;
+  --color-surface-strong: #dce2f3;
+  --color-surface-elevated: var(--color-surface-raised);
+  --color-primary: #00236f;
+  --color-primary-strong: #1e3a8a;
+  --color-primary-soft: #dce1ff;
+  --color-on-primary: #ffffff;
+  --color-ink: #151c27;
+  --color-muted: #444651;
+  --color-muted-light: #757682;
+  --color-border: #c5c5d3;
+  --color-border-strong: var(--color-border);
+  --color-border-subtle: #dce2f3;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fff2d8;
+  --color-success: #16803a;
+  --color-success-soft: #dff7e8;
+  --color-danger: #ba1a1a;
+  --color-danger-soft: #ffdad6;
+  --font-display: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: var(--font-display);
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.04), 0 12px 26px -16px rgba(21, 28, 39, 0.16);
+  --shadow-card-hover: 0 2px 6px rgba(21, 28, 39, 0.05), 0 26px 50px -22px rgba(21, 28, 39, 0.26);
+  --shadow-pop: 0 18px 44px -14px rgba(21, 28, 39, 0.20);
+
+  /* Compatibility aliases for existing files during this redesign. */
+  --color-ivory: var(--color-surface);
+  --color-ivory-dim: var(--color-surface-muted);
+  --color-ivory-deep: var(--color-surface-strong);
+  --color-crimson: var(--color-primary);
+  --color-crimson-dark: var(--color-primary-strong);
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: var(--color-primary-soft);
+  --color-accent: var(--color-warning);
+  --color-accent-soft: var(--color-warning-soft);
+  --color-charcoal: var(--color-ink);
+  --color-slate: var(--color-muted);
+  --color-gold: var(--color-warning);
+  --color-gold-light: #ffb95f;
+  --color-tone-positive: var(--color-success);
+  --color-tone-positive-soft: var(--color-success-soft);
+  --color-tone-warning: var(--color-warning);
+  --color-tone-warning-soft: var(--color-warning-soft);
+  --color-tone-critical: var(--color-danger);
+  --color-tone-critical-soft: var(--color-danger-soft);
+}
+
+/* Admin shares the public navy brand system — denser (tighter radii) but the
+   same palette, borders, and accent, so it no longer reads like a different
+   product. */
+[data-theme="academic"]:not(html):not(.institutional-page) {
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.6rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+
+  --color-ivory: #ffffff;
+  --color-ivory-dim: #f0f3ff;
+  --color-ivory-deep: #dce2f3;
+  --color-crimson: #00236f;
+  --color-crimson-dark: #1e3a8a;
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: #dce1ff;
+  --color-charcoal: #151c27;
+  --color-slate: #444651;
+  --color-gold: #f59e0b;
+  --color-gold-light: #ffb95f;
+  --color-border: #c5c5d3;
+  --color-border-subtle: #dce2f3;
+  --color-tone-positive: #16803a;
+  --color-tone-positive-soft: #dff7e8;
+  --color-tone-warning: #f59e0b;
+  --color-tone-warning-soft: #fff2d8;
+  --color-tone-critical: #ba1a1a;
+  --color-tone-critical-soft: #ffdad6;
+  --font-serif: "Inter", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* Cleaner near-white blue-tint canvas, aligned with the public shell. */
+  background:
+    radial-gradient(46rem 32rem at 0% -10%, color-mix(in srgb, #00236f 6%, transparent), transparent 60%),
+    #f9f9ff;
+}
+
+.institutional-page {
+  --color-base-100: #ffffff;
+  --color-base-200: #f0f3ff;
+  --color-base-300: #dce2f3;
+  --color-base-content: #151c27;
+  --color-primary: #00236f;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5c5f60;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-content: #151c27;
+  --color-neutral: #151c27;
+  --color-neutral-content: #ffffff;
+  --color-info: #4059aa;
+  --color-info-content: #ffffff;
+  --color-success: #16803a;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #151c27;
+  --color-error: #ba1a1a;
+  --color-error-content: #ffffff;
+
+  --color-app-bg: #f9f9ff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f3ff;
+  --color-surface-raised: #e7eefe;
+  --color-surface-strong: #dce2f3;
+  --color-surface-elevated: var(--color-surface-raised);
+  --color-primary-strong: #1e3a8a;
+  --color-primary-soft: #dce1ff;
+  --color-on-primary: #ffffff;
+  --color-ink: #151c27;
+  --color-muted: #444651;
+  --color-muted-light: #757682;
+  --color-border: #c5c5d3;
+  --color-border-strong: var(--color-border);
+  --color-border-subtle: #dce2f3;
+  --color-warning-soft: #fff2d8;
+  --color-success-soft: #dff7e8;
+  --color-danger: #ba1a1a;
+  --color-danger-soft: #ffdad6;
+  --shadow-card: 0 1px 2px rgba(21, 28, 39, 0.04), 0 12px 26px -16px rgba(21, 28, 39, 0.16);
+  --shadow-card-hover: 0 2px 6px rgba(21, 28, 39, 0.05), 0 26px 50px -22px rgba(21, 28, 39, 0.26);
+  --shadow-pop: 0 18px 44px -14px rgba(21, 28, 39, 0.20);
+
+  --color-ivory: var(--color-surface);
+  --color-ivory-dim: var(--color-surface-muted);
+  --color-ivory-deep: var(--color-surface-strong);
+  --color-crimson: var(--color-primary);
+  --color-crimson-dark: var(--color-primary-strong);
+  --color-crimson-light: #4059aa;
+  --color-crimson-muted: var(--color-primary-soft);
+  --color-accent-soft: var(--color-warning-soft);
+  --color-charcoal: var(--color-ink);
+  --color-slate: var(--color-muted);
+  --color-gold: var(--color-warning);
+  --color-gold-light: #ffb95f;
+  --color-tone-positive: var(--color-success);
+  --color-tone-positive-soft: var(--color-success-soft);
+  --color-tone-warning: var(--color-warning);
+  --color-tone-warning-soft: var(--color-warning-soft);
+  --color-tone-critical: var(--color-danger);
+  --color-tone-critical-soft: var(--color-danger-soft);
+}
+
+html[data-theme-preference="dark"] .institutional-page {
+  --color-app-bg: #101827;
+  --color-surface: #172033;
+  --color-surface-muted: #202b42;
+  --color-surface-raised: #26344f;
+  --color-surface-strong: #2f3f5f;
+  --color-surface-elevated: #202b42;
+  --color-primary: #b6c4ff;
+  --color-primary-strong: #dce1ff;
+  --color-primary-soft: #26344f;
+  --color-on-primary: #101827;
+  --color-ink: #f7f9ff;
+  --color-muted: #c8d0e2;
+  --color-muted-light: #9ea8bd;
+  --color-border: #3f4f6d;
+  --color-border-subtle: #2f3f5f;
+  --color-warning-soft: #4a3717;
+  --color-success-soft: #183a2a;
+  --color-danger-soft: #4b2222;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme-preference="system"] .institutional-page {
+    --color-app-bg: #101827;
+    --color-surface: #172033;
+    --color-surface-muted: #202b42;
+    --color-surface-raised: #26344f;
+    --color-surface-strong: #2f3f5f;
+    --color-surface-elevated: #202b42;
+    --color-primary: #b6c4ff;
+    --color-primary-strong: #dce1ff;
+    --color-primary-soft: #26344f;
+    --color-on-primary: #101827;
+    --color-ink: #f7f9ff;
+    --color-muted: #c8d0e2;
+    --color-muted-light: #9ea8bd;
+    --color-border: #3f4f6d;
+    --color-border-subtle: #2f3f5f;
+    --color-warning-soft: #4a3717;
+    --color-success-soft: #183a2a;
+    --color-danger-soft: #4b2222;
+  }
+}
+
+/* ── Base Typography ─────────────────────────────────────────────── */
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.institutional-page h1,
+.institutional-page h2,
+.institutional-page h3,
+.institutional-page .heading {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
+
+/* Oversized page title — sentence case and heavy. */
+.institutional-page .display-editorial {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+/* Small eyebrow control label — nav, filters, sort, meta captions */
+.institutional-page .editorial-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Field / meta label — sentence case, calm gray (modern SaaS form label) */
+.institutional-page .label-academic {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--color-slate);
+}
+
+.institutional-page {
+  color: var(--color-ink);
+  background:
+    radial-gradient(58rem 40rem at 6% -12%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 60%),
+    radial-gradient(50rem 38rem at 104% 2%, color-mix(in srgb, var(--color-crimson-light) 9%, transparent), transparent 60%),
+    var(--color-app-bg);
+  background-attachment: fixed;
+}
+
+.institutional-panel {
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+}
+
+.institutional-control {
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.institutional-control:focus,
+.institutional-control:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  outline-offset: 1px;
+}
+
+/* ── Institutional card — white surface, floating soft shadow ─────── */
+.institutional-page .card {
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
+  box-shadow: var(--shadow-card);
+  border-radius: 1.25rem;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+}
+
+.institutional-page .card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-3px);
+}
+
+/* ── Stat ─────────────────────────────────────────────────────────── */
+.institutional-page .stats {
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
+  box-shadow: var(--shadow-card);
+  border-radius: 1.25rem;
+}
+
+/* ── Table — structured list with thin dividers ──────────────────── */
+.institutional-page .table th {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-slate);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.institutional-page .table td {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* ── Admin tables — stronger headers + zebra + row hover (scan-friendly) ── */
+[data-theme="academic"]:not(html):not(.institutional-page) .table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+[data-theme="academic"]:not(html):not(.institutional-page) .table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--color-surface-muted) 50%, transparent);
+}
+[data-theme="academic"]:not(html):not(.institutional-page) .table tbody tr:hover {
+  background: var(--color-surface-muted);
+}
+
+/* ── Badge — pill ────────────────────────────────────────────────── */
+.institutional-page .badge {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* ── Button — pill (standalone; joined groups keep their join radii) ─ */
+.institutional-page .btn:not(.join-item) {
+  border-radius: 999px;
+}
+
+/* ── Button focus — blue ring ────────────────────────────────────── */
+.institutional-page .btn:focus-visible {
+  outline: 2px solid var(--color-crimson);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ── Input focus — blue border + soft ring ───────────────────────── */
+.institutional-page .input:focus,
+.institutional-page .select:focus,
+.institutional-page .textarea:focus {
+  border-color: var(--color-crimson);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  outline: none;
+}
+
+.institutional-page select,
+.institutional-page select option {
+  background-color: var(--color-ivory);
+  color: var(--color-charcoal);
+}
+
+/* ── Navbar — hairline + faint shadow ────────────────────────────── */
+.institutional-page .navbar {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border-subtle) 60%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Alert ───────────────────────────────────────────────────────── */
+.institutional-page .alert {
+  border-radius: 0.5rem;
+}
+
+/* ── Dropdown — soft popover shadow ──────────────────────────────── */
+.institutional-page .dropdown-content {
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 75%, transparent);
+  box-shadow: var(--shadow-pop);
+  border-radius: 1rem;
+}
+
+/* ── Thin horizontal rule ────────────────────────────────────────── */
+.divider-academic {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* ── Status dots ─────────────────────────────────────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+.status-dot-active { background-color: var(--color-crimson); }
+.status-dot-pending { background-color: var(--color-gold); }
+.status-dot-completed { background-color: var(--color-charcoal); }
+.status-dot-expired { background-color: var(--color-border); }
+
+/* ── Gold seal badge ─────────────────────────────────────────────── */
+.seal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background-color: var(--color-gold-light);
+  color: #4e3d00;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* ── Tabular figures for data ────────────────────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Popover / dropdown enter animation ──────────────────────────── */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fadeSlideIn 150ms ease-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Reskin « vivant mais doux » — entrées en cascade, survol qui soulève,
+   ambiance qui dérive. Tout est neutralisé par [data-motion="off"] et
+   par prefers-reduced-motion (bloc plus bas).
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes driftSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(24px, -18px) scale(1.08); }
+}
+@keyframes floatSoft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Entrée simple (fondu + montée) */
+.rise-in {
+  opacity: 0;
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Entrée en cascade : les enfants directs apparaissent l'un après l'autre */
+.stagger > * {
+  opacity: 0;
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.stagger > *:nth-child(4) { animation-delay: 0.22s; }
+.stagger > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger > *:nth-child(6) { animation-delay: 0.34s; }
+.stagger > *:nth-child(7) { animation-delay: 0.40s; }
+.stagger > *:nth-child(8) { animation-delay: 0.46s; }
+.stagger > *:nth-child(n + 9) { animation-delay: 0.5s; }
+
+/* Survol qui soulève, pour les cartes/tuiles cliquables non-.card */
+.hover-lift {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Blobs d'ambiance qui dérivent lentement en arrière-plan */
+.ambiance-blob {
+  position: fixed;
+  border-radius: 9999px;
+  filter: blur(64px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  animation: driftSlow 20s ease-in-out infinite;
+}
+.float-soft { animation: floatSoft 6s ease-in-out infinite; }
+
+/* Coupe-circuit global : bouton « animations off » */
+[data-motion="off"] .rise-in,
+[data-motion="off"] .stagger > *,
+[data-motion="off"] .ambiance-blob,
+[data-motion="off"] .float-soft {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+[data-motion="off"] .ambiance-blob { display: none; }
+[data-motion="off"] * {
+  transition-duration: 0.01ms !important;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .rise-in,
+  .stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .ambiance-blob {
+    display: none !important;
+  }
+}
+
+/* ── Prose for content pages ─────────────────────────────────────── */
+.prose-academic h2 {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-charcoal);
+}
+
+.prose-academic h3 {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-charcoal);
+}
+
+.prose-academic p {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 24px;
+  margin-bottom: 1rem;
+  color: var(--color-slate);
+}
+
+.prose-academic ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.prose-academic li {
+  font-size: 16px;
+  line-height: 24px;
+  margin-bottom: 0.25rem;
+  color: var(--color-slate);
+}
+
+.prose-academic strong {
+  color: var(--color-charcoal);
+  font-weight: 600;
+}

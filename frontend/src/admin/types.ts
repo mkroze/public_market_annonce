@@ -1,0 +1,281 @@
+export interface ImportRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  tenders_found: number;
+  tenders_new: number;
+  tenders_updated: number;
+  tenders_skipped: number;
+  status: string; // running | done | failed
+  error: string | null;
+  actor_email: string | null;
+  trigger: string | null; // manual | scheduled
+  warnings: string | null;
+}
+
+export interface DceCacheRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  total: number;
+  cached: number;
+  skipped: number;
+  failed: number;
+  status: string; // running | done | failed | stopped
+  error: string | null;
+  actor_email: string | null;
+  concurrency: number | null;
+  pauses: number | null;
+}
+
+export interface DceExtractionRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  total: number;
+  enqueued: number;
+  skipped: number;
+  failed: number;
+  status: string; // running | done | failed
+  actor_email: string | null;
+  error: string | null;
+}
+
+export interface DceExtractionRecent {
+  tender_id: string;
+  title: string | null;
+  status: string; // ok | partial | failed
+  ocr_lang: string;
+  tags: string[];
+  object: string | null;
+  extracted_at: string;
+}
+
+export interface DceExtractionStatus {
+  last_run: DceExtractionRun | null;
+  data: DceExtractionRun[];
+  active: boolean;
+  paused: boolean;
+  extracted_count: number;
+  recent: DceExtractionRecent[];
+  simulate_enabled: boolean;
+}
+
+// Live per-sector progress reported by a running scrape (from the shared
+// PipelineControl on the backend). Null when no scrape is active.
+export interface ScrapeProgress {
+  sectors_total: number;
+  sectors_done: number;
+  found: number;
+  new: number;
+}
+
+export interface ImportsStatus {
+  data: ImportRun[];
+  active: boolean;
+  paused: boolean;
+  progress: ScrapeProgress | null;
+  next_scheduled_run: string;
+  digest_hour: number;
+}
+
+export interface DceCacheStatus {
+  data: DceCacheRun[];
+  active: boolean;
+  paused: boolean;
+  cached_total: number;
+  cached_bytes: number;
+  cap_bytes: number;
+  /** Per-run download budget (0 = uncapped). A run stops after this many new DCEs. */
+  max_downloads_per_run?: number;
+}
+
+export interface ScrapePreviewRow {
+  category: string;
+  sector_code: string;
+  sector_name: string;
+  count: number;
+}
+
+export interface ScrapePreview {
+  data: ScrapePreviewRow[];
+  total: number;
+}
+
+// Pipeline steering (pause / resume / cancel) shared across the three stages.
+export type PipelineStage = "imports" | "dce-cache" | "dce-extraction";
+export type SteerAction = "pause" | "resume" | "cancel";
+
+export interface SteerResult {
+  status: string;
+  paused: boolean;
+  cancel_requested: boolean;
+}
+
+export type CostCategory =
+  | "hosting" | "domain" | "email" | "ai_api" | "storage"
+  | "monitoring" | "scraping" | "software" | "other";
+
+export type BillingCycle = "monthly" | "yearly" | "one_off" | "usage_based";
+export type CostStatus = "planned" | "due" | "paid" | "overdue" | "cancelled";
+export type CostCurrency = "MAD" | "USD" | "EUR";
+
+export interface WebsiteCost {
+  id: number;
+  provider: string;
+  category: CostCategory;
+  description: string;
+  amount_minor: number;
+  currency: CostCurrency;
+  billing_cycle: BillingCycle;
+  service_period_start: string | null;
+  service_period_end: string | null;
+  due_date: string | null;
+  paid_date: string | null;
+  status: CostStatus;
+  reference: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  archived_at: string | null;
+}
+
+export type WebsiteCostPayload = Omit<
+  WebsiteCost,
+  "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "archived_at"
+>;
+
+export interface WebsiteCostSummary {
+  current_month: Record<CostCurrency, number>;
+  upcoming_unpaid: Record<CostCurrency, number>;
+  overdue: Record<CostCurrency, number>;
+  annualized_recurring: Record<CostCurrency, number>;
+  largest_current_month_category: Partial<Record<CostCurrency, {
+    currency: CostCurrency;
+    category: CostCategory;
+    amount_minor: number;
+  }>>;
+}
+
+export interface AdminOverview {
+  last_import: ImportRun | null;
+  freshness: {
+    tender_count: number;
+    detail_count: number;
+    detail_coverage_pct: number;
+    last_scraped_at: string | null;
+    last_successful_import_at: string | null;
+    source: string;
+  };
+  failure_queues: {
+    failed_imports: number;
+    missing_details: number;
+    flagged_tenders: number;
+    archived_tenders: number;
+    stale_records: number;
+  };
+  governance: AuditEvent[];
+  health: {
+    database: string;
+    scraper_source: string;
+    scraper_last_attempt_at: string | null;
+  };
+}
+
+export interface AdminTender {
+  id: string;
+  reference: string;
+  title: string;
+  entity: string;
+  sector_code: string;
+  sector_name: string;
+  category: string;
+  deadline: string;
+  publication_date: string;
+  status: string;
+  procedure_type: string;
+  location: string;
+  scraped_at: string;
+  admin_status: string;
+  review_status: string;
+  flag_note: string | null;
+  detail_available: number;
+  estimation: string | null;
+}
+
+export interface Paginated<T> {
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+  data: T[];
+}
+
+export interface BatchResult {
+  action: string;
+  updated: string[];
+  failed: { id: string; reason: string }[];
+  result: "success" | "partial" | "failure";
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string;
+  company: string;
+  plan: string;
+  role: string;
+  status: string;
+  last_login: string | null;
+  mfa_enabled: number;
+  invited_by: number | null;
+  created_at: string;
+}
+
+export interface RoleInfo {
+  name: string;
+  description: string;
+  permissions: string[];
+}
+
+export interface AuditEvent {
+  id: number;
+  actor_id: number | null;
+  actor_email: string | null;
+  actor_role: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  result: string;
+  ip: string | null;
+  route: string | null;
+  before_json: string | null;
+  after_json: string | null;
+  created_at: string;
+}
+
+// Email/SMTP settings as returned by the admin API. The password is never sent
+// back to the client — only whether one is stored.
+export interface EmailSettings {
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_from: string;
+  smtp_from_name: string;
+  password_set: boolean;
+  configured: boolean;
+  password_updated?: boolean;
+}
+
+// Fields the client may write. Omit smtp_password (or send "") to keep the
+// stored password unchanged.
+export interface EmailSettingsPatch {
+  smtp_host?: string;
+  smtp_port?: string;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from?: string;
+  smtp_from_name?: string;
+}
