@@ -267,10 +267,66 @@ def _job_coro(job: str, *, actor_email: str, base_url: str | None):
     return None
 
 
+# Run outcomes, in the order of severity the admin surfaces them.
+# A job reports its own result: several sweeps catch their exceptions
+# internally and return {"status": "failed"} or {"status": "stopped"}, so a
+# coroutine returning without raising is not proof that the work succeeded.
+_OUTCOME_ALIASES = {
+    "ok": "ok", "done": "ok", "success": "ok",
+    "partial": "partial",
+    "failed": "failed", "error": "failed",
+    "stopped": "stopped", "cancelled": "stopped", "canceled": "stopped",
+}
+
+
+def job_outcome(result) -> str:
+    """Map a job's returned payload to the status recorded for that run."""
+    if isinstance(result, dict):
+        reported = str(result.get("status") or "").lower()
+        if reported in _OUTCOME_ALIASES:
+            return _OUTCOME_ALIASES[reported]
+        # No explicit status: a non-zero failure counter still means the run
+        # did not fully succeed, so it must not read as a clean success.
+        if result.get("failed"):
+            return "partial"
+    return "ok"
+
+
+# Run tables whose rows are owned by this process: an in-flight row can only be
+# live while the process that wrote it is, so one left behind is interrupted work.
+_RUN_TABLES = ("scrape_log", "dce_cache_log", "dce_extraction_log")
+
+
+async def reconcile_interrupted_runs() -> int:
+    """Close run rows a previous process left 'running'. Returns rows closed.
+
+    Progress and control flags are process-local, so after a restart or a crash
+    nothing owns those rows. Leaving them 'running' makes the admin claim work
+    is in flight that will never finish.
+    """
+    db = await get_db()
+    try:
+        closed = 0
+        for table in _RUN_TABLES:
+            cur = await db.execute(
+                f"""UPDATE {table}
+                    SET status = 'interrupted',
+                        finished_at = COALESCE(finished_at, datetime('now'))
+                    WHERE status = 'running'"""
+            )
+            closed += cur.rowcount or 0
+        await db.commit()
+        if closed:
+            print(f"[scheduler] reconciled {closed} interrupted run(s) at startup")
+        return closed
+    finally:
+        await db.close()
+
+
 async def _supervise(job: str, coro) -> None:
     try:
-        await coro
-        await _set_run_state(job, last_status="ok")
+        result = await coro
+        await _set_run_state(job, last_status=job_outcome(result))
     except Exception as e:  # noqa: BLE001
         print(f"[scheduler] job {job} failed: {e}")
         await _set_run_state(job, last_status="failed")

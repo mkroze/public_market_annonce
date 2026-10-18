@@ -1204,7 +1204,10 @@ async def admin_dce_extraction_status(user=Depends(require_admin("imports.view")
             "SELECT * FROM dce_extraction_log ORDER BY id DESC LIMIT 20"
         )).fetchall()
         runs = [dict(r) for r in rows]
-        active = bool(runs and runs[0]["status"] == "running")
+        # Same source as /workflows and the other stage views: the in-memory
+        # control, not the latest persisted row. A row left 'running' by a dead
+        # process must not make this stage claim an active sweep.
+        active = DCE_EXTRACTION.running
         # Samples never inflate the stored-fiches figure; they get their own
         # counter so the operator can see (and purge) what is fabricated.
         done = await (await db.execute(

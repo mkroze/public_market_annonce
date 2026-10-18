@@ -91,6 +91,9 @@ async def lifespan(app: FastAPI):
         await scheduler.ensure_seeded(db)
     finally:
         await db.close()
+    # Nothing owns a run row written by a previous process: close them before
+    # the loop runs, so the admin never shows phantom in-flight work.
+    await scheduler.reconcile_interrupted_runs()
     scheduler_task = asyncio.create_task(scheduler.job_scheduler_loop())
     yield
     scheduler_task.cancel()
