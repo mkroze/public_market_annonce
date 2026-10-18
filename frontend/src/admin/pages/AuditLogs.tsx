@@ -15,7 +15,7 @@ import Pagination from "../../components/Pagination";
 const FILTER_KEYS = ["q", "action", "target_type", "result", "date_from", "date_to"];
 
 // `embedded` drops the page header so this can serve as the Audit trail tab of
-// the Workflows journal, which already supplies the heading. The export action
+// the dashboard journal, which already supplies the heading. The export action
 // moves into the filter row in that mode.
 export default function AuditLogs({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();

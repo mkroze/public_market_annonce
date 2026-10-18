@@ -2,17 +2,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Workflows from "../Workflows";
+import WorkflowJournal from "../WorkflowJournal";
 
 const mocks = vi.hoisted(() => ({
   getWorkflows: vi.fn(),
   getWorkflowEvents: vi.fn(),
-  runImport: vi.fn(),
-  runDceCache: vi.fn(),
-  runDceExtraction: vi.fn(),
-  runCron: vi.fn(),
-  updateCron: vi.fn(),
-  steerPipeline: vi.fn(),
+  getAuditLogs: vi.fn(),
   role: "owner",
 }));
 
@@ -30,51 +25,11 @@ vi.mock("../../api", () => ({
   },
   getWorkflows: mocks.getWorkflows,
   getWorkflowEvents: mocks.getWorkflowEvents,
-  runImport: mocks.runImport,
-  runDceCache: mocks.runDceCache,
-  runDceExtraction: mocks.runDceExtraction,
-  runCron: mocks.runCron,
-  updateCron: mocks.updateCron,
-  steerPipeline: mocks.steerPipeline,
+  getAuditLogs: mocks.getAuditLogs,
 }));
 
-const schedule = {
-  job: "scrape_digest", label: "Scrape", enabled: true, schedule_kind: "daily", hour: 7,
-  interval_minutes: 1440, last_run_at: null, last_status: null,
-  next_run_at: "2026-10-05T07:00:00+01:00", updated_at: null, updated_by: null,
-};
-
-function flow(key: string, stage: string | null, over: Record<string, unknown> = {}) {
-  return {
-    key, label: key, stage, active: false, paused: false, cancel_requested: false,
-    progress: null, last_run: null, schedule: { ...schedule, job: key, enabled: key === "scrape_digest" },
-    ...over,
-  };
-}
-
 function seedApi() {
-  mocks.getWorkflows.mockResolvedValue({
-    data: [
-      flow("scrape_digest", "imports"),
-      flow("dce_cache", "dce-cache", {
-        active: true,
-        last_run: {
-          id: "run:dce_cache:3", at: "2026-10-04 09:00:00", finished_at: null, workflow: "dce_cache",
-          kind: "run", action: "dce_cache.run", origin: "manual", actor: "owner@x.com", status: "running",
-          run_id: 3, error: null, details: { total: 10, cached: 4, skipped: 1, failed: 0 },
-        },
-      }),
-      flow("dce_extraction", "dce-extraction"),
-      flow("dce_cache_cleanup", null),
-      flow("tender_stats", null, {
-        last_run: {
-          id: "run:tender_stats", at: "2026-10-04 06:00:00", finished_at: null, workflow: "tender_stats",
-          kind: "run", action: "tender_stats.run", origin: "scheduled", actor: "scheduler", status: "done",
-          run_id: null, error: null, details: { tender_count: 288, active_tender_count: 250 },
-        },
-      }),
-    ],
-  });
+  mocks.getAuditLogs.mockResolvedValue({ data: [], total: 0, pages: 1 });
   mocks.getWorkflowEvents.mockResolvedValue({
     total: 2, page: 1, per_page: 25, pages: 1,
     data: [
@@ -91,15 +46,13 @@ function seedApi() {
       },
     ],
   });
-  mocks.updateCron.mockResolvedValue({ ...schedule, job: "dce_cache_cleanup" });
-  mocks.steerPipeline.mockResolvedValue({ status: "pause", paused: true, cancel_requested: false });
 }
 
 function renderPage() {
-  return render(<MemoryRouter><Workflows /></MemoryRouter>);
+  return render(<MemoryRouter><WorkflowJournal /></MemoryRouter>);
 }
 
-describe("Workflows", () => {
+describe("Dashboard activity journal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.setItem("admin.workflows.lang", "en");
@@ -107,63 +60,46 @@ describe("Workflows", () => {
     seedApi();
   });
 
-  it("shows each pipeline's state and the merged journal", async () => {
+  it("shows the merged journal without treatment cards", async () => {
     renderPage();
-
-    expect(await screen.findByRole("heading", { name: "DCE caching" })).toBeInTheDocument();
-    expect(screen.getAllByText("Idle")).toHaveLength(4);
-    expect(screen.getByText("288 in total · 250 current")).toBeInTheDocument();
-    expect(screen.getByText(/5\/10 · 4 cached/)).toBeInTheDocument();
-
+    expect(await screen.findByRole("heading", { name: "Activity journal" })).toBeInTheDocument();
     const clearRow = (await screen.findByText("Cache cleared")).closest("tr")!;
     expect(within(clearRow).getByText(/7 files removed · 5\.0 MB freed · mode outdated · 2 orphan files/)).toBeInTheDocument();
-    const runRow = screen.getByText(/40 found · 3 new · 2m 5s/).closest("tr")!;
-    expect(within(runRow).getByText("Scheduled")).toBeInTheDocument();
-  });
-
-  it("steers the active pipeline through its own stage", async () => {
-    renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: /Pause/ }));
-    expect(mocks.steerPipeline).toHaveBeenCalledWith("dce-cache", "pause");
+    expect(screen.getByText(/40 found · 3 new · 2m 5s/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Pipelines" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Run now|Pause/ })).not.toBeInTheDocument();
+    expect(mocks.getWorkflows).not.toHaveBeenCalled();
   });
 
   it("filters the journal to deletions and cleanups", async () => {
     renderPage();
     await userEvent.click(await screen.findByRole("tab", { name: "Deletions & cleanups" }));
     expect(mocks.getWorkflowEvents).toHaveBeenLastCalledWith(
-      expect.objectContaining({ kind: "deletion,archive,restore", page: "1" }),
+      expect.objectContaining({ kind: "deletion,archive,restore", page: "1", per_page: "15" }),
     );
   });
 
-  it("enables the automatic cache cleanup from its card", async () => {
-    renderPage();
-    const toggle = await screen.findByRole("checkbox", { name: "Automatic daily cleanup" });
-    expect(toggle).not.toBeChecked();
-    await userEvent.click(toggle);
-    expect(mocks.updateCron).toHaveBeenCalledWith("dce_cache_cleanup", { enabled: true });
-  });
-
-  it("switches the tender count to hourly from its card", async () => {
-    renderPage();
-    const toggle = await screen.findByRole("checkbox", { name: "Recompute every hour" });
-    expect(toggle).not.toBeChecked();
-    await userEvent.click(toggle);
-    expect(mocks.updateCron).toHaveBeenCalledWith(
-      "tender_stats", { enabled: true, schedule_kind: "interval", interval_minutes: 60 },
-    );
-  });
-
-  it("switches to French", async () => {
+  it("switches the journal to French", async () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "fr" }));
-    expect(screen.getByRole("heading", { name: "Mise en cache des DCE" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Journal d'activité" })).toBeInTheDocument();
     expect(screen.getByText("Cache vidé")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Traitements" })).not.toBeInTheDocument();
   });
 
-  it("disables run controls without imports.run", async () => {
+  it("opens and refreshes the embedded audit trail", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("tab", { name: "Audit trail" }));
+    expect(await screen.findByText("No audit events")).toBeInTheDocument();
+    expect(mocks.getAuditLogs).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(mocks.getAuditLogs).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows auditors to inspect activity", async () => {
     mocks.role = "auditor";
     renderPage();
-    await screen.findByRole("heading", { name: "DCE caching" });
-    for (const button of screen.getAllByRole("button", { name: /Run now/ })) expect(button).toBeDisabled();
+    expect(await screen.findByText("Cache cleared")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Audit trail" })).toBeInTheDocument();
   });
 });

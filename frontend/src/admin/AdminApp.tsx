@@ -8,7 +8,6 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import AdminLayout from "./AdminLayout";
 import Dashboard from "./pages/Dashboard";
-import Workflows from "./pages/Workflows";
 import Users from "./pages/Users";
 import Costs from "./pages/Costs";
 import Settings from "./pages/Settings";
@@ -23,7 +22,11 @@ import { EmptyState } from "./components/StateBlock";
 /** Redirect that carries the query string over, so deep links keep their filters. */
 function RedirectWithQuery({ to }: { to: string }) {
   const { search } = useLocation();
-  return <Navigate to={`${to}${search}`} replace />;
+  const [pathname, query = ""] = to.split("?");
+  const merged = new URLSearchParams(search);
+  new URLSearchParams(query).forEach((value, key) => merged.set(key, value));
+  const suffix = merged.toString();
+  return <Navigate to={`${pathname}${suffix ? `?${suffix}` : ""}`} replace />;
 }
 
 export default function AdminApp() {
@@ -31,7 +34,7 @@ export default function AdminApp() {
     <AdminLayout>
       <Routes>
         <Route index element={<Dashboard />} />
-        <Route path="workflows" element={<Workflows />} />
+        <Route path="workflows" element={<RedirectWithQuery to="/admin" />} />
 
         {/* ── Tender lifecycle ───────────────────────────────────────────── */}
         <Route path="scrape" element={<StageShell slug="scrape" />}>
@@ -70,9 +73,9 @@ export default function AdminApp() {
         {/* The catalog is now stage 01's Data view; filters must survive. */}
         <Route path="tenders" element={<RedirectWithQuery to="/admin/scrape/data" />} />
         {/* Schedules are edited per stage; the journal lists them all. */}
-        <Route path="cron" element={<Navigate to="/admin/workflows" replace />} />
+        <Route path="cron" element={<Navigate to="/admin" replace />} />
         {/* The audit trail is a tab of the unified journal. */}
-        <Route path="audit-logs" element={<RedirectWithQuery to="/admin/workflows?tab=audit" />} />
+        <Route path="audit-logs" element={<RedirectWithQuery to="/admin?tab=audit" />} />
         {/* The permission matrix is a panel on Users. */}
         <Route path="roles" element={<Navigate to="/admin/users?view=roles" replace />} />
         {/* Older still: the combined imports page. */}

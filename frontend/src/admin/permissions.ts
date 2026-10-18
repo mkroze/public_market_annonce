@@ -91,12 +91,11 @@ export interface NavItem {
 // Sidebar, in lifecycle order. The six lifecycle entries are generated from the
 // stage registry so the nav cannot drift from the routes or the dashboard
 // diagram. Cron jobs, Tenders, Audit logs, Roles and Integrations are no longer
-// nav entries: the first three were folded into the stage or journal that owns
+// nav entries: the first three were folded into the stage or dashboard journal that owns
 // their subject, Roles became a panel on Users, and Integrations was an empty
 // placeholder. AdminApp still redirects their old paths.
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", permission: "overview.view" },
-  { label: "Workflows", path: "/admin/workflows", icon: "Workflow", permission: "imports.view" },
 
   ...STAGES.map((stage): NavItem => ({
     label: `${String(stage.step).padStart(2, "0")} · ${stage.title}`,

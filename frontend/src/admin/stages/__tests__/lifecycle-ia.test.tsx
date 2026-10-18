@@ -62,14 +62,14 @@ describe("sidebar", () => {
 
   it("drops the pages folded into other owners", () => {
     const paths = NAV_ITEMS.map((i) => i.path);
-    for (const gone of ["/admin/cron", "/admin/tenders", "/admin/audit-logs", "/admin/roles", "/admin/integrations"]) {
+    for (const gone of ["/admin/cron", "/admin/tenders", "/admin/audit-logs", "/admin/roles", "/admin/integrations", "/admin/workflows"]) {
       expect(paths, `${gone} should no longer be a nav entry`).not.toContain(gone);
     }
   });
 
-  it("keeps dashboard, workflows and the administration group", () => {
+  it("keeps dashboard and the administration group", () => {
     expect(NAV_ITEMS.map((i) => i.path)).toEqual(expect.arrayContaining([
-      "/admin", "/admin/workflows", "/admin/users", "/admin/costs", "/admin/settings",
+      "/admin", "/admin/users", "/admin/costs", "/admin/settings",
     ]));
   });
 });
