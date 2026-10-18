@@ -104,6 +104,9 @@ export const simulateDceExtraction = (tenderId?: string) =>
     { method: "POST", body: tenderId ? { tender_id: tenderId } : {} },
   );
 
+export const purgeDceSimulations = () =>
+  request<{ deleted: number }>("/dce-extraction/simulations", { method: "DELETE" });
+
 // ── Users ──
 export const getUsers = (params: Record<string, string>) =>
   request<{ data: AdminUser[] }>("/users", { params });

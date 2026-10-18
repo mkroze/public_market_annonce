@@ -51,6 +51,7 @@ export interface DceExtractionRecent {
   tags: string[];
   object: string | null;
   extracted_at: string;
+  source: string; // live | simulation
 }
 
 export interface DceExtractionStatus {
@@ -59,6 +60,7 @@ export interface DceExtractionStatus {
   active: boolean;
   paused: boolean;
   extracted_count: number;
+  simulated_count: number;
   recent: DceExtractionRecent[];
   simulate_enabled: boolean;
 }

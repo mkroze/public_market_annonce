@@ -4,7 +4,7 @@
 // the stage journal.
 import { useState } from "react";
 import { FileSearch, Sparkles } from "lucide-react";
-import { getDceExtraction, runDceExtraction, simulateDceExtraction, steerPipeline, ApiError } from "../api";
+import { getDceExtraction, runDceExtraction, simulateDceExtraction, purgeDceSimulations, steerPipeline, ApiError } from "../api";
 import type { DceExtractionRun, DceExtractionRecent, DceExtractionStatus, SteerAction } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
@@ -113,7 +113,19 @@ export function DceExtractionControls() {
 
 /** The fiches universelles this stage produced. */
 export function DceExtractionData() {
+  const { user } = useAuth();
+  const { toasts, push, dismiss } = useToasts();
   const { status, loading, error, reload } = useStageStatus(getDceExtraction, isActive);
+
+  async function doPurge() {
+    try {
+      const res = await purgeDceSimulations();
+      push(`${res.deleted} sample fiche(s) removed`, "success");
+      reload(true);
+    } catch (e) {
+      push(e instanceof ApiError ? e.message : "Failed to remove samples", "error");
+    }
+  }
 
   if (loading) return <LoadingState label="Loading extractions" />;
   if (error?.status === 403) return <DeniedState message={error.message} />;
@@ -121,11 +133,24 @@ export function DceExtractionData() {
 
   const recent = status?.recent ?? [];
   const extCount = status?.extracted_count ?? 0;
+  const simCount = status?.simulated_count ?? 0;
 
   const columns: Column<DceExtractionRecent>[] = [
     { header: "Tender", cell: (r) => <span className="block max-w-[16rem] truncate" title={r.title ?? r.tender_id}>{r.title ?? r.tender_id}</span> },
     { header: "Object (extracted)", cell: (r) => <span className="block max-w-[18rem] text-[var(--color-slate)]">{r.object ?? "—"}</span> },
-    { header: "Status", cell: (r) => <span className="capitalize">{r.status}</span> },
+    {
+      header: "Status",
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="capitalize">{r.status}</span>
+          {r.source === "simulation" && (
+            // Fabricated sample: never counted as a stored fiche and never
+            // served to members, so say so plainly in the table.
+            <span className="text-xs rounded bg-[var(--color-ivory-dim)] px-1.5 py-0.5 text-[var(--color-crimson)]">sample</span>
+          )}
+        </span>
+      ),
+    },
     {
       header: "Tags",
       cell: (r) => (
@@ -140,16 +165,35 @@ export function DceExtractionData() {
   ];
 
   return (
-    <Panel title={`Fiches universelles · ${extCount.toLocaleString("fr-FR")} stored`}>
-      <div className="px-1 pb-1">
-        <RunHistoryTable
-          columns={columns}
-          rows={recent}
-          rowKey={(r) => r.tender_id}
-          empty={<EmptyState title="No extractions yet" hint="Run a sweep from Controls to enqueue cached DCEs, or use “Simulate result” to store a sample." />}
-        />
-      </div>
-    </Panel>
+    <>
+      <Panel title={`Fiches universelles · ${extCount.toLocaleString("fr-FR")} stored`}>
+        {simCount > 0 && (
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--color-ivory-dim)] px-4 py-2.5">
+            <p className="text-sm font-sans text-[var(--color-muted-light)]">
+              {simCount.toLocaleString("fr-FR")} simulated sample{simCount > 1 ? "s" : ""} stored — excluded from the count above and never served to members.
+            </p>
+            {can(user?.role, "imports.run") && (
+              <button
+                type="button"
+                onClick={doPurge}
+                className="shrink-0 text-sm font-sans text-[var(--color-crimson)] underline underline-offset-2 hover:no-underline"
+              >
+                Remove samples
+              </button>
+            )}
+          </div>
+        )}
+        <div className="px-1 pb-1">
+          <RunHistoryTable
+            columns={columns}
+            rows={recent}
+            rowKey={(r) => r.tender_id}
+            empty={<EmptyState title="No extractions yet" hint="Run a sweep from Controls to enqueue cached DCEs, or use “Simulate result” to store a sample." />}
+          />
+        </div>
+      </Panel>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
+    </>
   );
 }
 

@@ -1205,12 +1205,18 @@ async def admin_dce_extraction_status(user=Depends(require_admin("imports.view")
         )).fetchall()
         runs = [dict(r) for r in rows]
         active = bool(runs and runs[0]["status"] == "running")
+        # Samples never inflate the stored-fiches figure; they get their own
+        # counter so the operator can see (and purge) what is fabricated.
         done = await (await db.execute(
-            "SELECT COUNT(*) AS n FROM dce_extraction WHERE status != 'failed'"
+            "SELECT COUNT(*) AS n FROM dce_extraction "
+            "WHERE status != 'failed' AND COALESCE(source, 'live') = 'live'"
+        )).fetchone()
+        simulated = await (await db.execute(
+            "SELECT COUNT(*) AS n FROM dce_extraction WHERE COALESCE(source, 'live') != 'live'"
         )).fetchone()
         recent_rows = await (await db.execute(
             """SELECT e.tender_id, t.title, e.status, e.ocr_lang, e.tags_json,
-                      e.core_json, e.extracted_at
+                      e.core_json, e.extracted_at, COALESCE(e.source, 'live') AS source
                FROM dce_extraction e
                LEFT JOIN tenders t ON t.id = e.tender_id
                ORDER BY e.extracted_at DESC LIMIT 10"""
@@ -1235,6 +1241,7 @@ async def admin_dce_extraction_status(user=Depends(require_admin("imports.view")
                 "tags": tags,
                 "object": obj.get("value"),
                 "extracted_at": r["extracted_at"],
+                "source": r["source"],
             })
         return {
             "last_run": runs[0] if runs else None,
@@ -1242,6 +1249,7 @@ async def admin_dce_extraction_status(user=Depends(require_admin("imports.view")
             "active": active,
             "paused": DCE_EXTRACTION.paused if active else False,
             "extracted_count": done["n"],
+            "simulated_count": simulated["n"],
             "recent": recent,
             "simulate_enabled": not _config.N8N_EXTRACT_WEBHOOK_URL,
         }
@@ -1319,6 +1327,11 @@ async def admin_simulate_dce_extraction(
     import dce_extraction
     db = await get_db()
     try:
+        # A tender that already holds a real fiche is off limits: the random
+        # pick skips it, and an explicit request for it is refused below.
+        no_live_result = """NOT EXISTS (
+                 SELECT 1 FROM dce_extraction x
+                 WHERE x.tender_id = t.id AND COALESCE(x.source, 'live') = 'live')"""
         if req.tender_id:
             row = await (await db.execute(
                 f"SELECT id, title FROM tenders t WHERE t.id = ? AND {public_visible_condition('t')}",
@@ -1327,16 +1340,51 @@ async def admin_simulate_dce_extraction(
         else:
             row = await (await db.execute(
                 f"SELECT id, title FROM tenders t WHERE {public_visible_condition('t')} "
-                "ORDER BY RANDOM() LIMIT 1"
+                f"AND {no_live_result} ORDER BY RANDOM() LIMIT 1"
             )).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Aucun appel d'offres éligible trouvé.")
         tender_id = row["id"]
-        await dce_extraction.store_extraction(db, tender_id, _sample_extraction_payload())
+        try:
+            await dce_extraction.store_extraction(
+                db, tender_id, _sample_extraction_payload(),
+                source=dce_extraction.SIMULATION,
+            )
+        except dce_extraction.LiveResultExists:
+            raise HTTPException(
+                status_code=409,
+                detail="Cet appel d'offres a déjà une fiche réelle : la simulation ne peut pas la remplacer.",
+            )
         await log_audit(db, actor=user, action="dce_extraction.simulate",
                         target_type="tender", target_id=tender_id, request=request)
         stored = await dce_extraction.get_extraction(db, tender_id)
         return {"tender_id": tender_id, "title": row["title"], "extraction": stored}
+    finally:
+        await db.close()
+
+
+@router.delete("/dce-extraction/simulations")
+async def admin_purge_dce_simulations(request: Request, user=Depends(require_admin("imports.run"))):
+    """Drop every fabricated sample row (and its recap file). Live results are
+    untouched, so this is always safe to run."""
+    import dce_extraction
+    db = await get_db()
+    try:
+        rows = await (await db.execute(
+            "SELECT tender_id FROM dce_extraction WHERE COALESCE(source, 'live') != 'live'"
+        )).fetchall()
+        tender_ids = [r["tender_id"] for r in rows]
+        await db.execute("DELETE FROM dce_extraction WHERE COALESCE(source, 'live') != 'live'")
+        await db.commit()
+        for tid in tender_ids:
+            try:
+                os.remove(dce_extraction.context_md_path(tid, dce_extraction.SIMULATION))
+            except OSError:
+                pass
+        await log_audit(db, actor=user, action="dce_extraction.purge_simulations",
+                        target_type="dce_extraction", target_id=None,
+                        after={"deleted": len(tender_ids)}, request=request)
+        return {"deleted": len(tender_ids)}
     finally:
         await db.close()
 

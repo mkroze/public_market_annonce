@@ -1835,7 +1835,8 @@ async def get_tender_dce_extraction(tender_id: str):
     if not visible:
         await db.close()
         raise HTTPException(status_code=404, detail="Tender not found")
-    row = await dce_extraction.get_extraction(db, tender_id)
+    # live_only: a simulated sample must never be served as a real fiche.
+    row = await dce_extraction.get_extraction(db, tender_id, live_only=True)
     await db.close()
     if not row:
         raise HTTPException(status_code=404, detail="No extraction for this tender")

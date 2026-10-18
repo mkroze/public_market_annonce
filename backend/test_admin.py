@@ -899,7 +899,11 @@ class ExtractionSimulateTest(unittest.TestCase):
 
         s = self.client.get("/api/admin/dce-extraction/status",
                             headers=self.owner_headers).json()
-        self.assertEqual(s["extracted_count"], 1)
+        # A sample is visible to the operator but counted apart from real
+        # fiches; see test_extraction_simulation for the full isolation
+        # contract (member reads, overwrite protection, purge).
+        self.assertEqual(s["extracted_count"], 0)
+        self.assertEqual(s["simulated_count"], 1)
         self.assertTrue(s["simulate_enabled"])
         self.assertTrue(any(row["tender_id"] == "SIM-1" for row in s["recent"]))
 

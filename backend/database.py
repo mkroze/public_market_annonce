@@ -368,6 +368,12 @@ async def init_db():
     await _add_column_if_missing(db, "scrape_log", "tenders_skipped", "tenders_skipped INTEGER DEFAULT 0")
     await _add_column_if_missing(db, "scrape_log", "warnings", "warnings TEXT")
 
+    # dce_extraction: tell fabricated sample rows apart from pipeline results.
+    # Anything written before this column existed came from the callback or the
+    # admin simulator; 'live' is the safe default because the simulator now
+    # labels its own rows explicitly.
+    await _add_column_if_missing(db, "dce_extraction", "source", "source TEXT DEFAULT 'live'")
+
     # dce_cache_log: parallel warm-all observability
     await _add_column_if_missing(db, "dce_cache_log", "concurrency", "concurrency INTEGER")
     await _add_column_if_missing(db, "dce_cache_log", "pauses", "pauses INTEGER DEFAULT 0")
