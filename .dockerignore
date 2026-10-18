@@ -5,3 +5,7 @@ backend/data
 frontend/dist
 .git
 *.pyc
+backend/tests
+backend/venv
+backend/*.db
+backend/**/__pycache__

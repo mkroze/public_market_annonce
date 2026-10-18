@@ -18,6 +18,8 @@ import { GatedButton, MetricCard, PageHeader, Panel, fmtDateOnly } from "../comp
 import { CostStatusBadge } from "../components/StatusBadge";
 import { useToasts } from "../components/useToasts";
 import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
+import CostInventory from "../components/CostInventory";
+import type { CostInventoryItem } from "../costInventory";
 
 const FILTER_KEYS = ["q", "category", "status", "currency", "date_from", "date_to"];
 const CATEGORIES: CostCategory[] = ["hosting", "domain", "email", "ai_api", "storage", "monitoring", "scraping", "software", "other"];
@@ -151,6 +153,22 @@ export default function Costs() {
     setAmountText("");
   }
 
+  function openInventoryCost(item: CostInventoryItem) {
+    if (!canManage) return;
+    setEditing(null);
+    setDraft({
+      ...EMPTY_DRAFT,
+      provider: item.provider,
+      category: item.category,
+      description: item.description,
+      billing_cycle: item.billing_cycle,
+      currency: item.currency,
+      reference: `inventory:${item.id}`,
+      notes: `${item.group}. ${item.basis}\nRepository: ${item.evidence}`,
+    });
+    setAmountText("");
+  }
+
   function openEdit(cost: WebsiteCost) {
     setEditing(cost);
     setDraft(draftFrom(cost));
@@ -251,6 +269,9 @@ export default function Costs() {
         <MetricCard label="Annualized recurring" value={<span className="text-base">{formatGrouped(summary?.annualized_recurring)}</span>} sub="Monthly and yearly costs" />
       </div>
 
+      <CostInventory canManage={canManage} onEnterPrice={openInventoryCost} />
+
+      <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)] mb-3">Recorded costs</h2>
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           aria-label="Search provider, description, reference"

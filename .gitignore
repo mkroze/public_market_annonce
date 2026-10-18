@@ -20,7 +20,9 @@ build/
 *.db
 *.sqlite
 *.sqlite3
-backend/data/*.db
+# The whole runtime data tree: SQLite DB, cached DCE ZIPs (hundreds of MB),
+# extracted recaps. Mounted as a volume in the container; never committed.
+backend/data/
 
 # ---- Env / secrets ----
 .env

@@ -14,7 +14,8 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend code. The package lands at /app/mpm, so `config.BASE_DIR`
+# resolves to /app and DATA_DIR to the /app/data volume below.
 COPY backend/ .
 
 # Copy built frontend into static/
@@ -25,4 +26,4 @@ VOLUME /app/data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "mpm.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,24 @@
+# Packaging metadata only — no new runtime dependencies. Declaring the package
+# makes import resolution independent of the working directory:
+#
+#   pip install -e .        # editable, for ops scripts and CI
+#   uvicorn mpm.api.main:app
+#
+# Runtime pins stay in requirements.txt, which the Dockerfile installs directly,
+# so the image build is unchanged.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpm"
+version = "0.1.0"
+description = "Marches Publics Maroc backend: catalog API, admin control plane, tender pipeline"
+requires-python = ">=3.12"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["mpm*"]

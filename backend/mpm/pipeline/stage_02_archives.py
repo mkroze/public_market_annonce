@@ -1,0 +1,477 @@
+"""DCE ZIP caching.
+
+Downloads each tender's DCE once (filling the portal's anonymous form
+programmatically via ``download_dce``), stores the ZIP on the persistent
+``/app/data`` volume, and serves cached copies instantly. This removes both the
+slow multi-step portal handshake and the double-hop proxying from the user's
+download path — one click, no form, no wait.
+
+Two entry points:
+- ``ensure_dce_cached`` — lazy: serve from cache, or fetch+store on first use.
+- ``cache_all_dces`` — admin warm-all: pre-fetch every tender's DCE in the
+  background. Skips already-cached (resumable) and stops if disk runs low.
+"""
+
+import asyncio
+import hashlib
+import json
+import os
+import random
+import shutil
+
+from mpm.core.config import (
+    DCE_CACHE_DIR,
+    DCE_MIN_FREE_BYTES,
+    DCE_CACHE_MAX_BYTES,
+    DCE_WARM_DELAY_MIN,
+    DCE_WARM_DELAY_MAX,
+    DCE_WARM_START_THREADS,
+    DCE_WARM_PAUSE_SECONDS,
+    DCE_WARM_BACKOFF_STEP,
+    DCE_WARM_MIN_THREADS,
+    DCE_WARM_MAX_DOWNLOADS,
+    DCE_CACHE_PRUNE_ORPHANS,
+)
+from mpm.db.database import get_db
+from mpm.core.mem_profile import profile_run
+from mpm.pipeline.control import DCE_CACHE
+from mpm.pipeline.stage_01_collect import download_dce, ensure_tender_details
+
+# Only one warm-all run at a time (mirrors main.scrape_lock for imports).
+dce_cache_lock = asyncio.Lock()
+# Only one scheduled outdated-cache cleanup at a time.
+dce_cleanup_lock = asyncio.Lock()
+
+# "Outdated" cached DCEs = tenders that are archived, past their deadline, or no
+# longer in the catalog. Deadlines are stored as DD/MM/YYYY HH:MM, so reformat
+# to YYYY-MM-DD before comparing (a raw string compare would be wrong).
+_STALE_TENDER_IDS = """
+    SELECT tender_id FROM dce_cache WHERE tender_id NOT IN (
+        SELECT id FROM tenders
+        WHERE COALESCE(admin_status, '') != 'archived'
+          AND (deadline = '' OR deadline IS NULL OR
+               (substr(deadline, 7, 4) || '-' || substr(deadline, 4, 2) || '-' || substr(deadline, 1, 2))
+               >= date('now'))
+    )
+"""
+
+
+def _disk_path(tender_id: str) -> str:
+    # tender_id may contain slashes; hash it for a safe, collision-free filename.
+    digest = hashlib.sha1(tender_id.encode("utf-8")).hexdigest()
+    return os.path.join(DCE_CACHE_DIR, f"{digest}.zip")
+
+
+def _has_free_space() -> bool:
+    try:
+        os.makedirs(DCE_CACHE_DIR, exist_ok=True)
+        return shutil.disk_usage(DCE_CACHE_DIR).free >= DCE_MIN_FREE_BYTES
+    except OSError:
+        return True  # don't block the run on a stat failure
+
+
+async def cache_total_bytes(db) -> int:
+    row = await (await db.execute(
+        "SELECT COALESCE(SUM(size), 0) FROM dce_cache WHERE status = 'ok'"
+    )).fetchone()
+    return int(row[0]) if row else 0
+
+
+async def _remove_entry(db, tender_id: str) -> int:
+    """Delete a cached ZIP (file + row). Returns freed bytes."""
+    freed = 0
+    path = _disk_path(tender_id)
+    try:
+        if os.path.exists(path):
+            freed = os.path.getsize(path)
+            os.remove(path)
+    except OSError:
+        pass
+    await db.execute("DELETE FROM dce_cache WHERE tender_id = ?", (tender_id,))
+    return freed
+
+
+async def _log_system_event(db, action: str, after: dict, *, actor_email: str = "system",
+                            actor_role: str | None = "system", result: str = "success") -> None:
+    """Best-effort audit row for an automatic (non-admin) cache deletion, so the
+    admin Workflows view can show it. Never raises: tracing must not break a
+    download. Caller commits."""
+    try:
+        await db.execute(
+            """INSERT INTO admin_audit_logs
+               (actor_email, actor_role, action, target_type, result, after_json)
+               VALUES (?, ?, ?, 'dce_cache', ?, ?)""",
+            (actor_email, actor_role, action, result, json.dumps(after, ensure_ascii=False)),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# How many evicted tender ids one audit row keeps (the counts are always exact).
+_EVICT_LOG_MAX_IDS = 20
+
+
+async def _evict_to_fit(db, incoming: int) -> None:
+    """Evict oldest-cached ZIPs until `incoming` bytes fit under the cap."""
+    evicted: list[str] = []
+    freed = 0
+    while await cache_total_bytes(db) + incoming > DCE_CACHE_MAX_BYTES:
+        oldest = await (await db.execute(
+            "SELECT tender_id FROM dce_cache WHERE status = 'ok' ORDER BY cached_at ASC, rowid ASC LIMIT 1"
+        )).fetchone()
+        if not oldest:
+            break
+        freed += await _remove_entry(db, oldest["tender_id"])
+        evicted.append(oldest["tender_id"])
+    if evicted:
+        await _log_system_event(db, "dce_cache.evict", {
+            "reason": "size_cap",
+            "removed": len(evicted),
+            "freed_bytes": freed,
+            "tender_ids": evicted[:_EVICT_LOG_MAX_IDS],
+        })
+    await db.commit()
+
+
+async def _store(db, tender_id: str, file_bytes: bytes, filename: str) -> tuple[str, str]:
+    os.makedirs(DCE_CACHE_DIR, exist_ok=True)
+    await _evict_to_fit(db, len(file_bytes))
+    path = _disk_path(tender_id)
+    with open(path, "wb") as f:
+        f.write(file_bytes)
+    await db.execute(
+        """INSERT OR REPLACE INTO dce_cache (tender_id, filename, size, status, error, cached_at)
+           VALUES (?, ?, ?, 'ok', NULL, datetime('now'))""",
+        (tender_id, filename, len(file_bytes)),
+    )
+    await db.commit()
+    return path, filename
+
+
+async def get_cached(db, tender_id: str) -> tuple[str, str] | None:
+    """Return (path, filename) if a healthy cached ZIP exists on disk, else None."""
+    row = await (await db.execute(
+        "SELECT filename FROM dce_cache WHERE tender_id = ? AND status = 'ok'", (tender_id,)
+    )).fetchone()
+    if not row:
+        return None
+    path = _disk_path(tender_id)
+    if not os.path.exists(path):
+        return None
+    return path, (row["filename"] or "dce.zip")
+
+
+async def ensure_dce_cached(db, tender_id: str, dce_url: str) -> tuple[str, str] | None:
+    """Serve-from-cache, or fetch+store on a miss. Returns (path, filename) or None.
+
+    The live fetch fills the portal's anonymous form automatically, so the user
+    never sees a form even on the first (uncached) download.
+    """
+    cached = await get_cached(db, tender_id)
+    if cached:
+        return cached
+
+    status, payload = await download_dce(dce_url)
+    if status != "ok":
+        # Both "failed" and "flagged" collapse to the existing lazy behavior: a
+        # 'failed' row so repeat clicks don't blindly re-hit the portal. The
+        # flag distinction only matters to the warm-all supervisor.
+        await db.execute(
+            """INSERT OR REPLACE INTO dce_cache (tender_id, filename, size, status, error, cached_at)
+               VALUES (?, NULL, 0, 'failed', 'download failed', datetime('now'))""",
+            (tender_id,),
+        )
+        await db.commit()
+        return None
+
+    file_bytes, filename = payload
+    return await _store(db, tender_id, file_bytes, filename)
+
+
+async def _write_run_log(db, log_id: int, state: dict, status: str) -> None:
+    """Flush the in-memory counters to dce_cache_log so the polling admin UI
+    stays fresh. Status stays 'running' for the whole run; the terminal status
+    is written once in cache_all_dces's finally block."""
+    await db.execute(
+        """UPDATE dce_cache_log
+           SET total=?, cached=?, skipped=?, failed=?, pauses=?, concurrency=?, status=?
+           WHERE id=?""",
+        (state["total"], state["cached"], state["skipped"], state["failed"],
+         state["pauses"], state["concurrency"], status, log_id),
+    )
+    await db.commit()
+
+
+async def _run_sweep(db, log_id: int, items, concurrency: int,
+                     state: dict, counter_lock) -> str:
+    """Run one sweep over `items` (uncached tenders) with `concurrency` workers.
+
+    Workers share the single aiosqlite connection (aiosqlite serializes SQL, so
+    concurrent DB calls are safe); network I/O runs truly in parallel because
+    download_dce opens its own client per call. Returns the sweep outcome:
+    "finished" | "cap" | "disk" | "flagged" | "download_cap". On a terminal/flag
+    outcome, workers drain their in-flight download then stop pulling new work.
+
+    ``DCE_WARM_MAX_DOWNLOADS`` caps the number of *new* downloads in this run so a
+    single in-process sweep can't balloon RSS and OOM-kill the web worker. The
+    cap counts only fresh stores (skips of already-cached tenders are free), so a
+    resumable sweep picks up the next batch on the next run.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+    for item in items:
+        queue.put_nowait(item)
+    stop = {"reason": None}  # "cap" | "disk" | "flagged" | "cancelled" | "download_cap"
+    downloaded_this_run = {"n": 0}
+
+    async def worker():
+        while stop["reason"] is None:
+            # Cooperative pause/cancel: block here while paused, bail on cancel.
+            if not await DCE_CACHE.checkpoint():
+                stop["reason"] = "cancelled"
+                return
+            try:
+                tender_id, detail_url = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            try:
+                if await get_cached(db, tender_id):
+                    async with counter_lock:
+                        state["skipped"] += 1
+                    continue
+                # Per-run download cap: stop pulling new work once this run has
+                # fetched its budget of fresh ZIPs (keeps peak RSS bounded).
+                if DCE_WARM_MAX_DOWNLOADS > 0 and downloaded_this_run["n"] >= DCE_WARM_MAX_DOWNLOADS:
+                    stop["reason"] = "download_cap"
+                    return
+                if await cache_total_bytes(db) >= DCE_CACHE_MAX_BYTES:
+                    stop["reason"] = "cap"
+                    return
+                if not _has_free_space():
+                    stop["reason"] = "disk"
+                    return
+
+                detail = await ensure_tender_details(db, tender_id, detail_url)
+                dce_url = (detail or {}).get("dce_url", "")
+                if not dce_url:
+                    async with counter_lock:
+                        state["skipped"] += 1
+                    continue
+
+                dl_status, payload = await download_dce(dce_url)
+                if dl_status == "flagged":
+                    stop["reason"] = "flagged"
+                    return  # no row written -> retried next sweep
+                if dl_status == "failed":
+                    await db.execute(
+                        """INSERT OR REPLACE INTO dce_cache
+                           (tender_id, filename, size, status, error, cached_at)
+                           VALUES (?, NULL, 0, 'failed', 'download failed', datetime('now'))""",
+                        (tender_id,),
+                    )
+                    await db.commit()
+                    async with counter_lock:
+                        state["failed"] += 1
+                    continue
+
+                file_bytes, filename = payload
+                await _store(db, tender_id, file_bytes, filename)
+                # Release the ZIP buffer promptly so it isn't pinned across the
+                # inter-download sleep while other workers allocate their own.
+                del file_bytes, payload
+                async with counter_lock:
+                    state["cached"] += 1
+                    downloaded_this_run["n"] += 1
+                    hit_cap = (
+                        DCE_WARM_MAX_DOWNLOADS > 0
+                        and downloaded_this_run["n"] >= DCE_WARM_MAX_DOWNLOADS
+                    )
+                await _write_run_log(db, log_id, state, "running")
+                if hit_cap:
+                    stop["reason"] = "download_cap"
+                    return
+                await asyncio.sleep(random.uniform(DCE_WARM_DELAY_MIN, DCE_WARM_DELAY_MAX))
+            finally:
+                queue.task_done()
+
+    workers = [asyncio.create_task(worker()) for _ in range(max(1, concurrency))]
+    await asyncio.gather(*workers)
+    return stop["reason"] or "finished"
+
+
+async def cache_all_dces(actor_email: str | None = None) -> dict:
+    """Warm the cache for every tender in parallel, self-throttling downward.
+
+    Runs in resumable sweeps. Each sweep uses `concurrency` workers; on a portal
+    push-back "flag" it pauses then resumes with fewer threads (never more), down
+    to DCE_WARM_MIN_THREADS where a further flag stops the run. Still stops on the
+    size cap or low disk. Skips already-cached tenders, so a lower-concurrency
+    resume just continues where the last sweep left off.
+    """
+    async with dce_cache_lock:
+        db = await get_db()
+        concurrency = DCE_WARM_START_THREADS
+        log_cursor = await db.execute(
+            "INSERT INTO dce_cache_log (status, actor_email, concurrency, pauses) "
+            "VALUES ('running', ?, ?, 0)",
+            (actor_email, concurrency),
+        )
+        log_id = log_cursor.lastrowid
+        await db.commit()
+
+        state = {"total": 0, "cached": 0, "skipped": 0, "failed": 0,
+                 "pauses": 0, "concurrency": concurrency}
+        counter_lock = asyncio.Lock()
+        final_status = "done"
+        err = None
+        DCE_CACHE.begin()
+
+        try:
+            rows = await (await db.execute(
+                "SELECT id, detail_url FROM tenders "
+                "WHERE detail_url IS NOT NULL AND detail_url != ''"
+            )).fetchall()
+            items = [(r["id"], r["detail_url"]) for r in rows]
+            state["total"] = len(items)
+
+            async with profile_run("cache_all_dces"):
+                while True:
+                    outcome = await _run_sweep(db, log_id, items, concurrency, state, counter_lock)
+                    if outcome == "finished":
+                        final_status = "done"
+                        break
+                    if outcome == "download_cap":
+                        # Hit the per-run download budget: stop cleanly (not a failure).
+                        # The next scheduled run resumes with the next batch.
+                        final_status = "stopped"
+                        err = (f"Per-run download cap ({DCE_WARM_MAX_DOWNLOADS}) reached — "
+                               "remaining DCEs will cache on the next run.")
+                        break
+                    if outcome == "cap":
+                        final_status = "stopped"
+                        err = "Cache size cap reached — remaining DCEs will cache on demand."
+                        break
+                    if outcome == "disk":
+                        final_status = "stopped"
+                        err = "Low disk space — stopped to protect the volume."
+                        break
+                    if outcome == "cancelled":
+                        final_status = "stopped"
+                        err = "Run cancelled by operator."
+                        break
+                    # outcome == "flagged": back off one step, or stop at the floor.
+                    state["pauses"] += 1
+                    concurrency -= DCE_WARM_BACKOFF_STEP
+                    if concurrency < DCE_WARM_MIN_THREADS:
+                        final_status = "stopped"
+                        err = "Portal pushing back even at the minimum thread count — try again later."
+                        break
+                    state["concurrency"] = concurrency
+                    await _write_run_log(db, log_id, state, "running")
+                    await asyncio.sleep(DCE_WARM_PAUSE_SECONDS)
+        except Exception as e:  # noqa: BLE001
+            final_status = "failed"
+            err = str(e)[:500]
+        finally:
+            await db.execute(
+                """UPDATE dce_cache_log
+                   SET finished_at = datetime('now'),
+                       total=?, cached=?, skipped=?, failed=?, pauses=?, concurrency=?,
+                       status=?, error=?
+                   WHERE id = ?""",
+                (state["total"], state["cached"], state["skipped"], state["failed"],
+                 state["pauses"], state["concurrency"], final_status, err, log_id),
+            )
+            await db.commit()
+            await db.close()
+            DCE_CACHE.end()
+
+        return {"total": state["total"], "cached": state["cached"],
+                "skipped": state["skipped"], "failed": state["failed"],
+                "pauses": state["pauses"], "status": final_status}
+
+
+async def prune_orphan_files(db) -> tuple[int, int]:
+    """Delete ZIP files on disk that have no matching 'ok' cache row.
+
+    These are "périmé" leftovers — e.g. a row deleted by eviction/clear while the
+    file lingered, or a partial write from a crashed run. Returns (files, bytes).
+    """
+    if not DCE_CACHE_PRUNE_ORPHANS:
+        return (0, 0)
+    try:
+        entries = os.listdir(DCE_CACHE_DIR)
+    except OSError:
+        return (0, 0)
+    rows = await (await db.execute(
+        "SELECT tender_id FROM dce_cache WHERE status = 'ok'"
+    )).fetchall()
+    known = {os.path.basename(_disk_path(r["tender_id"])) for r in rows}
+    removed = freed = 0
+    for name in entries:
+        if not name.endswith(".zip") or name in known:
+            continue
+        path = os.path.join(DCE_CACHE_DIR, name)
+        try:
+            freed += os.path.getsize(path)
+            os.remove(path)
+            removed += 1
+        except OSError:
+            pass
+    return (removed, freed)
+
+
+async def clear_dce_cache(db, mode: str = "all") -> dict:
+    """Delete cached DCE ZIPs (files + rows).
+
+    mode="all"      -> wipe the entire cache (e.g. to force a fresh re-download).
+    mode="outdated" -> only tenders that are archived, past deadline, or gone
+                       ("périmé"), PLUS orphan files with no matching cache row.
+    Returns {"removed": n, "freed_bytes": b, "mode": mode, "orphans_removed": o,
+    "orphan_bytes": ob}; the orphan figures are included in removed/freed_bytes.
+    """
+    query = _STALE_TENDER_IDS if mode == "outdated" else "SELECT tender_id FROM dce_cache"
+    rows = await (await db.execute(query)).fetchall()
+
+    removed = 0
+    freed = 0
+    for row in rows:
+        freed += await _remove_entry(db, row["tender_id"])
+        removed += 1
+    await db.commit()
+
+    # In "outdated" cleanup, also sweep orphan files (rows already gone but the
+    # ZIP lingered on the volume). "all" already removes every file it knows of.
+    orphan_files = orphan_bytes = 0
+    if mode == "outdated":
+        orphan_files, orphan_bytes = await prune_orphan_files(db)
+        removed += orphan_files
+        freed += orphan_bytes
+
+    return {"removed": removed, "freed_bytes": freed, "mode": mode,
+            "orphans_removed": orphan_files, "orphan_bytes": orphan_bytes}
+
+
+async def cleanup_outdated_dces(actor_email: str | None = None) -> dict:
+    """The periodic janitor (job ``dce_cache_cleanup``): drop cached DCEs whose
+    tender is archived, past its deadline, or gone — ``clear_dce_cache`` in
+    "outdated" mode — and audit the outcome for the admin Workflows journal."""
+    from mpm.scheduler import SCHEDULER_ACTOR  # lazy: scheduler imports this module
+
+    scheduled = actor_email in (None, SCHEDULER_ACTOR)
+    actor = {"actor_email": actor_email or SCHEDULER_ACTOR,
+             "actor_role": "system" if scheduled else None}
+    async with dce_cleanup_lock:
+        db = await get_db()
+        try:
+            try:
+                result = await clear_dce_cache(db, mode="outdated")
+            except Exception as e:  # noqa: BLE001
+                await _log_system_event(db, "dce_cache.cleanup", {"error": str(e)[:500]},
+                                        result="failure", **actor)
+                await db.commit()
+                raise
+            await _log_system_event(db, "dce_cache.cleanup", result, **actor)
+            await db.commit()
+            return result
+        finally:
+            await db.close()

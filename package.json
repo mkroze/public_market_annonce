@@ -8,8 +8,10 @@
     "docker:stop": "docker stop marches",
     "heavyupdocker": "npm run docker:build && npm run docker:run",
     "tunnel": "cloudflared tunnel --url http://localhost:5173",
-    "dev:backend": "cd backend && .venv/bin/python -m uvicorn main:app --port 8000 --reload",
+    "dev:backend": "cd backend && .venv/bin/python -m uvicorn mpm.api.main:app --port 8000 --reload",
     "dev:frontend": "cd frontend && npm run dev",
+    "test:backend": "cd backend && .venv/bin/python -m unittest discover -s tests -t .",
+    "test:frontend": "cd frontend && npx tsc --noEmit -p tsconfig.json",
     "superdev": "trap 'kill 0' SIGINT SIGTERM EXIT; npm run dev:backend & npm run dev:frontend & wait",
     "light": "npm run superdev",
     "tunnel:dev": "npm run dev:backend & npm run dev:frontend & sleep 3 && cloudflared tunnel --url http://localhost:5173"

@@ -3,7 +3,7 @@
 // routes and the per-stage Controls / Data / Logs views all read from here, so a
 // stage is added or reordered in one place.
 //
-// `workflow` ties a stage to its backend journal key (admin.py WorkflowKey) and
+// `workflow` ties a stage to its backend journal key (mpm/api/admin.py WorkflowKey) and
 // drives both the status pill and the Logs view. `steer` ties it to the
 // pause/resume/cancel endpoint. Planned stages have neither yet.
 import type { PipelineStage, WorkflowKey } from "../types";

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -143,5 +143,47 @@ describe("Costs page", () => {
     renderCosts();
     await screen.findByText("OpenAI");
     expect(screen.getByRole("button", { name: /add cost/i })).toBeDisabled();
+  });
+
+  it("lists operating dependencies without creating unpriced ledger entries", async () => {
+    renderCosts();
+    await screen.findByRole("heading", { name: "Operating cost inventory" });
+    expect(screen.getByText("Render · application hosting")).toBeInTheDocument();
+    expect(screen.getByText("Brevo · transactional email")).toBeInTheDocument();
+    expect(screen.getByText("n8n · extraction orchestration")).toBeInTheDocument();
+    expect(screen.getByText("OCR / GPU worker")).toBeInTheDocument();
+    expect(screen.getByText("OpenRouter · document extraction")).toBeInTheDocument();
+    expect(mocks.createCost).not.toHaveBeenCalled();
+  });
+
+  it("prefills an inventory cost and saves only after a price is entered", async () => {
+    const user = userEvent.setup();
+    renderCosts();
+    await user.click(await screen.findByText("Optional integrations"));
+    await user.click(screen.getByRole("button", { name: "Enter price for n8n · extraction orchestration" }));
+    expect(screen.getByLabelText("Provider")).toHaveValue("n8n");
+    expect(screen.getByLabelText("Cycle")).toHaveValue("monthly");
+    expect(screen.getByLabelText("Amount")).toHaveValue("");
+    expect(within(screen.getByRole("dialog", { name: /add cost/i })).getByLabelText("Status")).toHaveValue("planned");
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(mocks.createCost).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText("Amount"), "25");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(mocks.createCost).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "n8n", amount_minor: 2500, billing_cycle: "monthly", status: "planned",
+      reference: "inventory:n8n",
+    }));
+  });
+
+  it("allows auditors to read the inventory but prevents recording prices", async () => {
+    const user = userEvent.setup();
+    mocks.role = "auditor";
+    renderCosts();
+    await screen.findByRole("heading", { name: "Operating cost inventory" });
+    for (const group of ["Optional integrations", "Maintenance and operations", "Planned features"]) {
+      await user.click(screen.getByText(group));
+    }
+    const buttons = await screen.findAllByRole("button", { name: /^Enter price for / });
+    for (const button of buttons) expect(button).toBeDisabled();
   });
 });
