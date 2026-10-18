@@ -70,6 +70,7 @@ export interface ScrapeProgress {
   sectors_done: number;
   found: number;
   new: number;
+  updated: number;
 }
 
 export interface ImportsStatus {

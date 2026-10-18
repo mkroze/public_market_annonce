@@ -103,7 +103,7 @@ export function ScrapeControls() {
                       <Loader2 className="w-3.5 h-3.5 motion-safe:animate-spin" aria-hidden />
                       {status?.paused ? "Paused" : "Running"} — sector {progress.sectors_done}/{progress.sectors_total}
                     </span>
-                    <span className="tabular-nums">{progress.found} found · {progress.new} new</span>
+                    <span className="tabular-nums">{progress.found} found · {progress.new} new · {progress.updated} updated</span>
                   </>
                 }
               />

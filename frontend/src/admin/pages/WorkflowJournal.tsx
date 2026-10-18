@@ -42,7 +42,7 @@ const TEXT = {
       "tender.batch.restore": "Tenders restored", "cron.update": "Schedule edited", run: "Run",
     },
     d: {
-      found: "found", fresh: "new", cached: "cached", skipped: "skipped", failed: "failed", enqueued: "enqueued",
+      found: "found", fresh: "new", refreshed: "updated", cached: "cached", skipped: "skipped", failed: "failed", enqueued: "enqueued",
       files: "files removed", freed: "freed", orphans: "orphan files", mode: "mode",
       archived: "archived", restored: "restored", matched: "matched", run: "Run",
       all: "in total", current: "current",
@@ -73,7 +73,7 @@ const TEXT = {
       "tender.batch.restore": "Appels d'offres restaurés", "cron.update": "Planification modifiée", run: "Exécution",
     },
     d: {
-      found: "trouvés", fresh: "nouveaux", cached: "mis en cache", skipped: "ignorés", failed: "en échec", enqueued: "envoyés",
+      found: "trouvés", fresh: "nouveaux", refreshed: "mis à jour", cached: "mis en cache", skipped: "ignorés", failed: "en échec", enqueued: "envoyés",
       files: "fichiers supprimés", freed: "libérés", orphans: "fichiers orphelins", mode: "mode",
       archived: "archivés", restored: "restaurés", matched: "concernés", run: "Exécution",
       all: "au total", current: "à jour",
@@ -120,7 +120,8 @@ function detailsText(t: Text, e: WorkflowEvent): string {
   const parts: string[] = [];
   if (e.kind === "run") {
     if (e.workflow === "scrape_digest") {
-      parts.push(`${num(d.tenders_found)} ${t.d.found}`, `${num(d.tenders_new)} ${t.d.fresh}`);
+      parts.push(`${num(d.tenders_found)} ${t.d.found}`, `${num(d.tenders_new)} ${t.d.fresh}`,
+                 `${num(d.tenders_updated)} ${t.d.refreshed}`);
     } else if (e.workflow === "tender_stats") {
       parts.push(`${num(d.tender_count)} ${t.d.all}`, `${num(d.active_tender_count)} ${t.d.current}`);
     } else if (e.workflow === "dce_cache") {

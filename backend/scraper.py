@@ -9,6 +9,7 @@ from config import BASE_URL, HEADERS, SEARCH_URL, SECTORS, CATEGORIES
 from database import get_db
 from mem_profile import profile_run
 from pipeline_control import SCRAPE
+from tender_lifecycle import parse_deadline_date
 
 # Substrings that mark a rate-limit / CAPTCHA interstitial served in place of a
 # ZIP. Presence => the portal is pushing back on us (a "flag"), not a bad tender.
@@ -426,6 +427,46 @@ async def download_dce(dce_url: str) -> tuple[str, tuple[bytes, str] | str | Non
         return ("failed", None)
 
 
+# Columns the portal owns: a sweep keeps these in sync with the source. The
+# moderation columns (admin_status, review_status, flag_note, archived_*) are
+# deliberately absent — those belong to the operator, not to the portal, and a
+# refresh must never undo an archive or a review.
+_SOURCE_COLUMNS = (
+    "reference", "title", "entity", "entity_code", "sector_code",
+    "sector_name", "category", "deadline", "publication_date",
+    "status", "procedure_type", "location", "detail_url",
+)
+
+_SELECT_TENDER_SQL = (
+    f"SELECT {', '.join(_SOURCE_COLUMNS)} FROM tenders WHERE id = ?"
+)
+
+# `deadline_date` is normalized here rather than only in init_db()'s startup
+# backfill, so a freshly imported notice lands in the right deadline filters
+# and admin counts immediately instead of after the next restart.
+_INSERT_TENDER_SQL = f"""INSERT OR IGNORE INTO tenders
+       (id, {', '.join(_SOURCE_COLUMNS)},
+        deadline_date, source_last_seen_at, last_seen_import_id)
+       VALUES ({', '.join(['?'] * (len(_SOURCE_COLUMNS) + 1))}, ?, datetime('now'), ?)"""
+
+_UPDATE_TENDER_SQL = f"""UPDATE tenders
+       SET {', '.join(f'{c} = ?' for c in _SOURCE_COLUMNS)},
+           deadline_date = ?, source_last_seen_at = datetime('now'),
+           last_seen_import_id = ?
+       WHERE id = ?"""
+
+
+def _source_values(t: dict) -> list:
+    return [t.get(c) for c in _SOURCE_COLUMNS]
+
+
+def _source_changed(existing, t: dict) -> bool:
+    """True when the portal's copy differs from ours. NULL and '' are the same
+    absence of a value, so a parser returning one where the other was stored
+    does not count as a source change."""
+    return any((existing[c] or "") != (t.get(c) or "") for c in _SOURCE_COLUMNS)
+
+
 async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "scheduled") -> dict:
     db = await get_db()
     log_cursor = await db.execute(
@@ -437,9 +478,13 @@ async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "sch
 
     total_found = 0
     total_new = 0
+    total_updated = 0
+    total_unchanged = 0
+    total_errors = 0
     new_ids: list[str] = []
     cancelled = False
-    SCRAPE.begin({"sectors_total": len(SECTORS), "sectors_done": 0, "found": 0, "new": 0})
+    SCRAPE.begin({"sectors_total": len(SECTORS), "sectors_done": 0,
+                  "found": 0, "new": 0, "updated": 0})
 
     try:
       async with profile_run("scrape_all_sectors"):
@@ -453,29 +498,44 @@ async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "sch
             total_found += len(tenders)
 
             for t in tenders:
+                tid = t.get("id")
                 try:
-                    before = db.total_changes
-                    await db.execute(
-                        """INSERT OR IGNORE INTO tenders
-                           (id, reference, title, entity, entity_code, sector_code,
-                            sector_name, category, deadline, publication_date,
-                            status, procedure_type, location, detail_url)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            t["id"], t["reference"], t["title"], t["entity"],
-                            t["entity_code"], t["sector_code"], t["sector_name"],
-                            t["category"], t["deadline"], t["publication_date"],
-                            t["status"], t["procedure_type"], t["location"],
-                            t["detail_url"],
-                        ),
-                    )
-                    # total_changes is cumulative for the connection, so compare against
-                    # its value before the insert to know if this row was actually new
-                    if db.total_changes > before:
-                        total_new += 1
-                        new_ids.append(t["id"])
+                    deadline_date = parse_deadline_date(t.get("deadline"))
+                    existing = await (await db.execute(_SELECT_TENDER_SQL, (tid,))).fetchone()
+
+                    if existing is None:
+                        before = db.total_changes
+                        await db.execute(
+                            _INSERT_TENDER_SQL,
+                            (tid, *_source_values(t), deadline_date, log_id),
+                        )
+                        # total_changes is cumulative for the connection, so compare
+                        # against its value before the insert to know if this row was
+                        # actually new. An ignored insert means UNIQUE(reference,
+                        # entity_code) is already held under a different id.
+                        if db.total_changes > before:
+                            total_new += 1
+                            new_ids.append(tid)
+                        else:
+                            total_errors += 1
+                            print(f"[scraper] {tid}: reference/entity already stored under another id")
+                    else:
+                        # Always rewrite source fields and last-seen metadata; the
+                        # comparison only decides which counter this notice lands in,
+                        # so a legacy row with a missing deadline_date is healed even
+                        # when the portal's copy is unchanged.
+                        changed = _source_changed(existing, t)
+                        await db.execute(
+                            _UPDATE_TENDER_SQL,
+                            (*_source_values(t), deadline_date, log_id, tid),
+                        )
+                        if changed:
+                            total_updated += 1
+                        else:
+                            total_unchanged += 1
                 except Exception as e:
-                    print(f"[scraper] DB insert error: {e}")
+                    total_errors += 1
+                    print(f"[scraper] DB upsert error for {tid}: {e}")
 
             await db.commit()
 
@@ -485,26 +545,41 @@ async def scrape_all_sectors(actor_email: str | None = None, trigger: str = "sch
 
             # Live progress: flush interim counters so the polling admin UI shows
             # the run advancing sector by sector (previously only on completion).
-            SCRAPE.update(sectors_done=idx + 1, found=total_found, new=total_new)
+            SCRAPE.update(sectors_done=idx + 1, found=total_found,
+                          new=total_new, updated=total_updated)
             await db.execute(
-                "UPDATE scrape_log SET tenders_found = ?, tenders_new = ? WHERE id = ?",
-                (total_found, total_new, log_id),
+                """UPDATE scrape_log
+                   SET tenders_found = ?, tenders_new = ?, tenders_updated = ?,
+                       tenders_skipped = ?
+                   WHERE id = ?""",
+                (total_found, total_new, total_updated, total_unchanged, log_id),
             )
             await db.commit()
 
         status = "stopped" if cancelled else "done"
+        warnings = f"{total_errors} notice(s) could not be stored" if total_errors else None
         await db.execute(
             """UPDATE scrape_log
-               SET finished_at = datetime('now'), tenders_found = ?, tenders_new = ?, status = ?
+               SET finished_at = datetime('now'), tenders_found = ?, tenders_new = ?,
+                   tenders_updated = ?, tenders_skipped = ?, status = ?, warnings = ?
                WHERE id = ?""",
-            (total_found, total_new, status, log_id),
+            (total_found, total_new, total_updated, total_unchanged, status, warnings, log_id),
         )
         await db.commit()
     finally:
         await db.close()
         SCRAPE.end()
 
-    return {"total_found": total_found, "total_new": total_new, "new_ids": new_ids}
+    return {
+        "total_found": total_found,
+        "total_new": total_new,
+        "total_updated": total_updated,
+        "total_unchanged": total_unchanged,
+        "total_errors": total_errors,
+        # Alert digests fan out on new_ids only: a refreshed deadline must not
+        # re-notify subscribers who were already told about that tender.
+        "new_ids": new_ids,
+    }
 
 
 async def scrape_homepage_counts() -> list[dict]:
