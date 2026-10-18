@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ShieldX, ShieldCheck, ChevronRight, ChevronDown } from "lucide-react";
 import { getUsers, setUserStatus, setUserRole, ApiError } from "../api";
 import type { AdminUser } from "../types";
@@ -11,6 +12,7 @@ import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
 import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
 import UserClassificationDetail from "../components/UserClassificationDetail";
+import Roles from "./Roles";
 
 const VERDICT_LABEL: Record<string, { label: string; cls: string }> = {
   clear: { label: "Clear", cls: "text-[var(--color-emerald,#047857)]" },
@@ -24,6 +26,8 @@ const ROLES = ["user", "support", "auditor", "operator", "admin", "owner"];
 export default function Users() {
   const { user } = useAuth();
   const { toasts, push, dismiss } = useToasts();
+  // ?view=roles opens the folded-in permission matrix (old /admin/roles link).
+  const [params] = useSearchParams();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
@@ -230,6 +234,21 @@ export default function Users() {
           </div>
         )}
       </Panel>
+
+      <details
+        className="mt-6 rounded-lg border border-[var(--color-border-subtle)] bg-base-100"
+        open={params.get("view") === "roles"}
+      >
+        <summary className="cursor-pointer px-4 py-3 text-sm font-sans font-semibold text-[var(--color-charcoal)]">
+          Roles &amp; permissions
+          <span className="ml-2 font-normal text-[var(--color-slate)]">
+            — defined in code, enforced server-side, read-only
+          </span>
+        </summary>
+        <div className="border-t border-[var(--color-border-subtle)] p-4">
+          <Roles embedded />
+        </div>
+      </details>
 
       <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />

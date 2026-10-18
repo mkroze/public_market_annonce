@@ -15,7 +15,10 @@ import Pagination from "../../components/Pagination";
 
 const FILTER_KEYS = ["q", "category", "sector", "status", "review_status", "admin_status", "detail", "sort", "order"];
 
-export default function AdminTenders() {
+// `embedded` renders the table without its own page header, for use as the
+// Data view of lifecycle stage 01 where StageShell already supplies the
+// heading. The moderation action moves into the toolbar in that mode.
+export default function AdminTenders({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const { toasts, push, dismiss } = useToasts();
   const [params, setParams] = useSearchParams();
@@ -131,10 +134,8 @@ export default function AdminTenders() {
 
   return (
     <div>
-      <PageHeader
-        title="Tender administration"
-        description="Review, moderate, and maintain data quality across ingested tenders."
-        actions={
+      {embedded ? (
+        <div className="mb-4 flex justify-end">
           <GatedButton
             allowed={canModerate}
             reason="Requires tenders.moderate permission"
@@ -142,8 +143,22 @@ export default function AdminTenders() {
           >
             <CalendarX2 className="w-4 h-4" aria-hidden /> Cleanup expired
           </GatedButton>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Tender administration"
+          description="Review, moderate, and maintain data quality across ingested tenders."
+          actions={
+            <GatedButton
+              allowed={canModerate}
+              reason="Requires tenders.moderate permission"
+              onClick={confirmCleanup}
+            >
+              <CalendarX2 className="w-4 h-4" aria-hidden /> Cleanup expired
+            </GatedButton>
+          }
+        />
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">

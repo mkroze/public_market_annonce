@@ -14,11 +14,15 @@ describe("cost admin permissions", () => {
   });
 
   it("exposes a costs nav item guarded by costs.view", () => {
-    expect(NAV_ITEMS).toContainEqual({
-      label: "Costs",
-      path: "/admin/costs",
-      icon: "Receipt",
-      permission: "costs.view",
-    });
+    // objectContaining, not an exact match: the sidebar groups entries and that
+    // grouping is presentation, not the permission guarantee under test.
+    expect(NAV_ITEMS).toContainEqual(
+      expect.objectContaining({
+        label: "Costs",
+        path: "/admin/costs",
+        icon: "Receipt",
+        permission: "costs.view",
+      }),
+    );
   });
 });

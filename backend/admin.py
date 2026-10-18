@@ -1011,7 +1011,7 @@ async def admin_workflows(user=Depends(require_admin("imports.view"))):
 
 @router.get("/workflows/events")
 async def admin_workflow_events(
-    workflow: str = Query(""),
+    workflow: str = Query(""),  # comma-separated: a stage passes every job key it owns
     kind: str = Query(""),  # comma-separated: run,control,deletion,archive,restore,config
     origin: str = Query(""),
     status: str = Query(""),
@@ -1024,6 +1024,7 @@ async def admin_workflow_events(
     """One chronological journal: pipeline runs merged with the audited actions
     that steer, clean up, or reschedule them (newest first)."""
     kinds = {k.strip() for k in kind.split(",") if k.strip()}
+    workflows = {w.strip() for w in workflow.split(",") if w.strip()}
 
     def window(column: str) -> tuple[list[str], list]:
         conditions, params = [], []
@@ -1060,7 +1061,7 @@ async def admin_workflow_events(
 
     events = [
         e for e in events
-        if (not workflow or e["workflow"] == workflow)
+        if (not workflows or e["workflow"] in workflows)
         and (not kinds or e["kind"] in kinds)
         and (not origin or e["origin"] == origin)
         and (not status or e["status"] == status)

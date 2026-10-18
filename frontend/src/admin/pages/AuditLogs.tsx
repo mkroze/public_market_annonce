@@ -14,7 +14,10 @@ import Pagination from "../../components/Pagination";
 
 const FILTER_KEYS = ["q", "action", "target_type", "result", "date_from", "date_to"];
 
-export default function AuditLogs() {
+// `embedded` drops the page header so this can serve as the Audit trail tab of
+// the Workflows journal, which already supplies the heading. The export action
+// moves into the filter row in that mode.
+export default function AuditLogs({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const { toasts, push, dismiss } = useToasts();
   const [params, setParams] = useSearchParams();
@@ -63,17 +66,24 @@ export default function AuditLogs() {
 
   return (
     <div>
-      <PageHeader
-        title="Audit-log explorer"
-        description="Every sensitive admin action and access denial, with actor and result."
-        actions={
-          <GatedButton allowed={canExport} reason="Requires audit.export permission" onClick={doExport}>
-            <Download className="w-4 h-4" aria-hidden /> Export audit logs
-          </GatedButton>
-        }
-      />
+      {!embedded && (
+        <PageHeader
+          title="Audit-log explorer"
+          description="Every sensitive admin action and access denial, with actor and result."
+          actions={
+            <GatedButton allowed={canExport} reason="Requires audit.export permission" onClick={doExport}>
+              <Download className="w-4 h-4" aria-hidden /> Export audit logs
+            </GatedButton>
+          }
+        />
+      )}
 
       <div className="flex flex-wrap gap-2 mb-4">
+        {embedded && (
+          <GatedButton allowed={canExport} reason="Requires audit.export permission" onClick={doExport}>
+            <Download className="w-4 h-4" aria-hidden /> Export
+          </GatedButton>
+        )}
         <input aria-label="Search action, target, route" placeholder="Search action, target, route" className={`${inputCls} w-64`}
           defaultValue={params.get("q") || ""} onKeyDown={(e) => { if (e.key === "Enter") setFilter("q", (e.target as HTMLInputElement).value); }} />
         <select aria-label="Result" className={`select select-bordered select-sm ${inputCls}`} value={params.get("result") || ""} onChange={(e) => setFilter("result", e.target.value)}>

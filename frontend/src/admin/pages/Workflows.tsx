@@ -11,6 +11,7 @@ import {
 import type {
   Paginated, SteerAction, WorkflowEvent, WorkflowEventKind, WorkflowKey, WorkflowState,
 } from "../types";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
 import { PageHeader, Panel, ProgressBar, GatedButton, fmtDate, fmtBytes, duration } from "../components/ui";
@@ -22,6 +23,7 @@ import { usePipelinePolling } from "../hooks";
 import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
 import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
+import AuditLogs from "./AuditLogs";
 
 // The rest of the admin has no i18n layer, so this page carries its own small
 // EN/FR dictionary and remembers the choice per browser.
@@ -53,7 +55,7 @@ const TEXT = {
     started: "started", failedToStart: "Failed to start",
     steered: { pause: "paused", resume: "resumed", cancel: "cancel requested" },
     journal: "Activity journal",
-    tabAll: "All activity", tabCleanup: "Deletions & cleanups",
+    tabAll: "All activity", tabCleanup: "Deletions & cleanups", tabAudit: "Audit trail",
     allWorkflows: "All workflows", allKinds: "All event types", allOrigins: "All origins",
     from: "From", to: "To",
     colDate: "Date", colWorkflow: "Workflow", colEvent: "Event", colOrigin: "Origin",
@@ -104,7 +106,7 @@ const TEXT = {
     started: "lancé", failedToStart: "Échec du lancement",
     steered: { pause: "mis en pause", resume: "repris", cancel: "annulation demandée" },
     journal: "Journal d'activité",
-    tabAll: "Toute l'activité", tabCleanup: "Suppressions et nettoyages",
+    tabAll: "Toute l'activité", tabCleanup: "Suppressions et nettoyages", tabAudit: "Journal d'audit",
     allWorkflows: "Tous les workflows", allKinds: "Tous les types", allOrigins: "Toutes les origines",
     from: "Du", to: "Au",
     colDate: "Date", colWorkflow: "Workflow", colEvent: "Événement", colOrigin: "Origine",
@@ -260,8 +262,12 @@ const ghostBtn = "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans
 interface Filters { workflow: string; kind: string; origin: string; date_from: string; date_to: string; }
 const NO_FILTERS: Filters = { workflow: "", kind: "", origin: "", date_from: "", date_to: "" };
 
+/** Journal tabs. "audit" renders the folded-in audit-log explorer. */
+type JournalTab = "all" | "cleanup" | "audit";
+
 export default function Workflows() {
   const { user } = useAuth();
+  const [params] = useSearchParams();
   const { toasts, push, dismiss } = useToasts();
   const [lang, setLang] = useState<Lang>(initialLang);
   const t = TEXT[lang];
@@ -271,7 +277,9 @@ export default function Workflows() {
   const [error, setError] = useState<ApiError | null>(null);
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
-  const [tab, setTab] = useState<"all" | "cleanup">("all");
+  const [tab, setTab] = useState<JournalTab>(
+    () => (params.get("tab") === "audit" ? "audit" : "all"),
+  );
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [page, setPage] = useState(1);
   const [events, setEvents] = useState<Paginated<WorkflowEvent> | null>(null);
@@ -318,7 +326,7 @@ export default function Workflows() {
     setPage(1);
   }
 
-  function switchTab(next: "all" | "cleanup") {
+  function switchTab(next: JournalTab) {
     setTab(next);
     setPage(1);
   }
@@ -527,7 +535,7 @@ export default function Workflows() {
 
       <Panel title={t.journal}>
         <div className="px-4 pt-3 flex flex-wrap items-center gap-2" role="tablist">
-          {([["all", t.tabAll], ["cleanup", t.tabCleanup]] as const).map(([key, label]) => (
+          {([["all", t.tabAll], ["cleanup", t.tabCleanup], ["audit", t.tabAudit]] as const).map(([key, label]) => (
             <button
               key={key}
               role="tab"
@@ -544,6 +552,12 @@ export default function Workflows() {
           ))}
         </div>
 
+        {tab === "audit" ? (
+          <div className="px-4 py-3">
+            <AuditLogs embedded />
+          </div>
+        ) : (
+        <>
         <div className="px-4 py-3 flex flex-wrap items-end gap-2">
           <select aria-label={t.colWorkflow} className={selectCls} value={filters.workflow} onChange={(e) => patchFilters({ workflow: e.target.value })}>
             <option value="">{t.allWorkflows}</option>
@@ -593,6 +607,8 @@ export default function Workflows() {
               </div>
             </div>
           </>
+        )}
+        </>
         )}
       </Panel>
 

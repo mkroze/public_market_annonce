@@ -5,7 +5,9 @@ import type { RoleInfo } from "../types";
 import { PageHeader, Panel } from "../components/ui";
 import { LoadingState, FailedState, DeniedState } from "../components/StateBlock";
 
-export default function Roles() {
+// `embedded` drops the page header so this read-only matrix can sit as a panel
+// on the Users page, where role assignment actually happens.
+export default function Roles({ embedded = false }: { embedded?: boolean } = {}) {
   const [roles, setRoles] = useState<RoleInfo[]>([]);
   const [allPerms, setAllPerms] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,10 +29,12 @@ export default function Roles() {
 
   return (
     <div>
-      <PageHeader
-        title="Roles & permissions"
-        description="Roles are defined in code and enforced server-side. This matrix is read-only."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Roles & permissions"
+          description="Roles are defined in code and enforced server-side. This matrix is read-only."
+        />
+      )}
 
       <Panel className="overflow-x-auto">
         <table className="w-full text-sm font-sans">

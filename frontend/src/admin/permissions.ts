@@ -1,3 +1,5 @@
+import { STAGES } from "./stages/registry";
+
 // Mirror of the backend RBAC matrix (backend/admin.py). Kept in sync manually.
 // Used only to gate UI affordances; the backend is the source of truth and
 // re-checks every request.
@@ -86,18 +88,25 @@ export interface NavItem {
   disabledReason?: string;
 }
 
+// Sidebar, in lifecycle order. The six lifecycle entries are generated from the
+// stage registry so the nav cannot drift from the routes or the dashboard
+// diagram. Cron jobs, Tenders, Audit logs, Roles and Integrations are no longer
+// nav entries: the first three were folded into the stage or journal that owns
+// their subject, Roles became a panel on Users, and Integrations was an empty
+// placeholder. AdminApp still redirects their old paths.
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", path: "/admin", icon: "LayoutDashboard", permission: "overview.view" },
-  { label: "Workflows", path: "/admin/workflows", icon: "Workflow", permission: "imports.view", group: "Data pipeline" },
-  { label: "Scrape", path: "/admin/scrape", icon: "DownloadCloud", permission: "imports.view", group: "Data pipeline" },
-  { label: "DCE cache", path: "/admin/dce-cache", icon: "Database", permission: "imports.view", group: "Data pipeline" },
-  { label: "DCE extraction", path: "/admin/dce-extraction", icon: "FileSearch", permission: "imports.view", group: "Data pipeline" },
-  { label: "Cron jobs", path: "/admin/cron", icon: "Clock", permission: "imports.view", group: "Data pipeline" },
-  { label: "Tenders", path: "/admin/tenders", icon: "Table2", permission: "tenders.view" },
-  { label: "Audit logs", path: "/admin/audit-logs", icon: "ScrollText", permission: "audit.view" },
-  { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view" },
-  { label: "Roles", path: "/admin/roles", icon: "ShieldCheck", permission: "roles.view" },
-  { label: "Costs", path: "/admin/costs", icon: "Receipt", permission: "costs.view" },
-  { label: "Settings", path: "/admin/settings", icon: "Settings", permission: "settings.view" },
-  { label: "Integrations", path: "/admin/integrations", icon: "Plug", permission: "overview.view", disabled: true, disabledReason: "Coming soon" },
+  { label: "Workflows", path: "/admin/workflows", icon: "Workflow", permission: "imports.view" },
+
+  ...STAGES.map((stage): NavItem => ({
+    label: `${String(stage.step).padStart(2, "0")} · ${stage.title}`,
+    path: `/admin/${stage.slug}`,
+    icon: stage.icon,
+    permission: "imports.view",
+    group: "Tender lifecycle",
+  })),
+
+  { label: "Users", path: "/admin/users", icon: "Users", permission: "users.view", group: "Administration" },
+  { label: "Costs", path: "/admin/costs", icon: "Receipt", permission: "costs.view", group: "Administration" },
+  { label: "Settings", path: "/admin/settings", icon: "Settings", permission: "settings.view", group: "Administration" },
 ];

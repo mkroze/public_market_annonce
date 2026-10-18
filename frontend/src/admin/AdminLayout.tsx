@@ -1,17 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck,
-  Settings, Plug, Receipt, LogOut, Menu, X, ExternalLink, Database, FileSearch,
-  AlertTriangle, Clock, Workflow,
-} from "lucide-react";
+import { LogOut, Menu, X, ExternalLink, AlertTriangle } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, can, type NavItem } from "./permissions";
-
-const ICONS: Record<string, typeof LayoutDashboard> = {
-  LayoutDashboard, DownloadCloud, Table2, ScrollText, Users, ShieldCheck, Settings, Plug, Receipt,
-  Database, FileSearch, Clock, Workflow,
-};
+import { resolveIcon } from "./components/icons";
 
 const ENV = import.meta.env.MODE === "production" ? "production" : "development";
 
@@ -40,7 +32,7 @@ function NavList({ role, onNavigate }: { role: string | undefined; onNavigate?: 
 }
 
 function NavEntry({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
-  const Icon = ICONS[item.icon] ?? LayoutDashboard;
+  const Icon = resolveIcon(item.icon);
 
   if (item.disabled) {
     return (
