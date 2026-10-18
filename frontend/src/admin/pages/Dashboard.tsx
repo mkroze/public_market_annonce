@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Database, Globe, RefreshCw, ChevronRight, CalendarClock } from "lucide-react";
+import { Database, Globe, RefreshCw } from "lucide-react";
 import { getOverview, getImports, getDceCache, getDceExtraction, updateCron, ApiError } from "../api";
 import type { AdminOverview } from "../types";
 import { PageHeader, Panel, MetricCard, fmtDate } from "../components/ui";
@@ -11,7 +11,7 @@ import { can } from "../permissions";
 import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
 
-interface PipelineSummary { cached: number; extracted: number; nextRun: string | null; }
+import PipelineDiagram, { type PipelineSnapshot } from "../components/PipelineDiagram";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function Dashboard() {
   const { toasts, push, dismiss } = useToasts();
   const canSchedule = can(user?.role, "imports.run");
   const [data, setData] = useState<AdminOverview | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -30,11 +30,13 @@ export default function Dashboard() {
       .then(setData)
       .catch((e) => setError(e))
       .finally(() => setLoading(false));
-    // Pipeline funnel counts (best-effort; the dashboard still renders without them).
-    Promise.all([getImports(), getDceCache(), getDceExtraction()])
-      .then(([imp, cache, ext]) =>
-        setPipeline({ cached: cache.cached_total, extracted: ext.extracted_count, nextRun: imp.next_scheduled_run }))
-      .catch(() => setPipeline(null));
+    // Keep available stages visible if one service is unavailable.
+    Promise.allSettled([getImports(), getDceCache(), getDceExtraction()])
+      .then(([imp, cache, ext]) => setPipeline({
+        imports: imp.status === "fulfilled" ? imp.value : null,
+        cache: cache.status === "fulfilled" ? cache.value : null,
+        extraction: ext.status === "fulfilled" ? ext.value : null,
+      }));
   }
 
   useEffect(load, []);
@@ -63,8 +65,11 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title="Operational dashboard"
-        description="Import health, data freshness, and governance at a glance."
+        description="Follow each tender from collection to structured insights and award results."
+        actions={<button onClick={load} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-white px-4 text-sm font-semibold hover:bg-[var(--color-surface-muted)]"><RefreshCw className="h-4 w-4" aria-hidden /> Refresh</button>}
       />
+
+      <PipelineDiagram total={f.tender_count} snapshot={pipeline} />
 
       {/* Freshness */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
@@ -105,26 +110,6 @@ export default function Dashboard() {
           Recompute every hour
         </label>
       </div>
-
-      {/* Data pipeline funnel: scraped → cached → extracted */}
-      <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)] mb-2">Data pipeline</h2>
-      <div className="flex flex-col sm:flex-row sm:items-stretch gap-2 mb-1">
-        <div className="flex-1">
-          <MetricCard label="Scraped" value={f.tender_count.toLocaleString("fr-FR")} sub="tenders in catalog" onClick={() => navigate("/admin/scrape")} />
-        </div>
-        <FunnelArrow />
-        <div className="flex-1">
-          <MetricCard label="Cached" value={pipeline ? pipeline.cached.toLocaleString("fr-FR") : "—"} sub="DCE documents" onClick={() => navigate("/admin/dce-cache")} />
-        </div>
-        <FunnelArrow />
-        <div className="flex-1">
-          <MetricCard label="Extracted" value={pipeline ? pipeline.extracted.toLocaleString("fr-FR") : "—"} sub="structured DCEs" onClick={() => navigate("/admin/dce-extraction")} />
-        </div>
-      </div>
-      <p className="flex items-center gap-1.5 text-xs font-sans text-[var(--color-slate)] mb-5">
-        <CalendarClock className="w-3.5 h-3.5 text-[var(--color-gold)]" aria-hidden />
-        Next automatic run <strong className="text-[var(--color-charcoal)] font-semibold">{fmtDate(pipeline?.nextRun)}</strong>
-      </p>
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Latest import */}
@@ -213,15 +198,6 @@ export default function Dashboard() {
       </Panel>
 
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
-    </div>
-  );
-}
-
-// Chevron between funnel stages — horizontal on desktop, rotated on mobile stack.
-function FunnelArrow() {
-  return (
-    <div className="hidden sm:flex items-center justify-center text-[var(--color-muted-light)]" aria-hidden>
-      <ChevronRight className="w-5 h-5" />
     </div>
   );
 }

@@ -15,11 +15,11 @@ import Settings from "./pages/Settings";
 import { EmptyState } from "./components/StateBlock";
 import { PageHeader } from "./components/ui";
 
-function ComingSoon({ title }: { title: string }) {
+function ComingSoon({ title, description = "This section is planned but not yet available." }: { title: string; description?: string }) {
   return (
     <div>
-      <PageHeader title={title} description="This section is planned but not yet available." />
-      <EmptyState title="Coming soon" hint="Settings and integrations will be added in a future iteration." />
+      <PageHeader title={title} description={description} />
+      <EmptyState title="Coming soon" hint="This workflow is planned. No processing or campaign sending is available here yet." />
     </div>
   );
 }
@@ -33,6 +33,9 @@ export default function AdminApp() {
         <Route path="scrape" element={<Scrape />} />
         <Route path="dce-cache" element={<DceCache />} />
         <Route path="dce-extraction" element={<DceExtraction />} />
+        <Route path="video-generation" element={<ComingSoon title="Video generation" description="Planned: use the fiche universelle to generate a short reel for the tender." />} />
+        <Route path="awards" element={<ComingSoon title="Résultats & attributions" description="Planned: retrieve award PDFs after the deadline, verify winning suppliers and amounts, and retain the source evidence." />} />
+        <Route path="campaigns" element={<ComingSoon title="Campagnes" description="Planned: prepare award-result campaigns, track delivery, and retain campaign history before archiving." />} />
         <Route path="cron" element={<CronJobs />} />
         {/* Old combined page — keep the link working. */}
         <Route path="imports" element={<Navigate to="/admin/scrape" replace />} />
