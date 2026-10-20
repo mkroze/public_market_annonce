@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../api";
 import { usePipelinePolling } from "../hooks";
+import { useOutletContext } from "react-router-dom";
+import type { StageContext } from "./useStageContext";
 
 export interface StageStatus<T> {
   status: T | null;
@@ -19,6 +21,7 @@ export function useStageStatus<T>(
   const [status, setStatus] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
+  const context = useOutletContext<StageContext | undefined>();
 
   const reload = useCallback((showSpinner = false) => {
     if (showSpinner) setLoading(true);
@@ -30,7 +33,7 @@ export function useStageStatus<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { reload(true); }, [reload]);
+  useEffect(() => { reload(); }, [reload, context?.refreshKey, context?.workflow?.active]);
   usePipelinePolling(() => reload(false), isActive(status));
 
   return { status, loading, error, reload };

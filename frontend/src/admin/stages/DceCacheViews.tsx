@@ -2,7 +2,7 @@
 // steers and prunes the cache and owns the cleanup schedule; Data is the cache
 // inventory the stage produced; Logs is the run table plus the stage journal.
 import { useState } from "react";
-import { DownloadCloud, Loader2, Trash2 } from "lucide-react";
+import { DownloadCloud, Loader2 } from "lucide-react";
 import { getDceCache, runDceCache, clearDceCache, steerPipeline, ApiError } from "../api";
 import type { DceCacheRun, DceCacheStatus, SteerAction } from "../types";
 import { useAuth } from "../../lib/auth";
@@ -21,14 +21,14 @@ import StageScheduleCard from "./StageScheduleCard";
 
 const isActive = (s: DceCacheStatus | null) => s?.active ?? false;
 
-export function DceCacheControls() {
+export function DceCacheControls({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { reloadStatus } = useStageContext();
   const { toasts, push, dismiss } = useToasts();
   const { status, loading, error, reload } = useStageStatus(getDceCache, isActive);
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
-  const canRun = can(user?.role, "imports.run");
+  const canRun = can(user?.role, "imports.run") && !!status && !loading && !error;
   const active = isActive(status);
   const cachedTotal = status?.cached_total ?? 0;
 
@@ -81,9 +81,6 @@ export function DceCacheControls() {
     });
   }
 
-  if (loading) return <LoadingState label="Loading DCE cache" />;
-  if (error?.status === 403) return <DeniedState message={error.message} />;
-  if (error) return <FailedState message={error.message} onRetry={() => reload(true)} />;
 
   const clearDisabledReason = !canRun
     ? "Requires imports.run permission"
@@ -91,38 +88,27 @@ export function DceCacheControls() {
 
   return (
     <div>
+      {loading && <p className="mb-3 text-xs text-[var(--color-slate)]">Connexion au backend…</p>}
+      {error && <FailedState message={error.message} onRetry={() => reload(true)} />}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <PipelineControls
           active={active}
           paused={status?.paused ?? false}
           canRun={canRun}
+          unavailableReason={loading ? "Connexion au backend…" : error ? "Backend indisponible" : undefined}
+          onRefresh={refresh}
+          cleanup={{ onClick: () => confirmClear("outdated"), disabled: !canRun || active || cachedTotal === 0, reason: clearDisabledReason || "Aucun ZIP à nettoyer", description: "Supprimer les ZIP des marchés expirés ou archivés" }}
+          deleteData={{ onClick: () => confirmClear("all"), disabled: !canRun || active || cachedTotal === 0, reason: clearDisabledReason || "Aucun ZIP à supprimer", description: "Supprimer tous les ZIP en cache · confirmation requise" }}
           onRun={confirmRun}
           onSteer={steer}
-          runLabel="Cache DCEs"
+          runLabel="Télécharger les ZIP"
           runIcon={<DownloadCloud className="w-4 h-4" aria-hidden />}
           runningReason="A DCE cache run is already in progress"
         />
-        <div className="ml-auto flex flex-wrap gap-2">
-          <button
-            onClick={() => confirmClear("outdated")}
-            disabled={!canRun || active || cachedTotal === 0}
-            title={clearDisabledReason}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden /> Clear outdated
-          </button>
-          <button
-            onClick={() => confirmClear("all")}
-            disabled={!canRun || active || cachedTotal === 0}
-            title={clearDisabledReason}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-crimson)]/40 text-[var(--color-crimson)] hover:bg-[var(--color-crimson)]/5 focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden /> Clear all
-          </button>
-        </div>
+
       </div>
 
-      <StageScheduleCard />
+      {!embedded && <StageScheduleCard />}
 
       <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />

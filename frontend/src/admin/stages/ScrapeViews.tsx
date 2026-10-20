@@ -4,7 +4,7 @@
 // the run table plus the stage journal.
 import { useState } from "react";
 import { Play, RotateCcw, Loader2, Eye, RefreshCw } from "lucide-react";
-import { getImports, runImport, retryImport, scrapePreview, steerPipeline, ApiError } from "../api";
+import { cleanupExpired, getImports, runImport, retryImport, scrapePreview, steerPipeline, ApiError } from "../api";
 import type { ImportRun, ImportsStatus, ScrapePreviewRow, SteerAction } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
@@ -24,7 +24,7 @@ import AdminTenders from "../pages/Tenders";
 
 const isActive = (s: ImportsStatus | null) => s?.active ?? false;
 
-export function ScrapeControls() {
+export function ScrapeControls({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { reloadStatus } = useStageContext();
   const { toasts, push, dismiss } = useToasts();
@@ -33,7 +33,7 @@ export function ScrapeControls() {
   const [preview, setPreview] = useState<ScrapePreviewRow[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const canRun = can(user?.role, "imports.run");
+  const canRun = can(user?.role, "imports.run") && !!status && !loading && !error;
   const active = isActive(status);
 
   function refresh() { reload(false); reloadStatus(); }
@@ -67,28 +67,44 @@ export function ScrapeControls() {
     });
   }
 
-  if (loading) return <LoadingState label="Loading scrape status" />;
-  if (error?.status === 403) return <DeniedState message={error.message} />;
-  if (error) return <FailedState message={error.message} onRetry={() => reload(true)} />;
+  function confirmCleanup() {
+    setConfirm({ title: "Archiver les marchés expirés", action: "Nettoyer les expirés",
+      target: "Tous les marchés dont la date limite est dépassée",
+      consequence: "Archive les marchés expirés. Les fichiers ZIP sont conservés. Le transfert vers l’étape 05 reste une action distincte.",
+      reversible: true, typedConfirmation: "ARCHIVE EXPIRED", confirmLabel: "Archiver les expirés",
+      onConfirm: async () => {
+        try { const result = await cleanupExpired(false); push(`${result.archived} marchés expirés archivés`, "success"); refresh(); }
+        catch (e) { push(e instanceof ApiError ? e.message : "Nettoyage impossible", "error"); }
+      },
+    });
+  }
+
 
   const progress = status?.progress ?? null;
 
   return (
     <div>
+      {loading && <p className="mb-3 text-xs text-[var(--color-slate)]">Connexion au backend…</p>}
+      {error && <FailedState message={error.message} onRetry={() => reload(true)} />}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <PipelineControls
           active={active}
           paused={status?.paused ?? false}
           canRun={canRun}
+          unavailableReason={loading ? "Connexion au backend…" : error ? "Backend indisponible" : undefined}
+          onRefresh={refresh}
+          cleanup={{ onClick: confirmCleanup, disabled: !status || loading || !!error || !can(user?.role, "tenders.moderate") || active, reason: active ? "Une collecte est en cours" : "Backend indisponible ou autorisation requise", description: "Archiver les marchés expirés · ZIP conservés" }}
           onRun={confirmRun}
           onSteer={steer}
-          runLabel="Run import"
+          runLabel="Lancer la collecte"
           runIcon={<Play className="w-4 h-4" aria-hidden />}
           runningReason="An import is already running"
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 mb-5">
+      <div className="stage-future-action"><button disabled title="Le transfert vers l’étape 05 n’est pas encore exposé par le backend.">Transférer les expirés · étape 05</button><p>Transfert vers les résultats et attributions : backend à connecter.</p></div>
+
+      {!embedded && <div className="grid gap-4 sm:grid-cols-2 mb-5">
         <StageScheduleCard />
 
         <Panel title="Live progress">
@@ -112,7 +128,7 @@ export function ScrapeControls() {
             )}
           </div>
         </Panel>
-      </div>
+      </div>}
 
       <Panel title="Available now (preview)">
         <div className="px-4 py-3.5">

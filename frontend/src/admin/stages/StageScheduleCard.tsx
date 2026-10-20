@@ -7,16 +7,17 @@
 // replaced was French.
 import { useCallback, useEffect, useState } from "react";
 import { Play, Loader2, Save, Clock, CircleDot } from "lucide-react";
-import { getCron, updateCron, runCron, ApiError } from "../api";
+import { getCron, updateCron, runCron, getDceExtraction, ApiError } from "../api";
 import type { CronJob, CronUpdatePayload, ScheduleKind } from "../types";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
 import { Panel, fmtDate } from "../components/ui";
-import { LoadingState, FailedState, DeniedState, EmptyState } from "../components/StateBlock";
+import { LoadingState, FailedState, DeniedState } from "../components/StateBlock";
 import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
 import { useStageContext } from "./useStageContext";
 import { stageWorkflowKeys } from "./registry";
+import { usePipelinePolling } from "../hooks";
 
 type Draft = Pick<CronJob, "enabled" | "schedule_kind" | "hour" | "interval_minutes">;
 
@@ -39,15 +40,16 @@ function scheduleSummary(d: Draft): string {
 const selectCls = "select select-bordered select-sm font-sans bg-base-100 border-[var(--color-border-subtle)] rounded";
 const inputCls = "input input-bordered input-sm w-24 font-sans bg-base-100 border-[var(--color-border-subtle)] rounded";
 
-export default function StageScheduleCard() {
+export default function StageScheduleCard({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
-  const { stage, reloadStatus } = useStageContext();
+  const { stage, reloadStatus, refreshKey } = useStageContext();
   const { toasts, push, dismiss } = useToasts();
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   const canRun = can(user?.role, "imports.run");
   const ownedParam = stageWorkflowKeys(stage).join(",");
@@ -56,8 +58,9 @@ export default function StageScheduleCard() {
     const owned = ownedParam ? ownedParam.split(",") : [];
     if (owned.length === 0) { setJobs([]); setLoading(false); return; }
     setLoading(true);
-    getCron()
-      .then((res) => {
+    Promise.all([getCron(), stage.slug === "dce-extraction" ? getDceExtraction() : Promise.resolve(null)])
+      .then(([res, extraction]) => {
+        setUnavailableReason(extraction?.simulate_enabled ? "Endpoint n8n non configuré" : null);
         const mine = res.data.filter((j) => owned.includes(j.job));
         setJobs(mine);
         setDrafts(Object.fromEntries(mine.map((j) => [j.job, {
@@ -67,9 +70,17 @@ export default function StageScheduleCard() {
       })
       .catch((e) => setError(e instanceof ApiError ? e : new ApiError(0, String(e))))
       .finally(() => setLoading(false));
-  }, [ownedParam]);
+  }, [ownedParam, stage.slug]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
+  // Refresh runtime fields without replacing an administrator's unsaved draft.
+  const refreshRuntime = useCallback(() => {
+    if (!ownedParam) return;
+    getCron().then((res) => {
+      setJobs(res.data.filter((j) => ownedParam.split(",").includes(j.job)));
+    }).catch(() => { /* Keep the editor and its draft; the explicit refresh can retry. */ });
+  }, [ownedParam]);
+  usePipelinePolling(refreshRuntime, !!ownedParam, 5000);
 
   function patchDraft(job: string, patch: Partial<Draft>) {
     setDrafts((cur) => ({ ...cur, [job]: { ...cur[job], ...patch } }));
@@ -94,11 +105,12 @@ export default function StageScheduleCard() {
   }
 
   async function run(job: string, label: string) {
+    if (!canRun || unavailableReason || busy || jobs.find((j) => j.job === job)?.running) return;
     setBusy(job);
     try {
       await runCron(job);
       push(`${label}: run started`, "success");
-      setTimeout(() => { load(); reloadStatus(); }, 800);
+      reloadStatus();
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Could not start the run", "error");
     } finally {
@@ -107,15 +119,16 @@ export default function StageScheduleCard() {
   }
 
   return (
-    <Panel title="Schedule">
+    <Panel title={embedded ? undefined : "Planification"}>
       <div className="px-4 py-3.5">
-        {loading ? <LoadingState label="Loading schedule" />
+        {loading ? <LoadingState label="Chargement des planifications" />
           : error?.status === 403 ? <DeniedState message={error.message} />
           : error ? <FailedState message={error.message} onRetry={load} />
           : jobs.length === 0 ? (
-            <EmptyState title="No recurring job" hint="This stage runs on demand only." />
+            <div className="stage-schedule-empty"><Clock size={22} aria-hidden /><strong>{stage.planned ? "Planification à connecter" : "Aucune tâche récurrente"}</strong><p>{stage.planned ? "Le backend de cette étape doit être disponible pour planifier ses actions." : "Aucune tâche planifiable n’est exposée pour cette étape."}</p><button disabled title="Aucune tâche planifiable disponible">Configurer une planification</button></div>
           ) : (
             <div className="flex flex-col gap-4">
+              {unavailableReason && <p className="text-xs text-[var(--color-slate)]">{unavailableReason} · exécution et planification indisponibles.</p>}
               {jobs.map((j) => {
                 const d = drafts[j.job];
                 if (!d) return null;
@@ -144,11 +157,11 @@ export default function StageScheduleCard() {
                         <input
                           type="checkbox"
                           className="toggle toggle-sm"
-                          disabled={!canRun}
+                          disabled={!canRun || !!unavailableReason || !!busy}
                           checked={d.enabled}
                           onChange={(e) => patchDraft(j.job, { enabled: e.target.checked })}
                         />
-                        Enabled
+                        Activée
                       </label>
                     </div>
 
@@ -156,12 +169,12 @@ export default function StageScheduleCard() {
                       <select
                         aria-label={`Schedule kind for ${j.label}`}
                         className={selectCls}
-                        disabled={!canRun}
+                        disabled={!canRun || !!unavailableReason || !!busy}
                         value={d.schedule_kind}
                         onChange={(e) => patchDraft(j.job, { schedule_kind: e.target.value as ScheduleKind })}
                       >
-                        <option value="daily">Daily</option>
-                        <option value="interval">By interval</option>
+                        <option value="daily">Chaque jour</option>
+                        <option value="interval">Par intervalle</option>
                       </select>
 
                       {d.schedule_kind === "daily" ? (
@@ -170,7 +183,7 @@ export default function StageScheduleCard() {
                           <select
                             aria-label={`Hour for ${j.label}`}
                             className={selectCls}
-                            disabled={!canRun}
+                            disabled={!canRun || !!unavailableReason || !!busy}
                             value={d.hour}
                             onChange={(e) => patchDraft(j.job, { hour: Number(e.target.value) })}
                           >
@@ -186,7 +199,7 @@ export default function StageScheduleCard() {
                             min={5}
                             aria-label={`Interval in minutes for ${j.label}`}
                             className={inputCls}
-                            disabled={!canRun}
+                            disabled={!canRun || !!unavailableReason || !!busy}
                             value={d.interval_minutes}
                             onChange={(e) => patchDraft(j.job, { interval_minutes: Number(e.target.value) })}
                           />
@@ -197,19 +210,19 @@ export default function StageScheduleCard() {
                       <div className="ml-auto flex items-center gap-2">
                         <button
                           onClick={() => save(j.job)}
-                          disabled={!canRun || !dirty || busy === j.job}
+                          disabled={!canRun || !!unavailableReason || !dirty || !!busy}
                           className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--color-charcoal)] hover:border-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {busy === j.job ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Save className="w-3.5 h-3.5" aria-hidden />}
-                          Save
+                          Enregistrer
                         </button>
                         <button
                           onClick={() => run(j.job, j.label)}
-                          disabled={!canRun || j.running || busy === j.job}
-                          title={j.running ? "Already running" : "Run now"}
+                          disabled={!canRun || !!unavailableReason || j.running || !!busy}
+                          title={unavailableReason || (j.running ? "Déjà en cours" : "Exécuter maintenant")}
                           className="inline-flex items-center gap-1.5 rounded bg-[var(--color-crimson)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          <Play className="w-3.5 h-3.5" aria-hidden /> Run
+                          <Play className="w-3.5 h-3.5" aria-hidden /> Exécuter
                         </button>
                       </div>
                     </div>

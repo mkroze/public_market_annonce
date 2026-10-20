@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Archive, CheckCircle2, Loader2, Pencil, Plus, X } from "lucide-react";
+import { Archive, CheckCircle2, Loader2, Pencil, Plus, X, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useAuth } from "../../lib/auth";
 import Pagination from "../../components/Pagination";
 import ToastContainer from "../../components/Toast";
@@ -14,7 +14,8 @@ import type {
   WebsiteCost, WebsiteCostPayload, WebsiteCostSummary,
 } from "../types";
 import { EmptyState, FailedState, FilteredEmptyState, LoadingState, DeniedState } from "../components/StateBlock";
-import { GatedButton, MetricCard, PageHeader, Panel, fmtDateOnly } from "../components/ui";
+import { GatedButton, PageHeader, Panel, fmtDateOnly } from "../components/ui";
+import { IndicateursAdministration, PanneauAdministration } from "../components/Administration";
 import { CostStatusBadge } from "../components/StatusBadge";
 import { useToasts } from "../components/useToasts";
 import ConfirmDialog, { type ConfirmConfig } from "../components/ConfirmDialog";
@@ -251,28 +252,26 @@ export default function Costs() {
   if (error) return <FailedState message={error.message} onRetry={load} />;
 
   return (
-    <div>
+    <div className="admin-page admin-costs-page">
       <PageHeader
         title="Costs"
-        description="Internal website operating expenses, provider renewals, and API usage costs."
+        description="Dépenses, renouvellements et services · une lecture claire de vos coûts de fonctionnement."
         actions={
-          <GatedButton allowed={canManage} reason="Requires costs.manage permission" onClick={openCreate}>
+          <><button className="stage-refresh" onClick={load} aria-label="Actualiser les coûts"><RefreshCw size={14} aria-hidden /></button><GatedButton allowed={canManage} reason="Requires costs.manage permission" onClick={openCreate}>
             <Plus className="w-4 h-4" aria-hidden /> Add cost
-          </GatedButton>
+          </GatedButton></>
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-        <MetricCard label="Current month" value={<span className="text-base">{formatGrouped(summary?.current_month)}</span>} sub={largest} />
-        <MetricCard label="Upcoming unpaid" value={<span className="text-base">{formatGrouped(summary?.upcoming_unpaid)}</span>} sub="Due in the next 45 days" />
-        <MetricCard label="Overdue" value={<span className="text-base">{formatGrouped(summary?.overdue)}</span>} tone={Object.keys(summary?.overdue || {}).length ? "danger" : "neutral"} />
-        <MetricCard label="Annualized recurring" value={<span className="text-base">{formatGrouped(summary?.annualized_recurring)}</span>} sub="Monthly and yearly costs" />
-      </div>
-
-      <CostInventory canManage={canManage} onEnterPrice={openInventoryCost} />
-
-      <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)] mb-3">Recorded costs</h2>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="admin-page-workspace">
+      <IndicateursAdministration items={[
+        { label: "Current month", value: formatGrouped(summary?.current_month), note: largest },
+        { label: "Upcoming unpaid", value: formatGrouped(summary?.upcoming_unpaid), note: "Échéances dans les 45 jours" },
+        { label: "Overdue", value: formatGrouped(summary?.overdue), note: "Paiements en attente", warning: Object.keys(summary?.overdue || {}).length > 0 },
+        { label: "Annualized recurring", value: formatGrouped(summary?.annualized_recurring), note: "Projection des coûts mensuels et annuels" },
+      ]} />
+      <PanneauAdministration title="Commandes" icon={SlidersHorizontal} aside="Filtrer les dépenses enregistrées">
+      <div className="admin-filter-toolbar">
         <input
           aria-label="Search provider, description, reference"
           placeholder="Search provider, description, reference"
@@ -306,8 +305,9 @@ export default function Costs() {
           </button>
         )}
       </div>
+      </PanneauAdministration>
 
-      <Panel>
+      <Panel title="Recorded costs" className="admin-records-panel">
         {rows.length === 0 ? (
           hasFilters
             ? <FilteredEmptyState onReset={clearFilters} />
@@ -400,6 +400,8 @@ export default function Costs() {
           </div>
         )}
       </Panel>
+      <CostInventory canManage={canManage} onEnterPrice={openInventoryCost} />
+      </div>
 
       {draft && (
         <div className="fixed inset-0 z-[150] flex justify-end" role="dialog" aria-modal="true" aria-label={editing ? "Edit cost" : "Add cost"}>

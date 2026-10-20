@@ -10,6 +10,7 @@ export interface StageContext {
   workflow: WorkflowState | null;
   /** Re-read the shell's status pill — call after run/pause/cancel. */
   reloadStatus: () => void;
+  refreshKey: number;
 }
 
 export const useStageContext = (): StageContext => useOutletContext<StageContext>();

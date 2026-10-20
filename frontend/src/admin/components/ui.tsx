@@ -2,7 +2,7 @@ import { useState, type ReactNode, type ElementType } from "react";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+    <div className="admin-page-header flex flex-wrap items-start justify-between gap-3 mb-5">
       <div>
         <h1 className="font-display text-xl text-[var(--color-charcoal)]">{title}</h1>
         {description && <p className="text-sm font-sans text-[var(--color-slate)] mt-0.5">{description}</p>}
@@ -14,7 +14,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`border border-[var(--color-border-subtle)] rounded-xl bg-base-100 shadow-card ${className}`}>
+    <section className={`admin-panel border border-[var(--color-border-subtle)] rounded-xl bg-base-100 shadow-card ${className}`}>
       {title && (
         <div className="px-4 py-2.5 border-b border-[var(--color-border-subtle)]">
           <h2 className="font-sans font-semibold text-sm text-[var(--color-charcoal)]">{title}</h2>
@@ -152,6 +152,7 @@ export function GatedButton({
 }) {
   return (
     <button
+      type="button"
       onClick={allowed ? onClick : undefined}
       disabled={!allowed}
       title={!allowed ? reason || "You do not have permission for this action" : undefined}

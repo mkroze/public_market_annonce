@@ -7,7 +7,7 @@
 // six without per-stage special-casing.
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { getWorkflows } from "../api";
 import type { WorkflowState } from "../types";
 import { ProgressBar, fmtDate } from "../components/ui";
@@ -68,9 +68,10 @@ function StepNav({ stage }: { stage: StageDescriptor }) {
 }
 
 const VIEWS = [
-  { to: ".", label: "Controls", end: true },
-  { to: "data", label: "Data", end: false },
-  { to: "logs", label: "Logs", end: false },
+  { to: ".", label: "Vue d’ensemble", end: true },
+  { to: "data", label: "Données", end: false },
+  { to: "logs", label: "Journal", end: false },
+  { to: "schedules", label: "Planification", end: false },
 ] as const;
 
 function ViewTabs() {
@@ -100,6 +101,7 @@ function ViewTabs() {
 export default function StageShell({ slug }: { slug: StageSlug }) {
   const stage = stageBySlug(slug);
   const [workflows, setWorkflows] = useState<WorkflowState[] | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(() => {
     // Best-effort: the shell still renders its chrome without live state.
@@ -107,10 +109,11 @@ export default function StageShell({ slug }: { slug: StageSlug }) {
   }, []);
 
   useEffect(load, [load]);
+  const reloadStatus = useCallback(() => { load(); setRefreshKey((key) => key + 1); }, [load]);
 
   const w = stage?.workflow ? workflows?.find((x) => x.key === stage.workflow) ?? null : null;
   const active = w?.active ?? false;
-  usePipelinePolling(load, active);
+  usePipelinePolling(load, !stage?.planned, 5000);
 
   if (!stage) {
     return <EmptyState title="Unknown stage" hint="This lifecycle stage does not exist." />;
@@ -124,13 +127,13 @@ export default function StageShell({ slug }: { slug: StageSlug }) {
   const schedule = w?.schedule ?? null;
 
   return (
-    <div>
+    <div className="stage-shell">
       <div className="mb-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs font-sans font-semibold uppercase tracking-[0.12em] text-[var(--color-slate)]">
             Tender lifecycle · step {step} of {String(STAGES.length).padStart(2, "0")}
           </span>
-          <StepNav stage={stage} />
+          <div className="flex items-center gap-2"><button className="stage-refresh" onClick={reloadStatus}><RefreshCw size={14} aria-hidden /> Actualiser</button><StepNav stage={stage} /></div>
         </div>
 
         <div className="flex flex-wrap items-start gap-3">
@@ -171,7 +174,7 @@ export default function StageShell({ slug }: { slug: StageSlug }) {
       </div>
 
       <ViewTabs />
-      <Outlet context={{ stage, workflow: w, reloadStatus: load }} />
+      <Outlet context={{ stage, workflow: w, reloadStatus, refreshKey }} />
     </div>
   );
 }

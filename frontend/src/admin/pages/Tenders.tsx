@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useOutletContext } from "react-router-dom";
+import type { StageContext } from "../stages/useStageContext";
+import { usePipelinePolling } from "../hooks";
 import { ExternalLink, Eye, Flag, Archive, ArchiveRestore, RefreshCw, CalendarX2 } from "lucide-react";
 import { getAdminTenders, batchTenders, cleanupExpired, ApiError } from "../api";
 import type { AdminTender, BatchResult } from "../types";
@@ -20,6 +22,7 @@ const FILTER_KEYS = ["q", "category", "sector", "status", "review_status", "admi
 // heading. The moderation action moves into the toolbar in that mode.
 export default function AdminTenders({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
+  const stageContext = useOutletContext<StageContext | undefined>();
   const { toasts, push, dismiss } = useToasts();
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState<{ rows: AdminTender[]; total: number; pages: number } | null>(null);
@@ -33,8 +36,8 @@ export default function AdminTenders({ embedded = false }: { embedded?: boolean 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
   const purgeCacheRef = useRef(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     const p: Record<string, string> = { page: String(page), per_page: "25" };
     FILTER_KEYS.forEach((k) => { const v = params.get(k); if (v) p[k] = v; });
     getAdminTenders(p)
@@ -47,6 +50,8 @@ export default function AdminTenders({ embedded = false }: { embedded?: boolean 
   }, [params, page]);
 
   useEffect(() => { load(); setSelected(new Set()); }, [load]);
+  useEffect(() => { load(false); }, [load, stageContext?.refreshKey, stageContext?.workflow?.active]);
+  usePipelinePolling(() => load(false), stageContext?.workflow?.active ?? false);
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(params);
@@ -82,6 +87,7 @@ export default function AdminTenders({ embedded = false }: { embedded?: boolean 
       else push(`All ${res.failed.length} failed: ${res.failed[0]?.reason ?? ""}`, "error", 6000);
       setSelected(new Set());
       load();
+      stageContext?.reloadStatus();
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Batch action failed", "error");
     }
@@ -111,6 +117,7 @@ export default function AdminTenders({ embedded = false }: { embedded?: boolean 
            res.dce_error ? "info" : "success", 6000);
       setSelected(new Set());
       load();
+      stageContext?.reloadStatus();
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Cleanup failed", "error");
     }

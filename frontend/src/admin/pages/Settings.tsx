@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mail, Send, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { Mail, Send, Save, Loader2, CheckCircle2, Server, SlidersHorizontal, ShieldCheck, RotateCcw } from "lucide-react";
 import { useAuth } from "../../lib/auth";
 import { can } from "../permissions";
 import {
@@ -9,7 +9,8 @@ import {
   ApiError,
 } from "../api";
 import type { EmailSettings, EmailSettingsPatch } from "../types";
-import { PageHeader, Panel, GatedButton } from "../components/ui";
+import { PageHeader, GatedButton } from "../components/ui";
+import { IndicateursAdministration, PanneauAdministration } from "../components/Administration";
 import { LoadingState, FailedState, DeniedState } from "../components/StateBlock";
 import { useToasts } from "../components/useToasts";
 import ToastContainer from "../../components/Toast";
@@ -117,145 +118,56 @@ export default function Settings() {
   if (error) return <FailedState message={error.message} onRetry={load} />;
   if (!draft || !settings) return null;
 
+  const dirty = Object.keys(draft).some((key) => draft[key as keyof Draft] !== draftFrom(settings)[key as keyof Draft]);
+
   return (
-    <div>
-      <PageHeader
-        title="Paramètres · Email"
-        description="Configuration SMTP utilisée pour les alertes et les emails de confirmation. Les variables d'environnement servent de valeurs de repli."
-      />
-
-      <div className="max-w-2xl space-y-5">
-        <Panel title="Statut">
-          <div className="px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-sans">
-            <span className="inline-flex items-center gap-1.5">
-              {settings.configured ? (
-                <CheckCircle2 className="w-4 h-4 text-green-700" aria-hidden />
-              ) : (
-                <Mail className="w-4 h-4 text-[var(--color-slate)]" aria-hidden />
-              )}
-              <span className={settings.configured ? "text-[var(--color-charcoal)]" : "text-[var(--color-slate)]"}>
-                {settings.configured ? "SMTP configuré — les envois sont actifs." : "SMTP non configuré — les envois sont désactivés."}
-              </span>
-            </span>
-            <span className="text-[var(--color-slate)]">
-              Mot de passe : {settings.password_set ? "défini" : "non défini"}
-            </span>
-          </div>
-        </Panel>
-
-        <form onSubmit={handleSave}>
-          <Panel title="Serveur SMTP">
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className="space-y-1.5 block sm:col-span-2">
-                <span className="editorial-label text-[var(--color-slate)]">Hôte SMTP</span>
-                <input
-                  className={CONTROL}
-                  placeholder="smtp-relay.brevo.com"
-                  value={draft.smtp_host}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_host: e.target.value })}
-                />
-              </label>
-
-              <label className="space-y-1.5 block">
-                <span className="editorial-label text-[var(--color-slate)]">Port</span>
-                <input
-                  className={CONTROL}
-                  inputMode="numeric"
-                  placeholder="587"
-                  value={draft.smtp_port}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_port: e.target.value })}
-                />
-              </label>
-
-              <label className="space-y-1.5 block">
-                <span className="editorial-label text-[var(--color-slate)]">Utilisateur / login</span>
-                <input
-                  className={CONTROL}
-                  placeholder="login@votredomaine.ma"
-                  value={draft.smtp_user}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_user: e.target.value })}
-                />
-              </label>
-
-              <label className="space-y-1.5 block sm:col-span-2">
-                <span className="editorial-label text-[var(--color-slate)]">
-                  Mot de passe (clé SMTP)
-                </span>
-                <input
-                  className={CONTROL}
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder={settings.password_set ? "•••••••• (laisser vide pour conserver)" : "clé SMTP Brevo"}
-                  value={draft.smtp_password}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_password: e.target.value })}
-                />
-                <span className="font-sans text-xs text-[var(--color-slate)]">
-                  Stocké côté serveur, jamais renvoyé au navigateur. Laissez vide pour conserver la valeur existante.
-                </span>
-              </label>
+    <div className="admin-page admin-settings-page">
+      <PageHeader title="Paramètres · Email" description="Connexion, expéditeur et vérification · tout pour piloter vos envois depuis le même espace." />
+      <div className="admin-page-workspace">
+        <IndicateursAdministration items={[
+          { label: "Connexion SMTP", value: settings.configured ? "Configurée" : "À configurer", note: settings.configured ? "Envois disponibles" : "Envois désactivés", warning: !settings.configured },
+          { label: "Authentification", value: settings.password_set ? "Définie" : "Non définie", note: "Clé SMTP conservée côté serveur" },
+          { label: "Port du serveur", value: settings.smtp_port || "—", note: settings.smtp_host || "Aucun serveur enregistré" },
+          { label: "Votre accès", value: canManage ? "Gestion" : "Lecture seule", note: canManage ? "Configuration et tests disponibles" : "Paramètres consultables" },
+        ]} />
+        <form onSubmit={handleSave} className="admin-settings-grid">
+          <PanneauAdministration title="Serveur SMTP" icon={Server} aside="Connexion sécurisée" className="admin-settings-server">
+            <div className="admin-fields-grid">
+              <label className="admin-field admin-field-full"><span>Hôte SMTP</span><input className={CONTROL} placeholder="smtp-relay.brevo.com" value={draft.smtp_host} disabled={!canManage || saving} onChange={(e) => patch({ smtp_host: e.target.value })} /></label>
+              <label className="admin-field"><span>Port</span><input className={CONTROL} inputMode="numeric" placeholder="587" value={draft.smtp_port} disabled={!canManage || saving} onChange={(e) => patch({ smtp_port: e.target.value })} /></label>
+              <label className="admin-field"><span>Utilisateur / login</span><input className={CONTROL} placeholder="login@votredomaine.ma" value={draft.smtp_user} disabled={!canManage || saving} onChange={(e) => patch({ smtp_user: e.target.value })} /></label>
+              <label className="admin-field admin-field-full"><span>Mot de passe (clé SMTP)</span><input className={CONTROL} type="password" autoComplete="new-password" placeholder={settings.password_set ? "•••••••• (laisser vide pour conserver)" : "clé SMTP Brevo"} value={draft.smtp_password} disabled={!canManage || saving} onChange={(e) => patch({ smtp_password: e.target.value })} /><small>Laissez vide pour conserver la clé existante. Elle n’est jamais renvoyée au navigateur.</small></label>
             </div>
-          </Panel>
-
-          <Panel title="Expéditeur" className="mt-5">
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className="space-y-1.5 block">
-                <span className="editorial-label text-[var(--color-slate)]">Adresse d'expédition</span>
-                <input
-                  className={CONTROL}
-                  placeholder="alertes@votredomaine.ma"
-                  value={draft.smtp_from}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_from: e.target.value })}
-                />
-              </label>
-
-              <label className="space-y-1.5 block">
-                <span className="editorial-label text-[var(--color-slate)]">Nom affiché</span>
-                <input
-                  className={CONTROL}
-                  placeholder="Marchés Publics Maroc"
-                  value={draft.smtp_from_name}
-                  disabled={!canManage}
-                  onChange={(e) => patch({ smtp_from_name: e.target.value })}
-                />
-              </label>
+          </PanneauAdministration>
+          <PanneauAdministration title="Commandes" icon={SlidersHorizontal} aside="Vous gardez la main" className="admin-settings-commands">
+            <p className="admin-pane-intro">Enregistrez vos réglages, puis envoyez un email de test pour vérifier la connexion.</p>
+            <div className="admin-settings-actions">
+              <button type="submit" disabled={!canManage || saving || testing} title={!canManage ? "Vous n'avez pas la permission settings.manage." : undefined} className="admin-primary-button">
+                {saving ? <Loader2 size={15} className="motion-safe:animate-spin" aria-hidden /> : <Save size={15} aria-hidden />}Enregistrer
+              </button>
+              <GatedButton allowed={canManage && !testing && !saving && settings.configured} reason={!canManage ? "Vous n'avez pas la permission settings.manage." : !settings.configured ? "Configurez et enregistrez le SMTP avant d'envoyer un test." : undefined} onClick={handleTest} className="admin-test-button">
+                {testing ? <Loader2 size={15} className="motion-safe:animate-spin" aria-hidden /> : <Send size={15} aria-hidden />}Envoyer un test
+              </GatedButton>
+              <button type="button" className="admin-secondary-button" disabled={!canManage || saving || testing || !dirty} onClick={() => setDraft(draftFrom(settings))}><RotateCcw size={14} aria-hidden />Annuler les modifications</button>
             </div>
-          </Panel>
-
-          <div className="flex flex-wrap items-center justify-end gap-3 mt-5">
-            <GatedButton
-              allowed={canManage && !testing && settings.configured}
-              reason={
-                !canManage
-                  ? "Vous n'avez pas la permission settings.manage."
-                  : !settings.configured
-                    ? "Configurez et enregistrez le SMTP avant d'envoyer un test."
-                    : undefined
-              }
-              onClick={handleTest}
-            >
-              {testing ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Send className="w-4 h-4" aria-hidden />}
-              Envoyer un test
-            </GatedButton>
-
-            {/* Native submit button so Enter works; GatedButton is type=button. */}
-            <button
-              type="submit"
-              disabled={!canManage || saving}
-              title={!canManage ? "Vous n'avez pas la permission settings.manage." : undefined}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans font-medium rounded text-white bg-[var(--color-crimson)] hover:bg-[var(--color-crimson-dark)] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <Save className="w-4 h-4" aria-hidden />}
-              Enregistrer
-            </button>
-          </div>
+            <p className={`admin-save-state ${dirty ? "has-changes" : ""}`} role="status">{dirty ? "Modifications non enregistrées" : "Configuration à jour"}</p>
+            {!canManage && <p className="admin-pane-intro">Votre rôle permet de consulter ces réglages. La modification nécessite la permission settings.manage.</p>}
+          </PanneauAdministration>
+          <PanneauAdministration title="Expéditeur" icon={Mail} aside="Identité des emails" className="admin-settings-sender">
+            <div className="admin-fields-grid">
+              <label className="admin-field"><span>Adresse d'expédition</span><input className={CONTROL} placeholder="alertes@votredomaine.ma" value={draft.smtp_from} disabled={!canManage || saving} onChange={(e) => patch({ smtp_from: e.target.value })} /></label>
+              <label className="admin-field"><span>Nom affiché</span><input className={CONTROL} placeholder="Marchés Publics Maroc" value={draft.smtp_from_name} disabled={!canManage || saving} onChange={(e) => patch({ smtp_from_name: e.target.value })} /></label>
+            </div>
+          </PanneauAdministration>
+          <PanneauAdministration title="État des envois" icon={ShieldCheck} aside="Configuration enregistrée" className="admin-settings-status">
+            <div className={`admin-connection-status ${settings.configured ? "is-ready" : ""}`}>
+              {settings.configured ? <CheckCircle2 size={19} aria-hidden /> : <Mail size={19} aria-hidden />}
+              <div><strong>{settings.configured ? "SMTP configuré — les envois sont actifs." : "SMTP non configuré — les envois sont désactivés."}</strong><p>Mot de passe : {settings.password_set ? "défini" : "non défini"}</p></div>
+            </div>
+            <p className="admin-pane-intro">L’email de test est envoyé avec la configuration enregistrée. Les modifications du formulaire doivent être enregistrées avant le test.</p>
+          </PanneauAdministration>
         </form>
       </div>
-
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );

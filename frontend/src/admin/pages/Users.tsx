@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ShieldX, ShieldCheck, ChevronRight, ChevronDown } from "lucide-react";
+import { ShieldX, ShieldCheck, ChevronRight, ChevronDown, SlidersHorizontal, RefreshCw, Search } from "lucide-react";
 import { getUsers, setUserStatus, setUserRole, ApiError } from "../api";
 import type { AdminUser } from "../types";
 import { useAuth } from "../../lib/auth";
@@ -13,6 +13,7 @@ import ToastContainer from "../../components/Toast";
 import { useToasts } from "../components/useToasts";
 import UserClassificationDetail from "../components/UserClassificationDetail";
 import Roles from "./Roles";
+import { IndicateursAdministration, PanneauAdministration } from "../components/Administration";
 
 const VERDICT_LABEL: Record<string, { label: string; cls: string }> = {
   clear: { label: "Clear", cls: "text-[var(--color-emerald,#047857)]" },
@@ -34,6 +35,7 @@ export default function Users() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [q, setQ] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -112,12 +114,21 @@ export default function Users() {
   const inputCls = "input input-bordered input-sm font-sans bg-base-100 border-[var(--color-border-subtle)] rounded";
 
   return (
-    <div>
-      <PageHeader title="Admin users" description="Manage roles and account access. Suspension is preferred over deletion." />
+    <div className="admin-page admin-users-page">
+      <PageHeader title="Admin users" description="Comptes, rôles et accès · une vue pour garder la main sur votre équipe." actions={<button className="stage-refresh" onClick={load}><RefreshCw size={14} aria-hidden />Actualiser</button>} />
+      <div className="admin-page-workspace">
+      <IndicateursAdministration items={[
+        { label: "Comptes affichés", value: loading || error ? "—" : users.length, note: "Selon les filtres actuels" },
+        { label: "Actifs", value: loading || error ? "—" : users.filter((u) => u.status === "active").length, note: "Accès au service" },
+        { label: "Suspendus", value: loading || error ? "—" : users.filter((u) => u.status === "suspended").length, note: "Accès interrompu", warning: true },
+        { label: "Équipe admin", value: loading || error ? "—" : users.filter((u) => u.role !== "user").length, note: "Parmi les comptes affichés" },
+      ]} />
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <PanneauAdministration title="Commandes" icon={SlidersHorizontal} aside="Rechercher et filtrer les comptes">
+      <form className="admin-filter-toolbar" onSubmit={(event) => { event.preventDefault(); setQ(searchDraft); }}>
         <input aria-label="Search users" placeholder="Search email, name, company" className={`${inputCls} w-64`}
-          defaultValue={q} onKeyDown={(e) => { if (e.key === "Enter") setQ((e.target as HTMLInputElement).value); }} />
+          value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} />
+        <button type="submit" className="admin-secondary-button"><Search size={14} aria-hidden />Rechercher</button>
         <select aria-label="Role filter" className={`select select-bordered select-sm ${inputCls}`} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="">Any role</option>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -127,9 +138,11 @@ export default function Users() {
           <option value="active">Active</option>
           <option value="suspended">Suspended</option>
         </select>
-      </div>
+        {(q || roleFilter || statusFilter) && <button type="button" className="admin-text-button" onClick={() => { setSearchDraft(""); setQ(""); setRoleFilter(""); setStatusFilter(""); }}>Réinitialiser</button>}
+      </form>
+      </PanneauAdministration>
 
-      <Panel>
+      <Panel title="Comptes utilisateurs" className="admin-records-panel">
         {loading ? (
           <LoadingState label="Loading users" />
         ) : error?.status === 403 ? (
@@ -236,7 +249,7 @@ export default function Users() {
       </Panel>
 
       <details
-        className="mt-6 rounded-lg border border-[var(--color-border-subtle)] bg-base-100"
+        className="admin-disclosure"
         open={params.get("view") === "roles"}
       >
         <summary className="cursor-pointer px-4 py-3 text-sm font-sans font-semibold text-[var(--color-charcoal)]">
@@ -249,6 +262,7 @@ export default function Users() {
           <Roles embedded />
         </div>
       </details>
+      </div>
 
       <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />

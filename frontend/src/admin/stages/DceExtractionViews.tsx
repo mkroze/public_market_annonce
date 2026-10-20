@@ -22,14 +22,14 @@ import StageScheduleCard from "./StageScheduleCard";
 
 const isActive = (s: DceExtractionStatus | null) => s?.active ?? false;
 
-export function DceExtractionControls() {
+export function DceExtractionControls({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { reloadStatus } = useStageContext();
   const { toasts, push, dismiss } = useToasts();
   const { status, loading, error, reload } = useStageStatus(getDceExtraction, isActive);
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
-  const canRun = can(user?.role, "imports.run");
+  const canRun = can(user?.role, "imports.run") && !!status && !loading && !error;
   const active = isActive(status);
 
   function refresh() { reload(false); reloadStatus(); }
@@ -66,30 +66,31 @@ export function DceExtractionControls() {
     });
   }
 
-  if (loading) return <LoadingState label="Loading extraction status" />;
-  if (error?.status === 403) return <DeniedState message={error.message} />;
-  if (error) return <FailedState message={error.message} onRetry={() => reload(true)} />;
 
   const simEnabled = status?.simulate_enabled ?? false;
 
   return (
     <div>
+      {loading && <p className="mb-3 text-xs text-[var(--color-slate)]">Connexion au backend…</p>}
+      {error && <FailedState message={error.message} onRetry={() => reload(true)} />}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <PipelineControls
           active={active}
           paused={status?.paused ?? false}
           canRun={canRun}
+          onRefresh={refresh}
           onRun={confirmRun}
           onSteer={steer}
-          runLabel="Run extraction"
+          runLabel="Lancer l’extraction"
+          unavailableReason={loading ? "Connexion au backend…" : error ? "Backend indisponible" : status?.simulate_enabled ? "Endpoint n8n non configuré" : undefined}
           runIcon={<FileSearch className="w-4 h-4" aria-hidden />}
           runningReason="An extraction sweep is already running"
         />
-        {simEnabled && (
+        {(
           <button
             onClick={doSimulate}
-            disabled={!canRun}
-            title={!canRun ? "Requires imports.run permission" : undefined}
+            disabled={!canRun || !simEnabled}
+            title={!canRun ? "Requires imports.run permission" : !simEnabled ? "Simulation disponible uniquement sans connexion n8n" : undefined}
             className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] hover:border-[var(--color-border)] focus-visible:ring-2 focus-visible:ring-[var(--color-crimson)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Sparkles className="w-3.5 h-3.5" aria-hidden /> Simulate result
@@ -99,11 +100,12 @@ export function DceExtractionControls() {
 
       {simEnabled && (
         <p className="mb-5 rounded-lg bg-[var(--color-gold)]/10 px-3 py-2 text-xs font-sans text-[var(--color-gold)]">
-          n8n is not configured — use “Simulate result” to test the store → display loop.
+          Endpoint n8n non configuré. La simulation permet de vérifier l’affichage des résultats.
         </p>
       )}
 
-      <StageScheduleCard />
+      <div className="stage-future-action"><button disabled title="La réception du prompt JSON et la connexion à votre modèle restent à livrer.">Envoyer le prompt JSON au modèle</button><p>Étape suivante : prompt JSON → votre modèle.</p></div>
+      {!embedded && <StageScheduleCard />}
 
       <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
@@ -114,6 +116,7 @@ export function DceExtractionControls() {
 /** The fiches universelles this stage produced. */
 export function DceExtractionData() {
   const { user } = useAuth();
+  const { reloadStatus } = useStageContext();
   const { toasts, push, dismiss } = useToasts();
   const { status, loading, error, reload } = useStageStatus(getDceExtraction, isActive);
 
@@ -122,6 +125,7 @@ export function DceExtractionData() {
       const res = await purgeDceSimulations();
       push(`${res.deleted} sample fiche(s) removed`, "success");
       reload(true);
+      reloadStatus();
     } catch (e) {
       push(e instanceof ApiError ? e.message : "Failed to remove samples", "error");
     }

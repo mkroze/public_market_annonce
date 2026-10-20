@@ -14,10 +14,12 @@ import Settings from "./pages/Settings";
 import StageShell from "./stages/StageShell";
 import PlannedView from "./stages/PlannedView";
 import { PLANNED_STAGES } from "./stages/registry";
-import { ScrapeControls, ScrapeData, ScrapeLogs } from "./stages/ScrapeViews";
-import { DceCacheControls, DceCacheData, DceCacheLogs } from "./stages/DceCacheViews";
-import { DceExtractionControls, DceExtractionData, DceExtractionLogs } from "./stages/DceExtractionViews";
+import { ScrapeData, ScrapeLogs } from "./stages/ScrapeViews";
+import { DceCacheData, DceCacheLogs } from "./stages/DceCacheViews";
+import { DceExtractionData, DceExtractionLogs } from "./stages/DceExtractionViews";
 import { EmptyState } from "./components/StateBlock";
+import CadreEtape from "./stages/CadreEtape";
+import StageScheduleCard from "./stages/StageScheduleCard";
 
 /** Redirect that carries the query string over, so deep links keep their filters. */
 function RedirectWithQuery({ to }: { to: string }) {
@@ -38,19 +40,22 @@ export default function AdminApp() {
 
         {/* ── Tender lifecycle ───────────────────────────────────────────── */}
         <Route path="scrape" element={<StageShell slug="scrape" />}>
-          <Route index element={<ScrapeControls />} />
+          <Route index element={<CadreEtape />} />
+          <Route path="schedules" element={<StageScheduleCard />} />
           <Route path="data" element={<ScrapeData />} />
           <Route path="logs" element={<ScrapeLogs />} />
         </Route>
 
         <Route path="dce-cache" element={<StageShell slug="dce-cache" />}>
-          <Route index element={<DceCacheControls />} />
+          <Route index element={<CadreEtape />} />
+          <Route path="schedules" element={<StageScheduleCard />} />
           <Route path="data" element={<DceCacheData />} />
           <Route path="logs" element={<DceCacheLogs />} />
         </Route>
 
         <Route path="dce-extraction" element={<StageShell slug="dce-extraction" />}>
-          <Route index element={<DceExtractionControls />} />
+          <Route index element={<CadreEtape />} />
+          <Route path="schedules" element={<StageScheduleCard />} />
           <Route path="data" element={<DceExtractionData />} />
           <Route path="logs" element={<DceExtractionLogs />} />
         </Route>
@@ -58,7 +63,8 @@ export default function AdminApp() {
         {/* Planned stages get the same shell and tabs, with a planned notice. */}
         {PLANNED_STAGES.map((s) => (
           <Route key={s.slug} path={s.slug} element={<StageShell slug={s.slug} />}>
-            <Route index element={<PlannedView />} />
+            <Route index element={<CadreEtape />} />
+            <Route path="schedules" element={<StageScheduleCard />} />
             <Route path="data" element={<PlannedView />} />
             <Route path="logs" element={<PlannedView />} />
           </Route>

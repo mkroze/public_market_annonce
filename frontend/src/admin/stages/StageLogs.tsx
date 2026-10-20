@@ -36,7 +36,7 @@ function detailsText(e: WorkflowEvent): string {
 }
 
 export default function StageLogs() {
-  const { stage, workflow } = useStageContext();
+  const { stage, workflow, refreshKey } = useStageContext();
   // Comma-separated so one request covers the stage's own key plus folded-in jobs.
   const keyParam = stageWorkflowKeys(stage).join(",");
 
@@ -56,7 +56,7 @@ export default function StageLogs() {
       .finally(() => setLoading(false));
   }, [page, keyParam]);
 
-  useEffect(() => { load(true); }, [load]);
+  useEffect(() => { load(true); }, [load, refreshKey, active]);
   usePipelinePolling(() => load(false), active);
 
   if (stage.planned) {

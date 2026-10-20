@@ -8,9 +8,9 @@ export default function CostInventory({ canManage, onEnterPrice }: {
   onEnterPrice: (item: CostInventoryItem) => void;
 }) {
   return (
-    <Panel title="Operating cost inventory" className="mb-5">
-      <div className="p-4 space-y-5 font-sans text-sm">
-        <div className="space-y-2 text-[var(--color-slate)]">
+    <Panel title="Operating cost inventory" className="admin-inventory-panel">
+      <div className="admin-inventory-content font-sans text-sm">
+        <div className="admin-inventory-intro space-y-2 text-[var(--color-slate)]">
           <p>
             {COST_INVENTORY.length} items to review across the current stack, optional integrations, operations, and planned features.
             This is a repository audit, not a live billing connection. Production plans and usage need confirmation.
@@ -29,7 +29,7 @@ export default function CostInventory({ canManage, onEnterPrice }: {
           </p>
         </div>
 
-        {GROUPS.map((group) => (
+        <div className="admin-inventory-groups">{GROUPS.map((group) => (
           <details key={group} aria-label={group} open={group === "Core services"} className="border border-[var(--color-border-subtle)] rounded-lg">
             <summary className="min-h-11 px-3 py-3 cursor-pointer font-semibold text-[var(--color-charcoal)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]">
               <span>{group}</span>
@@ -68,9 +68,9 @@ export default function CostInventory({ canManage, onEnterPrice }: {
               ))}
             </ul>
           </details>
-        ))}
+        ))}</div>
 
-        <details className="border-t border-[var(--color-border-subtle)] pt-3 text-[var(--color-slate)]">
+        <details className="admin-inventory-bundled border-t border-[var(--color-border-subtle)] pt-3 text-[var(--color-slate)]">
           <summary className="cursor-pointer font-medium py-2 text-[var(--color-charcoal)] focus-visible:outline-2">
             Bundled capabilities — avoid counting these twice
           </summary>

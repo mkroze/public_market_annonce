@@ -92,12 +92,12 @@ describe("StageShell", () => {
     );
   }
 
-  it("shows the stage's step, title and the three view tabs", async () => {
+  it("shows the stage's step, title and the shared view tabs", async () => {
     await renderStage("dce-cache", "/admin/dce-cache");
     expect(await screen.findByRole("heading", { name: "Dossiers ZIP" })).toBeInTheDocument();
     expect(screen.getByText(/step 02 of 06/)).toBeInTheDocument();
     const tabs = within(screen.getByRole("tablist", { name: "Stage views" }));
-    expect(tabs.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Controls", "Data", "Logs"]);
+    expect(tabs.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Vue d’ensemble", "Données", "Journal", "Planification"]);
   });
 
   it("renders the view matching the route", async () => {
