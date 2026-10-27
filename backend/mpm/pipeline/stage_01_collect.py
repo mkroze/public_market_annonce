@@ -23,143 +23,135 @@ async def fetch_page(url: str, params: dict | None = None) -> str:
         return resp.text
 
 
+# The 2026 redesign replaced the results <table> with a stream of
+# `div.contentColumn > div.item.tender_item` cards, each carrying its own
+# refConsultation/orgAcronyme pair in the card's onclick/detail link rather
+# than in hidden check-col inputs.
+_DETAIL_LINK_RE = re.compile(
+    r"EntrepriseDetailsConsultation.*?refConsultation=(?P<ref>[^&\"']+).*?orgAcronyme=(?P<org>[^&\"']+)"
+)
+
+# Deadline cards render "Jeu 07 Jan 2027" / "11:00" rather than the old raw
+# DD/MM/YYYY. Covers both the French and English 3-letter abbreviations the
+# portal has been observed using, since the site mixes locales.
+_MONTHS = {
+    "jan": 1, "fev": 2, "fév": 2, "feb": 2,
+    "mar": 3, "avr": 4, "apr": 4,
+    "mai": 5, "may": 5, "jun": 6, "juin": 6,
+    "jul": 7, "juil": 7,
+    "aou": 8, "aoû": 8, "aug": 8,
+    "sep": 9, "oct": 10, "nov": 11,
+    "dec": 12, "déc": 12,
+}
+_DEADLINE_TEXT_RE = re.compile(
+    r"(\d{2})\s+([A-Za-zÀ-ÿ]{3,4})\.?\s+(\d{4})(?:.*?(\d{2}:\d{2}))?", re.DOTALL
+)
+
+
+def _normalize_deadline_text(text: str) -> str:
+    """Convert "Jeu 07 Jan 2027 ... 11:00" into "07/01/2027 11:00"."""
+    m = _DEADLINE_TEXT_RE.search(text)
+    if not m:
+        return ""
+    day, month_name, year, time_part = m.groups()
+    month = _MONTHS.get(month_name.lower().rstrip("."))
+    if not month:
+        return ""
+    result = f"{day}/{month:02d}/{year}"
+    if time_part:
+        result += f" {time_part}"
+    return result
+
+
 def parse_tender_list(html: str, sector_code: str) -> list[dict]:
     soup = BeautifulSoup(html, "lxml")
     tenders = []
 
-    table = soup.find("table")
-    if not table:
-        return tenders
+    cards = soup.find_all("div", class_="tender_item")
 
-    # Data rows have td with class "col-90"
-    data_rows = [r for r in table.find_all("tr") if r.find("td", class_="col-90")]
-
-    for row in data_rows:
-        tender = extract_tender_from_row(row, sector_code)
+    for card in cards:
+        tender = extract_tender_from_card(card, sector_code)
         if tender:
             tenders.append(tender)
 
     return tenders
 
 
-def extract_tender_from_row(row: Tag, sector_code: str) -> dict | None:
-    # Cell 0 (check-col): hidden inputs with refCons and orgCons
-    check_cell = row.find("td", class_="check-col")
+def extract_tender_from_card(card: Tag, sector_code: str) -> dict | None:
+    # The card's own container carries the onclick with refConsultation/orgAcronyme;
+    # it's the parent of the `tender_item` div passed in here.
+    container = card.find_parent("div", class_="contentColumn") or card
     ref_cons = ""
     org_code = ""
-    if check_cell:
-        ref_input = check_cell.find("input", attrs={"id": re.compile(r"refCons$")})
-        org_input = check_cell.find("input", attrs={"id": re.compile(r"orgCons$")})
-        if ref_input:
-            ref_cons = ref_input.get("value", "")
-        if org_input:
-            org_code = org_input.get("value", "")
+    onclick = container.get("onclick", "")
+    m = _DETAIL_LINK_RE.search(onclick)
+    if not m:
+        link = card.find("a", href=_DETAIL_LINK_RE)
+        if link:
+            m = _DETAIL_LINK_RE.search(link["href"])
+    if m:
+        ref_cons = m.group("ref")
+        org_code = m.group("org")
 
-    # Cell 1 (col-90 procedure): procedure type (AOO, AOR, etc.)
-    proc_cell = row.find("td", class_="col-90", attrs={"headers": "cons_ref"})
-    procedure_type = ""
-    publication_date = ""
-    category_from_page = ""
-    if proc_cell:
-        line_div = proc_cell.find("div", class_="line-info-bulle")
-        if line_div:
-            procedure_type = line_div.get_text(strip=True).split("...")[0].strip()
-        # Look for category and date in the info-bulle
-        info_div = proc_cell.find("div", class_="info-bulle")
-        if info_div:
-            text = info_div.get_text(" ", strip=True)
-            # Extract category
-            for cat in ["Travaux", "Fournitures", "Services"]:
-                if cat in text:
-                    category_from_page = cat
-                    break
-            # Extract publication date
-            date_match = re.search(r"(\d{2}/\d{2}/\d{4})", text)
-            if date_match:
-                publication_date = date_match.group(1)
-
-    # Cell 2 (col-450 intitule): reference, title, entity
-    intitule_cell = row.find("td", attrs={"headers": "cons_intitule"})
-    reference = ""
-    title = ""
-    entity = ""
-    if intitule_cell:
-        ref_span = intitule_cell.find("span", class_="ref")
-        if ref_span:
-            reference = ref_span.get_text(strip=True)
-
-        # Object: prefer the tooltip (infosBullesObjet) for clean text, fall back to panelBlocObjet
-        tooltip_div = intitule_cell.find("div", attrs={"id": re.compile(r"infosBullesObjet")})
-        if tooltip_div:
-            title = tooltip_div.get_text(" ", strip=True).rstrip(". ")
-        else:
-            objet_div = intitule_cell.find("div", attrs={"id": re.compile(r"panelBlocObjet")})
-            if objet_div:
-                # Exclude nested info-bulle divs to avoid duplication
-                for nested in objet_div.find_all("div", class_="info-bulle"):
-                    nested.decompose()
-                text = objet_div.get_text(" ", strip=True)
-                text = re.sub(r"^Objet\s*:\s*", "", text)
-                title = text.strip()
-
-        # Entity is in panelBlocDenomination
-        acheteur_div = intitule_cell.find("div", attrs={"id": re.compile(r"panelBlocDenomination")})
-        if acheteur_div:
-            text = acheteur_div.get_text(" ", strip=True)
-            text = re.sub(r"^Acheteur public\s*:\s*", "", text)
-            entity = text.strip()
-
-    # Cell 3 (lieu d'execution): location
-    lieu_cell = row.find("td", attrs={"headers": "cons_lieuExe"})
-    location = ""
-    if lieu_cell:
-        loc_div = lieu_cell.find("div", attrs={"id": re.compile(r"panelBlocLieuxExec")})
-        if loc_div:
-            # Get first meaningful text node before "..." tooltip trigger
-            raw = loc_div.get_text(" ", strip=True)
-            # Remove tooltip duplicates after "..."
-            raw = raw.split("...")[0].strip()
-            # Clean up separators
-            raw = re.sub(r"\s*,\s*", ", ", raw)
-            location = raw.rstrip(", ")
-        if not location:
-            spans = lieu_cell.find_all("span")
-            for s in spans:
-                t = s.get_text(strip=True)
-                if t and t != "-":
-                    location = t
-                    break
-
-    # Cell 4 (date limit): deadline
-    deadline_cell = row.find("td", attrs={"headers": "cons_dateEnd"})
-    deadline = ""
-    if deadline_cell:
-        cloture_div = deadline_cell.find("div", class_="cloture-line")
-        if cloture_div:
-            text = cloture_div.get_text(" ", strip=True)
-            date_match = re.search(r"(\d{2}/\d{2}/\d{4})", text)
-            if date_match:
-                deadline = date_match.group(1)
-            time_match = re.search(r"(\d{2}:\d{2})", text)
-            if time_match:
-                deadline += " " + time_match.group(1)
-
-    # Cell 5 (actions): detail link
-    actions_cell = row.find("td", class_="actions", attrs={"headers": "cons_actions"})
     detail_url = ""
-    if actions_cell:
-        detail_link = actions_cell.find("a", href=re.compile(r"EntrepriseDetailConsultation"))
-        if detail_link:
-            href = detail_link["href"]
-            if not href.startswith("http"):
-                href = f"{BASE_URL}/{href.lstrip('/')}"
-            detail_url = href
+    if ref_cons and org_code:
+        detail_url = (
+            f"{BASE_URL}/?page=entreprise.EntrepriseDetailsConsultation"
+            f"&refConsultation={ref_cons}&orgAcronyme={org_code}&echanges"
+        )
+
+    # Procedure type (AOO, AOR, ...)
+    procedure_type = ""
+    proc_span = card.find("span", class_="verticalText")
+    if proc_span:
+        procedure_type = proc_span.get_text(strip=True)
+
+    # Reference, e.g. "01/2027"
+    reference = ""
+    ref_span = card.find("span", attrs={"id": re.compile(r"_referencem$")})
+    if ref_span:
+        reference = ref_span.get_text(strip=True)
+
+    # Title / objet
+    title = ""
+    objet_div = card.find("div", class_="p-objet")
+    if objet_div:
+        text = objet_div.get_text(" ", strip=True)
+        text = re.sub(r"^Objet\s*:\s*", "", text)
+        title = text.strip()
+
+    # Entity / acheteur public
+    entity = ""
+    for title_div in card.find_all("div", class_="title"):
+        text = title_div.get_text(" ", strip=True)
+        if "Acheteur public" in text:
+            entity = re.sub(r"^Acheteur public\s*:\s*", "", text).strip()
+            break
+
+    # Deadline: "limita" blocks hold a calendar date span and a clock time span
+    deadline = ""
+    limita_blocks = card.find_all("div", class_="limita")
+    for block in limita_blocks:
+        date_icon = block.find("i", class_="fa-calendar-o")
+        if date_icon:
+            deadline = _normalize_deadline_text(block.get_text(" ", strip=True))
+            break
+
+    # Location
+    location = ""
+    loc_div = card.find("div", attrs={"id": re.compile(r"panelBlocLieuxExec$")})
+    if loc_div:
+        raw = loc_div.get_text(" ", strip=True)
+        raw = re.sub(r"^Lieu d'exécution\s*", "", raw)
+        raw = raw.split("...")[0].strip()
+        raw = re.sub(r"\s*,\s*", ", ", raw)
+        location = raw.rstrip(", ")
 
     if not reference and not title:
         return None
 
     category_code = sector_code.split(".")[0] if "." in sector_code else ""
-    category = category_from_page or CATEGORIES.get(category_code, "")
+    category = CATEGORIES.get(category_code, "")
     sector_name = SECTORS.get(sector_code, "")
 
     tender_id = hashlib.md5(f"{ref_cons}:{org_code}:{reference}".encode()).hexdigest()
@@ -173,8 +165,8 @@ def extract_tender_from_row(row: Tag, sector_code: str) -> dict | None:
         "sector_code": sector_code,
         "sector_name": sector_name,
         "category": category,
-        "deadline": deadline.strip(),
-        "publication_date": publication_date,
+        "deadline": deadline,
+        "publication_date": "",
         "status": "en_cours",
         "procedure_type": procedure_type,
         "location": location,
@@ -210,9 +202,11 @@ async def scrape_tender_detail(detail_url: str) -> dict | None:
     if not main:
         return None
 
-    # Build a dict from all intitule-240 label/value pairs
+    # Build a dict from all intitule-300 label/value pairs (renamed from
+    # intitule-240 by the 2026 portal redesign; label -> sibling content-bloc
+    # structure is otherwise unchanged).
     fields: dict[str, str] = {}
-    for label_div in main.find_all("div", class_="intitule-240"):
+    for label_div in main.find_all("div", class_="intitule-300"):
         label = label_div.get_text(strip=True).rstrip(" :")
         value_div = label_div.find_next_sibling("div", class_="content-bloc")
         if value_div:
