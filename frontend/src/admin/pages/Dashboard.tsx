@@ -42,7 +42,7 @@ export default function Dashboard() {
       {loading ? <LoadingState label="Loading pipeline" />
         : error?.status === 403 ? <DeniedState message={error.message} />
         : error || !data ? <FailedState message={error?.message} onRetry={load} />
-        : <PipelineDiagram total={data.freshness.tender_count} snapshot={pipeline} />}
+        : <PipelineDiagram total={data.freshness.active_tender_count} snapshot={pipeline} />}
       <WorkflowJournal refreshKey={refreshKey} />
     </div>
   );
